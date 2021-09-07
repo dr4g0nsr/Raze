@@ -455,7 +455,7 @@ void DoRegenerates()
             if (pSprite->extra <= 0)
             {
                 BuildAnim(-1, 38, 0, pSprite->x, pSprite->y, pSprite->z, pSprite->sectnum, 64, 4);
-                D3PlayFX(StaticSound[kSoundTorchOn], i);
+                D3PlayFX(StaticSound[kSoundTorchOn], nSprite);
             }
             else {
                 continue;
