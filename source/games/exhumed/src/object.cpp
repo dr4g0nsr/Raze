@@ -126,7 +126,7 @@ struct slideData
     short nChannel;
     short field_2a;
     short field_4a;
-    short field_6a;
+    short nSprite;
     short field_8a;
 
     int field_0;
@@ -328,7 +328,7 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, slideData& w, slid
 			("channel", w.nChannel)
 			("at2a", w.field_2a)
 			("at4a", w.field_4a)
-			("at6a", w.field_6a)
+			("at6a", w.nSprite)
 			("at8a", w.field_8a)
 			.EndObject();
 	}
@@ -1117,7 +1117,7 @@ int BuildSlide(int nChannel, int nStartWall, int nWall1, int ecx, int nWall2, in
     int nSprite = insertsprite(nSector, 899);
 	auto pSprite = &sprite[nSprite];
 
-    SlideData[nSlide].field_6a = nSprite;
+    SlideData[nSlide].nSprite = nSprite;
     pSprite->cstat = 0x8000;
     pSprite->x = wall[nStartWall].x;
     pSprite->y = wall[nStartWall].y;
@@ -1160,7 +1160,7 @@ void FuncSlide(int a, int, int nRun)
 
             if (SlideData[nSlide].field_8a != sRunChannels[nChannel].c)
             {
-                D3PlayFX(StaticSound[kSound23], SlideData[nSlide].field_6a);
+                D3PlayFX(StaticSound[kSound23], SlideData[nSlide].nSprite);
                 SlideData[nSlide].field_8a = sRunChannels[nChannel].c;
             }
 
@@ -1186,7 +1186,7 @@ void FuncSlide(int a, int, int nRun)
                 int var_24 = nSeekB;
 
                 dragpoint(SlideData[nSlide].field_4, x, y, 0);
-                movesprite(SlideData[nSlide].field_6a, var_34 << 14, var_2C << 14, 0, 0, 0, CLIPMASK1);
+                movesprite(SlideData[nSlide].nSprite, var_34 << 14, var_2C << 14, 0, 0, 0, CLIPMASK1);
 
                 if (var_34 == 0)
                 {
@@ -1289,7 +1289,7 @@ void FuncSlide(int a, int, int nRun)
                 runlist_SubRunRec(SlideData[nSlide].field_4a);
 
                 SlideData[nSlide].field_4a = -1;
-                D3PlayFX(StaticSound[nStopSound], SlideData[nSlide].field_6a);
+                D3PlayFX(StaticSound[nStopSound], SlideData[nSlide].nSprite);
 
                 runlist_ReadyChannel(nChannel);
             }
