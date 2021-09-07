@@ -1055,7 +1055,7 @@ void FuncPlayer(int a, int nDamage, int nRun)
                             pPlayerSprite->yvel = 0;
 
                             StopSpriteSound(nPlayerSprite);
-    					    PlayFXAtXYZ(StaticSound[kSoundJonFDie], pPlayerSprite->x, pPlayerSprite->y, pPlayerSprite->z, pPlayerSprite->sectnum |= 0x4000); // CHECKME
+    					    PlayFXAtXYZ(StaticSound[kSoundJonFDie], pPlayerSprite->x, pPlayerSprite->y, pPlayerSprite->z, pPlayerSprite->sectnum, CHANF_NONE, 1);
                         }
                         else
                         {
