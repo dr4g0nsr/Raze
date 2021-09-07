@@ -1380,9 +1380,9 @@ void nnExtProcessSuperSprites()
                 PLAYER* pPlayer = NULL;
                 for (int a = connecthead; a != -1; a = connectpoint2[a]) 
                 {
-                    auto pact = pPlayer->actor;
                     pPlayer = &gPlayer[a];
-                    if (pact->hit.hit.type == kHitSprite && pact->hit.hit.actor == debrisactor) 
+                    auto pact = pPlayer->actor;
+                    if (pact->hit.hit.type == kHitSprite && pact->hit.hit.actor == debrisactor)
                     {
                         int nSpeed = approxDist(pact->xvel, pact->yvel);
                             nSpeed = ClipLow(nSpeed - MulScale(nSpeed, mass, 6), 0x9000 - (mass << 3));
