@@ -8230,6 +8230,7 @@ bool spritesTouching(DBloodActor *actor1, DBloodActor* actor2)
     if (hit->hit.type == kHitSprite) hitactor = hit->hit.actor;
     else if (hit->florhit.type == kHitSprite) hitactor = hit->florhit.actor;
     else if (hit->ceilhit.type == kHitSprite) hitactor = hit->ceilhit.actor;
+    else return false;
     return hitactor->hasX() && hitactor == actor2;
 }
 
