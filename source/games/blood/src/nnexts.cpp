@@ -8302,7 +8302,7 @@ DBloodActor* aiPatrolSearchTargets(DBloodActor* actor)
     bool blind = (pXSprite->dudeGuard); 
     bool deaf = (pXSprite->dudeDeaf);
 
-    DBloodActor* newtarget;
+    DBloodActor* newtarget = nullptr;
     // search for player targets
     for (i = connecthead; i != -1; i = connectpoint2[i]) 
     {
