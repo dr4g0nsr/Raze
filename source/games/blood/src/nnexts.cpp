@@ -1603,8 +1603,9 @@ int debrisGetFreeIndex(void)
 {
     for (int i = 0; i < kMaxSuperXSprites; i++) 
     {
+        if (gPhysSpritesList[i] == nullptr) return i;
         auto spr = &gPhysSpritesList[i]->s();
-        if (gPhysSpritesList[i] == nullptr || spr->statnum == kStatFree) return i;
+        if (spr->statnum == kStatFree) return i;
 
         else if ((spr->flags & kHitagFree) || !gPhysSpritesList[i]->hasX()) return i;
         else if (gPhysSpritesList[i]->x().physAttr == 0) return i;
