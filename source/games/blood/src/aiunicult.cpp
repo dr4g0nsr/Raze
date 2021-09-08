@@ -484,7 +484,9 @@ static void unicultThinkChase(DBloodActor* actor)
         genDudeUpdate(actor);
     }
 
-    if (targetactor == nullptr)  // target lost
+    XSPRITE* pXTarget = !targetactor || !targetactor->IsDudeActor() || !targetactor->GetTarget() ? nullptr : &targetactor->x();
+
+    if (pXTarget == nullptr)  // target lost
     {
         if(spriteIsUnderwater(actor,false)) aiGenDudeNewState(actor, &genDudeSearchShortW);
         else aiGenDudeNewState(actor, &genDudeSearchShortL);
@@ -493,7 +495,6 @@ static void unicultThinkChase(DBloodActor* actor)
     } 
 
     auto const pTarget = &targetactor->s();
-    XSPRITE* pXTarget = !targetactor->IsDudeActor() || !targetactor->GetTarget() ? nullptr : &targetactor->x();
     if (pXTarget->health <= 0) // target is dead
     {
         PLAYER* pPlayer = NULL;
