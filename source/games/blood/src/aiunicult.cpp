@@ -571,7 +571,6 @@ static void unicultThinkChase(DBloodActor* actor)
         int weaponType = actor->genDudeExtra.weaponType;
 
         auto actLeech = leechIsDropped(actor);
-        spritetype* pLeech = &actLeech->s();
 
         const VECTORDATA* meleeVector = &gVectorData[22];
         if (weaponType == kGenDudeWeaponThrow) 
@@ -604,13 +603,14 @@ static void unicultThinkChase(DBloodActor* actor)
                     {
                         case kModernThingEnemyLifeLeech: 
                         {
-                            if (pLeech == NULL) 
+                            if (actLeech == NULL) 
                             {
                                 aiGenDudeNewState(actor, &genDudeThrow2);
                                 genDudeThrow2.nextState = &genDudeDodgeShortL;
                                 return;
                             }
 
+                            spritetype* pLeech = &actLeech->s();
                             XSPRITE* pXLeech = &actLeech->x();
                             int ldist = aiFightGetTargetDist(targetactor, pDudeInfo, actLeech);
                             if (ldist > 3 || !cansee(pTarget->x, pTarget->y, pTarget->z, pTarget->sectnum,
