@@ -101,12 +101,12 @@ public:
 	GENDUDEEXTRA genDudeExtra;
 	DBloodActor* prevmarker;	// needed by the nnext marker code. This originally hijacked targetX in XSPRITE
 	POINT3D basePoint;
+	ConditionElement condition[2];
 
 	// transient data (not written to savegame)
 	int cumulDamage;
 	bool explosionhackflag;		// this originally hijacked the target field which is not safe when working with pointers.
 	bool interpolated;
-	ConditionElement condition[2];
 
 	DBloodActor() :index(int(this - base())) {}
 	DBloodActor& operator=(const DBloodActor& other) = default;

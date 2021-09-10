@@ -446,6 +446,21 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, DUDEEXTRA& w, DUDE
 	return arc;
 }
 
+FSerializer& Serialize(FSerializer& arc, const char* keyname, ConditionElement& w, ConditionElement* def)
+{
+	int empty = 0;
+	DBloodActor* empty2 = nullptr;
+	if (arc.isReading()) w = {};
+
+	if (arc.BeginObject(keyname))
+	{
+		arc("type", w.type, &empty)
+			("index", w.index_, &empty)
+			("actor", w.actor, &empty2)
+			.EndObject();
+	}
+	return arc;
+}
 
 FSerializer& Serialize(FSerializer& arc, const char* keyname, DBloodActor& w, DBloodActor* def)
 {
@@ -458,10 +473,12 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, DBloodActor& w, DB
 
 	if (arc.BeginObject(keyname))
 	{
+		arc("hasx", w.hasx, def->hasx);
 		// The rest is only relevant if the actor has an xsprite.
 		if (w.hasX())
 		{
-			arc("dudeslope", w.dudeSlope, def->dudeSlope)
+			arc ("xsprite", w.xsprite, def->xsprite)
+				("dudeslope", w.dudeSlope, def->dudeSlope)
 				("dudeextra", w.dudeExtra, def->dudeExtra)
 				("spritehit", w.hit, def->hit)
 				("basepoint", w.basePoint, def->basePoint);
@@ -472,7 +489,9 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, DBloodActor& w, DB
 			if (gModernMap)
 			{
 				arc("spritemass", w.spriteMass, def->spriteMass)
-					("prevmarker", w.prevmarker, def->prevmarker);
+					("prevmarker", w.prevmarker, def->prevmarker)
+					.Array("conditions", w.condition, def->condition, 2);
+				
 
 				// GenDudeExtra only contains valid info for kDudeModernCustom and kDudeModernCustomBurning so only save when needed as these are not small.
 				if (w.s().type == kDudeModernCustom || w.s().time == kDudeModernCustomBurning)
