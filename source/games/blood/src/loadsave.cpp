@@ -482,18 +482,19 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, DBloodActor& w, DB
 
 	if (arc.BeginObject(keyname))
 	{
-		arc("hasx", w.hasx, def->hasx);
+		arc("hasx", w.hasx, def->hasx)
+			("basepoint", w.basePoint, def->basePoint)
+			("xvel", w.xvel, def->xvel)
+			("yvel", w.yvel, def->yvel)
+			("zvel", w.zvel, def->zvel);
+
 		// The rest is only relevant if the actor has an xsprite.
 		if (w.hasX())
 		{
-			arc ("xsprite", w.xsprite, def->xsprite)
+			arc("xsprite", w.xsprite, def->xsprite)
 				("dudeslope", w.dudeSlope, def->dudeSlope)
 				("dudeextra", w.dudeExtra, def->dudeExtra)
-				("spritehit", w.hit, def->hit)
-				("basepoint", w.basePoint, def->basePoint);
-				("xvel", w.xvel, def->xvel);
-				("yvel", w.yvel, def->yvel);
-				("zvel", w.zvel, def->zvel);
+				("spritehit", w.hit, def->hit);
 
 			if (gModernMap)
 			{
