@@ -99,8 +99,6 @@ short consistency[MAXPLAYERS][BACKUPTICS];
 enum { NET_PeerToPeer, NET_PacketServer };
 uint8_t NetMode = NET_PeerToPeer;
 
-
-
 //
 // NETWORKING
 //

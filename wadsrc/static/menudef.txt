@@ -20,11 +20,9 @@ LISTMENU "MainMenu"
 		animatedtransition
 		DukeLogo
 		DukeTextItem "$MNU_NEWGAME", "n", "EpisodeMenu"
-		//DukeTextItem "$MNU_NEWGAME", "m", "MultiMenu" // In EDuke this replaces "New Game" when in networking mode. Kept here as a reminder.
+		DukeTextItem "$MNU_MULTIPLAYER", "m", "MultiMenu"
 		DukeTextItem "$MNU_LOADGAME", "l", "LoadGameMenu"
 		DukeTextItem "$MNU_OPTIONS", "o", "OptionsMenu"
-		DukeTextItem "$MNU_HELP", "h", "HelpMenu"
-		DukeTextItem "$MNU_CREDITS", "c", "CreditsMenu"
 		DukeTextItem "$MNU_QUITGAME", "q", "QuitMenu"
 	}
 	ifgame(Blood)

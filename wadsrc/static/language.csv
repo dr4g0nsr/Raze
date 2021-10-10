@@ -19,6 +19,7 @@ default,Identifier,Remarks,Filter,eng enc ena enz eni ens enj enb enl ent enw,cs
 "
 ,,Menus,,,,,,,,,,,,,,,,,,,,,
 New Game,MNU_NEWGAME,,,,Nová hra,Neues Spiel,,Nova Ludo,Nueva Partida,,Uusi peli,Nouvelle Partie,Új játék,Nuovo gioco,新規ゲーム,새로운 게임,Nieuw spel,Nowa Gra,Novo jogo,,Joc Nou,Новая игра,Нова игра
+Mutiplayer,MNU_MULTI,,,,Nová hra,Neues Spiel,,Nova Ludo,Nueva Partida,,Uusi peli,Nouvelle Partie,Új játék,Nuovo gioco,新規ゲーム,새로운 게임,Nieuw spel,Nowa Gra,Novo jogo,,Joc Nou,Новая игра,Нова игра
 Options,MNU_OPTIONS,,,,Možnosti,Optionen,,Agordoj,Opciones,,Asetukset,Options,Beállítások,Opzioni,オプション,설정,Opties,Opcje,Opções,,Opțiuni,Настройки,Подешавања
 Quit,MNU_QUITGAME,,,,Ukončit hru,Spiel verlassen,,Forlasi Ludon,Salir del juego,,Lopeta peli,Quitter le jeu,Kilépés,Esci dal gioco,終了,게임 종료,Verlaat spel,Wyjdź,Sair,,Ieșire,Выход,Заврши игру
 Help,MNU_HELP,,,,Nápověda,Hilfe,,Helpo,Ayuda,,Ohje,Aide,Segítség,,,,,Pomoc,Ajuda,,Ajutor,,
