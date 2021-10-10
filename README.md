@@ -1,4 +1,4 @@
-# Welcome to Raze!
+# Welcome to Raze Multiplayer, a fork of Raze (https://github.com/coelckers/Raze/)!
 
 [![Build Status](https://github.com/coelckers/Raze/workflows/Continuous%20Integration/badge.svg)](https://github.com/coelckers/Raze/actions?query=workflow%3A%22Continuous+Integration%22)
 
