@@ -50,7 +50,6 @@ ESyncBits ActionsToSend = 0;
 static int dpad_lock = 0;
 bool sendPause;
 bool crouch_toggle;
-static double lastCheck;
 
 CVAR(Float, m_pitch, 1.f, CVAR_GLOBALCONFIG | CVAR_ARCHIVE)		// Mouse speeds
 CVAR(Float, m_yaw, 1.f, CVAR_GLOBALCONFIG | CVAR_ARCHIVE)
@@ -65,10 +64,10 @@ CVAR(Float, m_side, 1.f, CVAR_GLOBALCONFIG | CVAR_ARCHIVE)
 
 void InputState::GetMouseDelta(ControlInfo * hidInput)
 {
-	hidInput->mouseturnx = g_mousePos.x * m_yaw * (1.f / 18.f);
-	hidInput->mouseturny = g_mousePos.y * m_pitch * (1.f / 14.f);
-	hidInput->mousemovex = g_mousePos.x * m_side;
-	hidInput->mousemovey = g_mousePos.y * m_forward;
+	hidInput->mouseturnx = g_mousePos.X * m_yaw * backendinputscale();
+	hidInput->mouseturny = g_mousePos.Y * m_pitch * backendinputscale();
+	hidInput->mousemovex = g_mousePos.X * m_side;
+	hidInput->mousemovey = g_mousePos.Y * m_forward;
 
 	g_mousePos = {};
 }
@@ -121,7 +120,6 @@ void InputState::ClearAllInput()
 	AnyKeyStatus = false;
 	WeaponToSend = 0;
 	dpad_lock = 0;
-	lastCheck = 0;
 
 	if (gamestate != GS_LEVEL)
 	{
@@ -291,7 +289,7 @@ CCMD(weapalt)
 
 CCMD(useitem)
 {
-	int max = (g_gameType & GAMEFLAG_PSEXHUMED)? 6 : (g_gameType & GAMEFLAG_SW)? 7 : isBlood() ? 4 : 5;
+	int max = (g_gameType & GAMEFLAG_PSEXHUMED)? 6 : isSWALL()? 7 : isBlood() ? 4 : 5;
 	if (argv.argc() != 2)
 	{
 		Printf("useitem <itemnum>: activates an inventory item (1-%d)", max);
@@ -470,21 +468,5 @@ void ApplyGlobalInput(InputPacket& input, ControlInfo* hidInput, bool const crou
 
 	if (buttonMap.ButtonDown(gamefunc_Look_Right)) 
 		input.actions |= SB_LOOK_RIGHT;
-
-}
-
-double InputScale()
-{
-	if (!SyncInput())
-	{
-		double now = I_msTimeF();
-		double elapsedInputTicks = lastCheck > 0 ? min(now - lastCheck, 1000.0 / GameTicRate) : 1;
-		lastCheck = now;
-		return elapsedInputTicks * GameTicRate / 1000.0;
-	}
-	else
-	{
-		return 1;
-	}
 }
 

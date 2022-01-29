@@ -40,9 +40,6 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 
 BEGIN_SW_NS
 
-int DoHariKariBlood(short SpriteNum);
-//int InitActorMoveCloser(short SpriteNum);
-
 DECISION GirlNinjaBattle[] =
 {
     {499, InitActorMoveCloser},
@@ -76,7 +73,7 @@ DECISION GirlNinjaEvasive[] =
     {400,   InitActorDuck}, // 100
 //    {300,   InitActorEvade},
 //    {800,   InitActorRunAway},
-    {1024,  NULL}
+    {1024,  nullptr}
 };
 
 DECISION GirlNinjaLostTarget[] =
@@ -169,7 +166,7 @@ STATE s_GirlNinjaRun[5][4] =
 };
 
 
-STATEp sg_GirlNinjaRun[] =
+STATE* sg_GirlNinjaRun[] =
 {
     s_GirlNinjaRun[0],
     s_GirlNinjaRun[1],
@@ -206,7 +203,7 @@ STATE s_GirlNinjaStand[5][1] =
 };
 
 
-STATEp sg_GirlNinjaStand[] =
+STATE* sg_GirlNinjaStand[] =
 {
     s_GirlNinjaStand[0],
     s_GirlNinjaStand[1],
@@ -228,34 +225,34 @@ STATE s_GirlNinjaRise[5][3] =
     {
         {GIRLNINJA_KNEEL_R0 + 0, GIRLNINJA_RISE_RATE, NullGirlNinja, &s_GirlNinjaRise[0][1]},
         {GIRLNINJA_STAND_R0 + 0, GIRLNINJA_STAND_RATE, NullGirlNinja, &s_GirlNinjaRise[0][2]},
-        {0, 0, NULL, (STATEp)sg_GirlNinjaRun},  // JBF: sg_GirlNinjaRun really is supposed to be the
+        {0, 0, nullptr, (STATE*)sg_GirlNinjaRun},  // JBF: sg_GirlNinjaRun really is supposed to be the
         // pointer to the state group. See StateControl() where
-        // it says "if (!u->State->Pic)".
+        // it says "if (!actor->user.State->Pic)".
     },
     {
         {GIRLNINJA_KNEEL_R1 + 0, GIRLNINJA_RISE_RATE, NullGirlNinja, &s_GirlNinjaRise[1][1]},
         {GIRLNINJA_STAND_R1 + 0, GIRLNINJA_STAND_RATE, NullGirlNinja, &s_GirlNinjaRise[1][2]},
-        {0, 0, NULL, (STATEp)sg_GirlNinjaRun},
+        {0, 0, nullptr, (STATE*)sg_GirlNinjaRun},
     },
     {
         {GIRLNINJA_KNEEL_R2 + 0, GIRLNINJA_RISE_RATE, NullGirlNinja, &s_GirlNinjaRise[2][1]},
         {GIRLNINJA_STAND_R2 + 0, GIRLNINJA_STAND_RATE, NullGirlNinja, &s_GirlNinjaRise[2][2]},
-        {0, 0, NULL, (STATEp)sg_GirlNinjaRun},
+        {0, 0, nullptr, (STATE*)sg_GirlNinjaRun},
     },
     {
         {GIRLNINJA_KNEEL_R3 + 0, GIRLNINJA_RISE_RATE, NullGirlNinja, &s_GirlNinjaRise[3][1]},
         {GIRLNINJA_STAND_R3 + 0, GIRLNINJA_STAND_RATE, NullGirlNinja, &s_GirlNinjaRise[3][2]},
-        {0, 0, NULL, (STATEp)sg_GirlNinjaRun},
+        {0, 0, nullptr, (STATE*)sg_GirlNinjaRun},
     },
     {
         {GIRLNINJA_KNEEL_R4 + 0, GIRLNINJA_RISE_RATE, NullGirlNinja, &s_GirlNinjaRise[4][1]},
         {GIRLNINJA_STAND_R4 + 0, GIRLNINJA_STAND_RATE, NullGirlNinja, &s_GirlNinjaRise[4][2]},
-        {0, 0, NULL, (STATEp)sg_GirlNinjaRun},
+        {0, 0, nullptr, (STATE*)sg_GirlNinjaRun},
     },
 };
 
 
-STATEp sg_GirlNinjaRise[] =
+STATE* sg_GirlNinjaRise[] =
 {
     s_GirlNinjaRise[0],
     s_GirlNinjaRise[1],
@@ -298,7 +295,7 @@ STATE s_GirlNinjaDuck[5][2] =
 };
 
 
-STATEp sg_GirlNinjaDuck[] =
+STATE* sg_GirlNinjaDuck[] =
 {
     s_GirlNinjaDuck[0],
     s_GirlNinjaDuck[1],
@@ -334,7 +331,7 @@ STATE s_GirlNinjaSit[5][1] =
 };
 
 
-STATEp sg_GirlNinjaSit[] =
+STATE* sg_GirlNinjaSit[] =
 {
     s_GirlNinjaSit[0],
     s_GirlNinjaSit[1],
@@ -377,7 +374,7 @@ STATE s_GirlNinjaJump[5][2] =
 };
 
 
-STATEp sg_GirlNinjaJump[] =
+STATE* sg_GirlNinjaJump[] =
 {
     s_GirlNinjaJump[0],
     s_GirlNinjaJump[1],
@@ -420,7 +417,7 @@ STATE s_GirlNinjaFall[5][2] =
 };
 
 
-STATEp sg_GirlNinjaFall[] =
+STATE* sg_GirlNinjaFall[] =
 {
     s_GirlNinjaFall[0],
     s_GirlNinjaFall[1],
@@ -457,7 +454,7 @@ STATE s_GirlNinjaPain[5][1] =
     },
 };
 
-STATEp sg_GirlNinjaPain[] =
+STATE* sg_GirlNinjaPain[] =
 {
     s_GirlNinjaPain[0],
     s_GirlNinjaPain[1],
@@ -519,7 +516,7 @@ STATE s_GirlNinjaSticky[5][6] =
     },
 };
 
-STATEp sg_GirlNinjaSticky[] =
+STATE* sg_GirlNinjaSticky[] =
 {
     s_GirlNinjaSticky[0],
     s_GirlNinjaSticky[1],
@@ -578,7 +575,7 @@ STATE s_GirlNinjaCrossbow[5][5] =
 };
 
 
-STATEp sg_GirlNinjaCrossbow[] =
+STATE* sg_GirlNinjaCrossbow[] =
 {
     s_GirlNinjaCrossbow[0],
     s_GirlNinjaCrossbow[1],
@@ -637,44 +634,44 @@ STATE s_GirlNinjaDeathFall[] =
 };
 
 /*
-STATEp *Stand[MAX_WEAPONS];
-STATEp *Run;
-STATEp *Jump;
-STATEp *Fall;
-STATEp *Crawl;
-STATEp *Swim;
-STATEp *Fly;
-STATEp *Rise;
-STATEp *Sit;
-STATEp *Look;
-STATEp *Climb;
-STATEp *Pain;
-STATEp *Death1;
-STATEp *Death2;
-STATEp *Dead;
-STATEp *DeathJump;
-STATEp *DeathFall;
-STATEp *CloseAttack[2];
-STATEp *Attack[6];
-STATEp *Special[2];
+STATE* *Stand[MAX_WEAPONS];
+STATE* *Run;
+STATE* *Jump;
+STATE* *Fall;
+STATE* *Crawl;
+STATE* *Swim;
+STATE* *Fly;
+STATE* *Rise;
+STATE* *Sit;
+STATE* *Look;
+STATE* *Climb;
+STATE* *Pain;
+STATE* *Death1;
+STATE* *Death2;
+STATE* *Dead;
+STATE* *DeathJump;
+STATE* *DeathFall;
+STATE* *CloseAttack[2];
+STATE* *Attack[6];
+STATE* *Special[2];
 */
 
-STATEp sg_GirlNinjaDie[] =
+STATE* sg_GirlNinjaDie[] =
 {
     s_GirlNinjaDie
 };
 
-STATEp sg_GirlNinjaDead[] =
+STATE* sg_GirlNinjaDead[] =
 {
     s_GirlNinjaDead
 };
 
-STATEp sg_GirlNinjaDeathJump[] =
+STATE* sg_GirlNinjaDeathJump[] =
 {
     s_GirlNinjaDeathJump
 };
 
-STATEp sg_GirlNinjaDeathFall[] =
+STATE* sg_GirlNinjaDeathFall[] =
 {
     s_GirlNinjaDeathFall
 };
@@ -691,16 +688,16 @@ ACTOR_ACTION_SET GirlNinjaActionSet =
     sg_GirlNinjaRun,
     sg_GirlNinjaJump,
     sg_GirlNinjaFall,
-    NULL,
-    NULL,
-    NULL,
+    nullptr,
+    nullptr,
+    nullptr,
     sg_GirlNinjaRise,
     sg_GirlNinjaSit,
-    NULL,
-    NULL,
+    nullptr,
+    nullptr,
     sg_GirlNinjaPain,
     sg_GirlNinjaDie,
-    NULL,
+    nullptr,
     sg_GirlNinjaDead,
     sg_GirlNinjaDeathJump,
     sg_GirlNinjaDeathFall,
@@ -708,152 +705,130 @@ ACTOR_ACTION_SET GirlNinjaActionSet =
     {800, 1024},
     {sg_GirlNinjaCrossbow, sg_GirlNinjaSticky},
     {800, 1024},
-    {NULL},
+    {nullptr},
     sg_GirlNinjaDuck,
-    NULL
+    nullptr
 };
 
-int
-SetupGirlNinja(short SpriteNum)
+int SetupGirlNinja(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u;
     ANIMATOR DoActorDecide;
 
-    if (TEST(sp->cstat, CSTAT_SPRITE_RESTORE))
+    if (!(actor->spr.cstat & CSTAT_SPRITE_RESTORE))
     {
-        u = User[SpriteNum].Data();
-        ASSERT(u);
-    }
-    else
-    {
-        u = SpawnUser(SpriteNum, GIRLNINJA_RUN_R0, s_GirlNinjaRun[0]);
-        u->Health = (Skill < MinEnemySkill - 1) ? 50 : 100;
+        SpawnUser(actor, GIRLNINJA_RUN_R0, s_GirlNinjaRun[0]);
+        actor->user.Health = (Skill < MinEnemySkill - 1) ? 50 : 100;
     }
 
-    u->StateEnd = s_GirlNinjaDie;
-    u->Rot = sg_GirlNinjaRun;
-    sp->xrepeat = 51;
-    sp->yrepeat = 43;
+    actor->user.StateEnd = s_GirlNinjaDie;
+    actor->user.Rot = sg_GirlNinjaRun;
+    actor->spr.xrepeat = 51;
+    actor->spr.yrepeat = 43;
 
-    u->Attrib = &GirlNinjaAttrib;
-    sp->pal = u->spal = 26;
-    EnemyDefaults(SpriteNum, &GirlNinjaActionSet, &GirlNinjaPersonality);
+    actor->user.Attrib = &GirlNinjaAttrib;
+    actor->spr.pal = actor->user.spal = 26;
+    EnemyDefaults(actor, &GirlNinjaActionSet, &GirlNinjaPersonality);
 
-    ChangeState(SpriteNum, s_GirlNinjaRun[0]);
-    DoActorSetSpeed(SpriteNum, NORM_SPEED);
+    ChangeState(actor, s_GirlNinjaRun[0]);
+    DoActorSetSpeed(actor, NORM_SPEED);
 
-    u->Radius = 280;
-    RESET(u->Flags, SPR_XFLIP_TOGGLE);
+    actor->user.Radius = 280;
+    actor->user.Flags &= ~(SPR_XFLIP_TOGGLE);
 
     return 0;
 }
 
 
-int
-DoGirlNinjaMove(short SpriteNum)
+int DoGirlNinjaMove(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-
     // jumping and falling
-    if (TEST(u->Flags, SPR_JUMPING | SPR_FALLING) && !TEST(u->Flags, SPR_CLIMBING))
+    if (actor->user.Flags & (SPR_JUMPING | SPR_FALLING) && !(actor->user.Flags & SPR_CLIMBING))
     {
-        if (TEST(u->Flags, SPR_JUMPING))
-            DoActorJump(SpriteNum);
-        else if (TEST(u->Flags, SPR_FALLING))
-            DoActorFall(SpriteNum);
+        if (actor->user.Flags & (SPR_JUMPING))
+            DoActorJump(actor);
+        else if (actor->user.Flags & (SPR_FALLING))
+            DoActorFall(actor);
     }
 
     // sliding
-    if (TEST(u->Flags, SPR_SLIDING) && !TEST(u->Flags, SPR_CLIMBING))
-        DoActorSlide(SpriteNum);
+    if (actor->user.Flags & (SPR_SLIDING) && !(actor->user.Flags & SPR_CLIMBING))
+        DoActorSlide(actor);
 
     // !AIC - do track or call current action function - such as DoActorMoveCloser()
-    if (u->track >= 0)
-        ActorFollowTrack(SpriteNum, ACTORMOVETICS);
+    if (actor->user.track >= 0)
+        ActorFollowTrack(actor, ACTORMOVETICS);
     else
     {
-        (*u->ActorActionFunc)(SpriteNum);
+        (*actor->user.ActorActionFunc)(actor);
     }
 
     // stay on floor unless doing certain things
-    if (!TEST(u->Flags, SPR_JUMPING | SPR_FALLING | SPR_CLIMBING))
+    if (!(actor->user.Flags & (SPR_JUMPING | SPR_FALLING | SPR_CLIMBING)))
     {
-        KeepActorOnFloor(SpriteNum);
+        KeepActorOnFloor(actor);
     }
 
     // take damage from environment
-    DoActorSectorDamage(SpriteNum);
+    DoActorSectorDamage(actor);
 
     return 0;
 }
 
-int
-GirlNinjaJumpActionFunc(short SpriteNum)
+int GirlNinjaJumpActionFunc(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
     int nx, ny;
 
     // Move while jumping
-    nx = MulScale(sp->xvel, bcos(sp->ang), 14);
-    ny = MulScale(sp->xvel, bsin(sp->ang), 14);
+    nx = MulScale(actor->spr.xvel, bcos(actor->spr.ang), 14);
+    ny = MulScale(actor->spr.xvel, bsin(actor->spr.ang), 14);
 
     // if cannot move the sprite
-    if (!move_actor(SpriteNum, nx, ny, 0L))
+    if (!move_actor(actor, nx, ny, 0L))
     {
         return 0;
     }
 
-    if (!TEST(u->Flags, SPR_JUMPING|SPR_FALLING))
+    if (!(actor->user.Flags & (SPR_JUMPING|SPR_FALLING)))
     {
-        InitActorDecide(SpriteNum);
+        InitActorDecide(actor);
     }
 
     return 0;
 }
 
-int
-NullGirlNinja(short SpriteNum)
+int NullGirlNinja(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
+    if (actor->user.WaitTics > 0) actor->user.WaitTics -= ACTORMOVETICS;
 
-    if (u->WaitTics > 0) u->WaitTics -= ACTORMOVETICS;
+    if (actor->user.Flags & (SPR_SLIDING) && !(actor->user.Flags & SPR_CLIMBING) && !(actor->user.Flags & (SPR_JUMPING|SPR_FALLING)))
+        DoActorSlide(actor);
 
-    if (TEST(u->Flags, SPR_SLIDING) && !TEST(u->Flags, SPR_CLIMBING) && !TEST(u->Flags, SPR_JUMPING|SPR_FALLING))
-        DoActorSlide(SpriteNum);
+    if (!(actor->user.Flags & SPR_CLIMBING) && !(actor->user.Flags & (SPR_JUMPING|SPR_FALLING)))
+        KeepActorOnFloor(actor);
 
-    if (!TEST(u->Flags, SPR_CLIMBING) && !TEST(u->Flags, SPR_JUMPING|SPR_FALLING))
-        KeepActorOnFloor(SpriteNum);
-
-    DoActorSectorDamage(SpriteNum);
+    DoActorSectorDamage(actor);
 
     return 0;
 }
 
 
-int DoGirlNinjaPain(short SpriteNum)
+int DoGirlNinjaPain(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
+    NullGirlNinja(actor);
 
-    NullGirlNinja(SpriteNum);
-
-    if ((u->WaitTics -= ACTORMOVETICS) <= 0)
-        InitActorDecide(SpriteNum);
+    if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0)
+        InitActorDecide(actor);
 
     return 0;
 }
 
-int DoGirlNinjaSpecial(short SpriteNum)
+int DoGirlNinjaSpecial(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u = User[SpriteNum].Data();
-
-    if (u->spal == PALETTE_PLAYER5)
+    if (actor->user.spal == PALETTE_PLAYER5)
     {
-        RESET(sp->cstat,CSTAT_SPRITE_TRANSLUCENT);
-        sp->hitag = 0;
-        sp->shade = -10;
+        actor->spr.cstat &= ~(CSTAT_SPRITE_TRANSLUCENT);
+        actor->spr.hitag = 0;
+        actor->spr.shade = -10;
     }
 
     return 0;
@@ -864,7 +839,6 @@ int DoGirlNinjaSpecial(short SpriteNum)
 
 static saveable_code saveable_girlninj_code[] =
 {
-    SAVE_CODE(SetupGirlNinja),
     SAVE_CODE(DoGirlNinjaMove),
     SAVE_CODE(GirlNinjaJumpActionFunc),
     SAVE_CODE(NullGirlNinja),

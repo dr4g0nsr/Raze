@@ -23,16 +23,15 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #include "ns.h"	// Must come before everything else!
 
-#include "compat.h"
 #include "build.h"
 
 #include "blood.h"
 
 BEGIN_BLD_NS
 
-static void houndThinkSearch(DBloodActor *);
-static void houndThinkGoto(DBloodActor *);
-static void houndThinkChase(DBloodActor *);
+static void houndThinkSearch(DBloodActor*);
+static void houndThinkGoto(DBloodActor*);
+static void houndThinkChase(DBloodActor*);
 
 AISTATE houndIdle = { kAiStateIdle, 0, -1, 0, NULL, NULL, aiThinkTarget, NULL };
 AISTATE houndSearch = { kAiStateMove, 8, -1, 1800, NULL, aiMoveForward, houndThinkSearch, &houndIdle };
@@ -45,122 +44,101 @@ AISTATE houndBurn = { kAiStateChase, 7, nHoundBurnClient, 60, NULL, NULL, NULL, 
 
 void houndBiteSeqCallback(int, DBloodActor* actor)
 {
-    XSPRITE* pXSprite = &actor->x();
-    spritetype* pSprite = &actor->s();
-    int dx = CosScale16(pSprite->ang);
-    int dy = SinScale16(pSprite->ang);
-    ///assert(pSprite->type >= kDudeBase && pSprite->type < kDudeMax);
-    if (!(pSprite->type >= kDudeBase && pSprite->type < kDudeMax)) {
-        Printf(PRINT_HIGH, "pSprite->type >= kDudeBase && pSprite->type < kDudeMax");
-        return;
-    }
+	int dx = bcos(actor->spr.ang);
+	int dy = bsin(actor->spr.ang);
+	if (!(actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax)) {
+		Printf(PRINT_HIGH, "actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax");
+		return;
+	}
 
-    ///assert(pXSprite->target >= 0 && pXSprite->target < kMaxSprites);
-    if (!(pXSprite->target >= 0 && pXSprite->target < kMaxSprites)) {
-        Printf(PRINT_HIGH, "pXSprite->target >= 0 && pXSprite->target < kMaxSprites");
-        return;
-    }
-    spritetype *pTarget = &sprite[pXSprite->target];
-    #ifdef NOONE_EXTENSIONS
-        if (IsPlayerSprite(pTarget) || gModernMap) // allow to hit non-player targets
-            actFireVector(pSprite, 0, 0, dx, dy, pTarget->z - pSprite->z, VECTOR_TYPE_15);
-    #else
-        if (IsPlayerSprite(pTarget))
-            actFireVector(pSprite, 0, 0, dx, dy, pTarget->z - pSprite->z, VECTOR_TYPE_15);
-    #endif
+	if (!actor->ValidateTarget(__FUNCTION__)) return;
+	auto target = actor->GetTarget();
+#ifdef NOONE_EXTENSIONS
+	if (target->IsPlayerActor() || gModernMap) // allow to hit non-player targets
+		actFireVector(actor, 0, 0, dx, dy, target->spr.pos.Z - actor->spr.pos.Z, kVectorHoundBite);
+#else
+	if (target->IsPlayerActor())
+		actFireVector(actor, 0, 0, dx, dy, target->spr.z - actor->spr.z, kVectorHoundBite);
+#endif
 }
 
 void houndBurnSeqCallback(int, DBloodActor* actor)
 {
-    spritetype* pSprite = &actor->s();
-    actFireMissile(pSprite, 0, 0, CosScale16(pSprite->ang), SinScale16(pSprite->ang), 0, kMissileFlameHound);
+	actFireMissile(actor, 0, 0, bcos(actor->spr.ang), bsin(actor->spr.ang), 0, kMissileFlameHound);
 }
 
 static void houndThinkSearch(DBloodActor* actor)
 {
-    auto pXSprite = &actor->x();
-    auto pSprite = &actor->s();
-    aiChooseDirection(pSprite, pXSprite, pXSprite->goalAng);
-    aiThinkTarget(actor);
+	aiChooseDirection(actor, actor->xspr.goalAng);
+	aiThinkTarget(actor);
 }
 
 static void houndThinkGoto(DBloodActor* actor)
 {
-    auto pXSprite = &actor->x();
-    auto pSprite = &actor->s();
-    ///assert(pSprite->type >= kDudeBase && pSprite->type < kDudeMax);
-    if (!(pSprite->type >= kDudeBase && pSprite->type < kDudeMax)) {
-        Printf(PRINT_HIGH, "pSprite->type >= kDudeBase && pSprite->type < kDudeMax");
-        return;
-    }
-    
-    DUDEINFO *pDudeInfo = getDudeInfo(pSprite->type);
-    int dx = pXSprite->targetX-pSprite->x;
-    int dy = pXSprite->targetY-pSprite->y;
-    int nAngle = getangle(dx, dy);
-    int nDist = approxDist(dx, dy);
-    aiChooseDirection(pSprite, pXSprite, nAngle);
-    if (nDist < 512 && abs(pSprite->ang - nAngle) < pDudeInfo->periphery)
-        aiNewState(actor, &houndSearch);
-    aiThinkTarget(actor);
+	if (!(actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax)) {
+		Printf(PRINT_HIGH, "actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax");
+		return;
+	}
+
+	DUDEINFO* pDudeInfo = getDudeInfo(actor->spr.type);
+	int dx = actor->xspr.TargetPos.X - actor->spr.pos.X;
+	int dy = actor->xspr.TargetPos.Y - actor->spr.pos.Y;
+	int nAngle = getangle(dx, dy);
+	int nDist = approxDist(dx, dy);
+	aiChooseDirection(actor, nAngle);
+	if (nDist < 512 && abs(actor->spr.ang - nAngle) < pDudeInfo->periphery)
+		aiNewState(actor, &houndSearch);
+	aiThinkTarget(actor);
 }
 
 static void houndThinkChase(DBloodActor* actor)
 {
-    auto pXSprite = &actor->x();
-    auto pSprite = &actor->s();
-    if (pXSprite->target == -1)
-    {
-        aiNewState(actor, &houndGoto);
-        return;
-    }
-    ///assert(pSprite->type >= kDudeBase && pSprite->type < kDudeMax);
-    if (!(pSprite->type >= kDudeBase && pSprite->type < kDudeMax)) {
-        Printf(PRINT_HIGH, "pSprite->type >= kDudeBase && pSprite->type < kDudeMax");
-        return;
-    }
-    DUDEINFO *pDudeInfo = getDudeInfo(pSprite->type);
-    ///assert(pXSprite->target >= 0 && pXSprite->target < kMaxSprites);
-    if (!(pXSprite->target >= 0 && pXSprite->target < kMaxSprites)) {
-        Printf(PRINT_HIGH, "pXSprite->target >= 0 && pXSprite->target < kMaxSprites");
-        return;
-    }
-    spritetype *pTarget = &sprite[pXSprite->target];
-    XSPRITE *pXTarget = &xsprite[pTarget->extra];
-    int dx = pTarget->x-pSprite->x;
-    int dy = pTarget->y-pSprite->y;
-    aiChooseDirection(pSprite, pXSprite, getangle(dx, dy));
-    if (pXTarget->health == 0)
-    {
-        aiNewState(actor, &houndSearch);
-        return;
-    }
-    if (IsPlayerSprite(pTarget) && powerupCheck(&gPlayer[pTarget->type-kDudePlayer1], kPwUpShadowCloak) > 0)
-    {
-        aiNewState(actor, &houndSearch);
-        return;
-    }
-    int nDist = approxDist(dx, dy);
-    if (nDist <= pDudeInfo->seeDist)
-    {
-        int nDeltaAngle = ((getangle(dx,dy)+1024-pSprite->ang)&2047)-1024;
-        int height = (pDudeInfo->eyeHeight*pSprite->yrepeat)<<2;
-        if (cansee(pTarget->x, pTarget->y, pTarget->z, pTarget->sectnum, pSprite->x, pSprite->y, pSprite->z - height, pSprite->sectnum))
-        {
-            if (nDist < pDudeInfo->seeDist && abs(nDeltaAngle) <= pDudeInfo->periphery)
-            {
-                aiSetTarget(pXSprite, pXSprite->target);
-                if (nDist < 0xb00 && nDist > 0x500 && abs(nDeltaAngle) < 85)
-                    aiNewState(actor, &houndBurn);
-                else if(nDist < 0x266 && abs(nDeltaAngle) < 85)
-                    aiNewState(actor, &houndBite);
-                return;
-            }
-        }
-    }
+	if (actor->GetTarget() == nullptr)
+	{
+		aiNewState(actor, &houndGoto);
+		return;
+	}
+	if (!(actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax)) {
+		Printf(PRINT_HIGH, "actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax");
+		return;
+	}
+	DUDEINFO* pDudeInfo = getDudeInfo(actor->spr.type);
+	auto target = actor->GetTarget();
 
-    aiNewState(actor, &houndGoto);
-    pXSprite->target = -1;
+	int dx = target->spr.pos.X - actor->spr.pos.X;
+	int dy = target->spr.pos.Y - actor->spr.pos.Y;
+	aiChooseDirection(actor, getangle(dx, dy));
+	if (target->xspr.health == 0)
+	{
+		aiNewState(actor, &houndSearch);
+		return;
+	}
+	if (target->IsPlayerActor() && powerupCheck(&gPlayer[target->spr.type - kDudePlayer1], kPwUpShadowCloak) > 0)
+	{
+		aiNewState(actor, &houndSearch);
+		return;
+	}
+	int nDist = approxDist(dx, dy);
+	if (nDist <= pDudeInfo->seeDist)
+	{
+		int nDeltaAngle = ((getangle(dx, dy) + 1024 - actor->spr.ang) & 2047) - 1024;
+		int height = (pDudeInfo->eyeHeight * actor->spr.yrepeat) << 2;
+		if (cansee(target->spr.pos.X, target->spr.pos.Y, target->spr.pos.Z, target->sector(), actor->spr.pos.X, actor->spr.pos.Y, actor->spr.pos.Z - height, actor->sector()))
+		{
+			if (nDist < pDudeInfo->seeDist && abs(nDeltaAngle) <= pDudeInfo->periphery)
+			{
+				aiSetTarget(actor, actor->GetTarget());
+				if (nDist < 0xb00 && nDist > 0x500 && abs(nDeltaAngle) < 85)
+					aiNewState(actor, &houndBurn);
+				else if (nDist < 0x266 && abs(nDeltaAngle) < 85)
+					aiNewState(actor, &houndBite);
+				return;
+			}
+		}
+	}
+
+	aiNewState(actor, &houndGoto);
+	actor->SetTarget(nullptr);
 }
 
 END_BLD_NS

@@ -40,10 +40,15 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 
 BEGIN_SW_NS
 
+extern int InitSumoNapalm(DSWActor*);
+extern int InitSumoStompAttack(DSWActor*);
+extern int InitMiniSumoClap(DSWActor*);
+extern int InitSumoSkull(DSWActor*);
+
 extern uint8_t playTrack;
 bool bosswasseen[3];
 
-short BossSpriteNum[3] = {-1,-1,-1};
+DSWActor* BossSpriteNum[3];
 
 
 ANIMATOR InitSumoCharge;
@@ -162,7 +167,7 @@ STATE s_SumoRun[5][4] =
     }
 };
 
-STATEp sg_SumoRun[] =
+STATE* sg_SumoRun[] =
 {
     &s_SumoRun[0][0],
     &s_SumoRun[1][0],
@@ -218,7 +223,7 @@ STATE s_SumoCharge[5][4] =
     }
 };
 
-STATEp sg_SumoCharge[] =
+STATE* sg_SumoCharge[] =
 {
     &s_SumoCharge[0][0],
     &s_SumoCharge[1][0],
@@ -253,7 +258,7 @@ STATE s_SumoStand[5][1] =
     }
 };
 
-STATEp sg_SumoStand[] =
+STATE* sg_SumoStand[] =
 {
     &s_SumoStand[0][0],
     &s_SumoStand[1][0],
@@ -294,7 +299,7 @@ STATE s_SumoPain[5][2] =
     }
 };
 
-STATEp sg_SumoPain[] =
+STATE* sg_SumoPain[] =
 {
     &s_SumoPain[0][0],
     &s_SumoPain[1][0],
@@ -356,7 +361,7 @@ STATE s_SumoFart[5][6] =
     }
 };
 
-STATEp sg_SumoFart[] =
+STATE* sg_SumoFart[] =
 {
     &s_SumoFart[0][0],
     &s_SumoFart[1][0],
@@ -418,7 +423,7 @@ STATE s_SumoClap[5][6] =
     }
 };
 
-STATEp sg_SumoClap[] =
+STATE* sg_SumoClap[] =
 {
     &s_SumoClap[0][0],
     &s_SumoClap[1][0],
@@ -480,7 +485,7 @@ STATE s_SumoStomp[5][6] =
     }
 };
 
-STATEp sg_SumoStomp[] =
+STATE* sg_SumoStomp[] =
 {
     &s_SumoStomp[0][0],
     &s_SumoStomp[1][0],
@@ -520,7 +525,7 @@ STATE s_SumoDie[] =
     {SUMO_DEAD, SUMO_DIE_RATE, DoActorDebris, &s_SumoDie[16]}
 };
 
-STATEp sg_SumoDie[] =
+STATE* sg_SumoDie[] =
 {
     s_SumoDie
 };
@@ -530,182 +535,129 @@ STATE s_SumoDead[] =
     {SUMO_DEAD, SUMO_DIE_RATE, DoActorDebris, &s_SumoDead[0]},
 };
 
-STATEp sg_SumoDead[] =
+STATE* sg_SumoDead[] =
 {
     s_SumoDead
 };
-
-/*
-typedef struct
-{
-#define MAX_ACTOR_CLOSE_ATTACK 2
-#define MAX_ACTOR_ATTACK 6
-STATEp *Stand;
-STATEp *Run;
-STATEp *Jump;
-STATEp *Fall;
-STATEp *Crawl;
-STATEp *Swim;
-STATEp *Fly;
-STATEp *Rise;
-STATEp *Sit;
-STATEp *Look;
-STATEp *Climb;
-STATEp *Pain;
-STATEp *Death1;
-STATEp *Death2;
-STATEp *Dead;
-STATEp *DeathJump;
-STATEp *DeathFall;
-
-STATEp *CloseAttack[MAX_ACTOR_CLOSE_ATTACK];
-short  CloseAttackPercent[MAX_ACTOR_CLOSE_ATTACK];
-
-STATEp *Attack[MAX_ACTOR_ATTACK];
-short  AttackPercent[MAX_ACTOR_ATTACK];
-
-STATEp *Special[2];
-STATEp *Duck;
-STATEp *Dive;
-}ACTOR_ACTION_SET,*ACTOR_ACTION_SETp;
-*/
 
 ACTOR_ACTION_SET SumoActionSet =
 {
     sg_SumoStand,
     sg_SumoRun,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL, //climb
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr, //climb
     sg_SumoPain, //pain
     sg_SumoDie,
-    NULL,
+    nullptr,
     sg_SumoDead,
-    NULL,
-    NULL,
+    nullptr,
+    nullptr,
     {sg_SumoStomp,sg_SumoFart},
     {800,1024},
     {sg_SumoClap,sg_SumoStomp,sg_SumoFart},
     {400,750,1024},
-    {NULL},
-    NULL,
-    NULL
+    {nullptr},
+    nullptr,
+    nullptr
 };
 
 ACTOR_ACTION_SET MiniSumoActionSet =
 {
     sg_SumoStand,
     sg_SumoRun,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL, //climb
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr, //climb
     sg_SumoPain, //pain
     sg_SumoDie,
-    NULL,
+    nullptr,
     sg_SumoDead,
-    NULL,
-    NULL,
+    nullptr,
+    nullptr,
     {sg_SumoClap},
     {1024},
     {sg_SumoClap},
     {1024},
-    {NULL},
-    NULL,
-    NULL
+    {nullptr},
+    nullptr,
+    nullptr
 };
 
 
-int
-SetupSumo(short SpriteNum)
+int SetupSumo(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u;
     ANIMATOR DoActorDecide;
 
-    if (TEST(sp->cstat, CSTAT_SPRITE_RESTORE))
+    if (!(actor->spr.cstat & CSTAT_SPRITE_RESTORE))
     {
-        u = User[SpriteNum].Data();
-        ASSERT(u);
-    }
-    else
-    {
-        u = SpawnUser(SpriteNum,SUMO_RUN_R0,s_SumoRun[0]);
-        u->Health = 6000;
+        SpawnUser(actor,SUMO_RUN_R0,s_SumoRun[0]);
+        actor->user.Health = 6000;
     }
 
-    if (Skill == 0) u->Health = 2000;
-    if (Skill == 1) u->Health = 4000;
+    if (Skill == 0) actor->user.Health = 2000;
+    if (Skill == 1) actor->user.Health = 4000;
 
-    ChangeState(SpriteNum,s_SumoRun[0]);
-    u->Attrib = &SumoAttrib;
-    DoActorSetSpeed(SpriteNum, NORM_SPEED);
-    u->StateEnd = s_SumoDie;
-    u->Rot = sg_SumoRun;
+    ChangeState(actor,s_SumoRun[0]);
+    actor->user.Attrib = &SumoAttrib;
+    DoActorSetSpeed(actor, NORM_SPEED);
+    actor->user.StateEnd = s_SumoDie;
+    actor->user.Rot = sg_SumoRun;
 
-    EnemyDefaults(SpriteNum, &SumoActionSet, &SumoPersonality);
+    EnemyDefaults(actor, &SumoActionSet, &SumoPersonality);
 
-    sp->clipdist = (512) >> 2;
-    if (sp->pal == 16)
+    actor->spr.clipdist = (512) >> 2;
+    if (actor->spr.pal == 16)
     {
         // Mini Sumo
-        sp->xrepeat = 43;
-        sp->yrepeat = 29;
-        u->ActorActionSet = &MiniSumoActionSet;
-        u->Health = 500;
+        actor->spr.xrepeat = 43;
+        actor->spr.yrepeat = 29;
+        actor->user.ActorActionSet = &MiniSumoActionSet;
+        actor->user.Health = 500;
     }
     else
     {
-        sp->xrepeat = 115;
-        sp->yrepeat = 75;
+        actor->spr.xrepeat = 115;
+        actor->spr.yrepeat = 75;
     }
 
-    //SET(u->Flags, SPR_XFLIP_TOGGLE);
+    //actor->user.Flags |= (SPR_XFLIP_TOGGLE);
 
     return 0;
 }
 
-int NullSumo(short SpriteNum)
+int NullSumo(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
+    if (!(actor->user.Flags & SPR_CLIMBING))
+        KeepActorOnFloor(actor);
 
-    //if (TEST(u->Flags,SPR_SLIDING))
-    //DoActorSlide(SpriteNum);
-
-    if (!TEST(u->Flags,SPR_CLIMBING))
-        KeepActorOnFloor(SpriteNum);
-
-    DoActorSectorDamage(SpriteNum);
+    DoActorSectorDamage(actor);
 
     return 0;
 }
 
-int DoSumoMove(short SpriteNum)
+int DoSumoMove(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-
-    //if (TEST(u->Flags,SPR_SLIDING))
-    //DoActorSlide(SpriteNum);
-
-    if (u->track >= 0)
-        ActorFollowTrack(SpriteNum, ACTORMOVETICS);
+    if (actor->user.track >= 0)
+        ActorFollowTrack(actor, ACTORMOVETICS);
     else
-        (*u->ActorActionFunc)(SpriteNum);
+        (*actor->user.ActorActionFunc)(actor);
 
-    KeepActorOnFloor(SpriteNum);
+    KeepActorOnFloor(actor);
 
-    if (DoActorSectorDamage(SpriteNum))
+    if (DoActorSectorDamage(actor))
     {
         return 0;
     }
@@ -713,107 +665,64 @@ int DoSumoMove(short SpriteNum)
     return 0;
 }
 
-#if 0
-int InitSumoCharge(short SpriteNum)
+
+int DoSumoRumble(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u = User[SpriteNum].Data();
-
-    if (RANDOM_P2(1024) > 950)
-        PlaySound(DIGI_SUMOALERT, sp, v3df_follow);
-
-    DoActorSetSpeed(SpriteNum, FAST_SPEED);
-
-    InitActorMoveCloser(SpriteNum);
-
-    NewStateGroup(SpriteNum, sg_SumoCharge);
-
-    return 0;
-}
-#endif
-
-int DoSumoRumble(short SpriteNum)
-{
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u = User[SpriteNum].Data();
-
-    SetSumoQuake(SpriteNum);
-
+    SetSumoQuake(actor);
     return 0;
 }
 
-int InitSumoFart(short SpriteNum)
+int InitSumoFart(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    extern int InitSumoNapalm(short SpriteNum);
-
-    PlaySound(DIGI_SUMOFART, sp, v3df_follow);
-
-    InitChemBomb(SpriteNum);
-
-    SetSumoFartQuake(SpriteNum);
-    InitSumoNapalm(SpriteNum);
-
+    PlaySound(DIGI_SUMOFART, actor, v3df_follow);
+    InitChemBomb(actor);
+    SetSumoFartQuake(actor);
+    InitSumoNapalm(actor);
     return 0;
 }
 
-int InitSumoStomp(short SpriteNum)
+int InitSumoStomp(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    extern int InitSumoStompAttack(short SpriteNum);
-
-    PlaySound(DIGI_SUMOSTOMP, sp, v3df_none);
-    SetSumoQuake(SpriteNum);
-    InitSumoStompAttack(SpriteNum);
-
+    PlaySound(DIGI_SUMOSTOMP, actor, v3df_none);
+    SetSumoQuake(actor);
+    InitSumoStompAttack(actor);
     return 0;
 }
 
-int InitSumoClap(short SpriteNum)
+int InitSumoClap(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    extern int InitMiniSumoClap(short SpriteNum);
-    extern int InitSumoSkull(short SpriteNum);
-
-    if (sp->pal == 16 && RANDOM_RANGE(1000) <= 800)
-        InitMiniSumoClap(SpriteNum);
+    if (actor->spr.pal == 16 && RandomRange(1000) <= 800)
+        InitMiniSumoClap(actor);
     else
-        InitSumoSkull(SpriteNum);
+        InitSumoSkull(actor);
     return 0;
 }
 
-int DoSumoDeathMelt(short SpriteNum)
+int DoSumoDeathMelt(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u = User[SpriteNum].Data();
+    PlaySound(DIGI_SUMOFART, actor, v3df_follow);
 
-    PlaySound(DIGI_SUMOFART, sp, v3df_follow);
+    actor->user.ID = SUMO_RUN_R0;
+    InitChemBomb(actor);
+    actor->user.ID = 0;
 
-    u->ID = SUMO_RUN_R0;
-    InitChemBomb(SpriteNum);
-    u->ID = 0;
-
-    DoMatchEverything(NULL, sp->lotag, ON);
+    DoMatchEverything(nullptr, actor->spr.lotag, 1);
     if (!SW_SHAREWARE)
     {
         // Resume the regular music - in a hack-free fashion.
-        PlaySong(currentLevel->labelName, currentLevel->music, currentLevel->cdSongId);
+        PlaySong(currentLevel->music, currentLevel->cdSongId);
     }
 
-    BossSpriteNum[1] = -2; // Sprite is gone, set it back to keep it valid!
+    BossSpriteNum[1] = nullptr; // Sprite is gone, set it back to keep it valid!
 
     return 0;
 }
 
 
-void
-BossHealthMeter(void)
+void BossHealthMeter(void)
 {
-    SPRITEp sp;
-    USERp u;
-    PLAYERp pp = Player + myconnectindex;
+    PLAYER* pp = Player + myconnectindex;
     short color=0,metertics,meterunit;
-    int i = 0;
     int y;
     extern bool NoMeters;
     short health;
@@ -829,46 +738,41 @@ BossHealthMeter(void)
 
     // all enemys
     if (currentLevel->gameflags & (LEVEL_SW_BOSSMETER_SERPENT|LEVEL_SW_BOSSMETER_SUMO|LEVEL_SW_BOSSMETER_ZILLA) &&
-        BossSpriteNum[0] <= -1 && BossSpriteNum[1] <= -1 && BossSpriteNum[2] <= -1)
+        BossSpriteNum[0] == nullptr && BossSpriteNum[1] == nullptr && BossSpriteNum[2] == nullptr)
     {
-        StatIterator it(STAT_ENEMY);
-        while ((i = it.NextIndex()) >= 0)
+        SWStatIterator it(STAT_ENEMY);
+        while (auto itActor = it.Next())
         {
-            sp = &sprite[i];
-            u = User[i].Data();
-
-            if ((u->ID == SERP_RUN_R0 || u->ID == SUMO_RUN_R0 || u->ID == ZILLA_RUN_R0) && sp->pal != 16)
+            if ((itActor->user.ID == SERP_RUN_R0 || itActor->user.ID == SUMO_RUN_R0 || itActor->user.ID == ZILLA_RUN_R0) && itActor->spr.pal != 16)
             {
-                if (u->ID == SERP_RUN_R0 && (currentLevel->gameflags & LEVEL_SW_BOSSMETER_SERPENT))
-                    BossSpriteNum[0] = i;
-                else if (u->ID == SUMO_RUN_R0 && (currentLevel->gameflags & LEVEL_SW_BOSSMETER_SUMO))
-                    BossSpriteNum[1] = i;
-                else if (u->ID == ZILLA_RUN_R0 && (currentLevel->gameflags & LEVEL_SW_BOSSMETER_ZILLA))
-                    BossSpriteNum[2] = i;
+                if (itActor->user.ID == SERP_RUN_R0 && (currentLevel->gameflags & LEVEL_SW_BOSSMETER_SERPENT))
+                    BossSpriteNum[0] = itActor;
+                else if (itActor->user.ID == SUMO_RUN_R0 && (currentLevel->gameflags & LEVEL_SW_BOSSMETER_SUMO))
+                    BossSpriteNum[1] = itActor;
+                else if (itActor->user.ID == ZILLA_RUN_R0 && (currentLevel->gameflags & LEVEL_SW_BOSSMETER_ZILLA))
+                    BossSpriteNum[2] = itActor;
             }
         }
     }
 
-    if (BossSpriteNum[0] <= -1 && BossSpriteNum[1] <= -1 && BossSpriteNum[2] <= -1)
+    if (BossSpriteNum[0] == nullptr && BossSpriteNum[1] == nullptr && BossSpriteNum[2] == nullptr)
         return;
 
 
     // Only show the meter when you can see the boss
-    for (i=0; i<3; i++)
+    for (int i=0; i<3; i++)
     {
-        if (BossSpriteNum[i] >= 0 && !bosswasseen[i])
+        DSWActor* actor = BossSpriteNum[i];
+        if (actor != nullptr && !bosswasseen[i])
         {
-            sp = &sprite[BossSpriteNum[i]];
-            u = User[BossSpriteNum[i]].Data();
-
-            if (cansee(sp->x, sp->y, SPRITEp_TOS(sp), sp->sectnum, pp->posx, pp->posy, pp->posz - Z(40), pp->cursectnum))
+            if (cansee(actor->spr.pos.X, actor->spr.pos.Y, ActorZOfTop(actor), actor->sector(), pp->pos.X, pp->pos.Y, pp->pos.Z - Z(40), pp->cursector))
             {
                 if (i == 0 && !bosswasseen[0])
                 {
                     bosswasseen[0] = true;
                     if (!SW_SHAREWARE)
                     {
-                        PlaySong(nullptr, ThemeSongs[2], ThemeTrack[2], true);
+                        PlaySong(ThemeSongs[2], ThemeTrack[2], true);
                     }
                 }
                 else if (i == 1 && !bosswasseen[1])
@@ -876,7 +780,7 @@ BossHealthMeter(void)
                     bosswasseen[1] = true;
                     if (!SW_SHAREWARE)
                     {
-                        PlaySong(nullptr, ThemeSongs[3], ThemeTrack[3], true);
+                        PlaySong(ThemeSongs[3], ThemeTrack[3], true);
                     }
                 }
                 else if (i == 2 && !bosswasseen[2])
@@ -884,7 +788,7 @@ BossHealthMeter(void)
                     bosswasseen[2] = true;
                     if (!SW_SHAREWARE)
                     {
-                        PlaySong(nullptr, ThemeSongs[4], ThemeTrack[4], true);
+                        PlaySong(ThemeSongs[4], ThemeTrack[4], true);
                     }
                 }
             }
@@ -892,20 +796,13 @@ BossHealthMeter(void)
     }
 
 
-    for (i=0; i<3; i++)
+    for (int i=0; i<3; i++)
     {
-
-        if (i == 0 && (!bosswasseen[0] || BossSpriteNum[0] < 0))
-            continue;
-        if (i == 1 && (!bosswasseen[1] || BossSpriteNum[1] < 0))
-            continue;
-        if (i == 2 && (!bosswasseen[2] || BossSpriteNum[2] < 0))
+        DSWActor* actor = BossSpriteNum[i];
+        if ((!bosswasseen[i] || actor == nullptr))
             continue;
 
-        sp = &sprite[BossSpriteNum[i]];
-        u = User[BossSpriteNum[i]].Data();
-
-        if (u->ID == SERP_RUN_R0 && bosswasseen[0])
+        if (actor->user.ID == SERP_RUN_R0 && bosswasseen[0])
         {
             if (Skill == 0) health = 1100;
             else if (Skill == 1) health = 2200;
@@ -913,7 +810,7 @@ BossHealthMeter(void)
                 health = HEALTH_SERP_GOD;
             meterunit = health / 30;
         }
-        else if (u->ID == SUMO_RUN_R0 && bosswasseen[1])
+        else if (actor->user.ID == SUMO_RUN_R0 && bosswasseen[1])
         {
             if (Skill == 0) health = 2000;
             else if (Skill == 1) health = 4000;
@@ -921,7 +818,7 @@ BossHealthMeter(void)
                 health = 6000;
             meterunit = health / 30;
         }
-        else if (u->ID == ZILLA_RUN_R0 && bosswasseen[2])
+        else if (actor->user.ID == ZILLA_RUN_R0 && bosswasseen[2])
         {
             if (Skill == 0) health = 2000;
             else if (Skill == 1) health = 4000;
@@ -934,10 +831,10 @@ BossHealthMeter(void)
 
         if (meterunit > 0)
         {
-            if (u->Health < meterunit && u->Health > 0)
+            if (actor->user.Health < meterunit && actor->user.Health > 0)
                 metertics = 1;
             else
-                metertics = u->Health / meterunit;
+                metertics = actor->user.Health / meterunit;
         }
         else
             continue;
@@ -954,8 +851,8 @@ BossHealthMeter(void)
 
         if ((currentLevel->gameflags & (LEVEL_SW_BOSSMETER_SUMO|LEVEL_SW_BOSSMETER_ZILLA)) == (LEVEL_SW_BOSSMETER_SUMO | LEVEL_SW_BOSSMETER_ZILLA) && numplayers >= 2)
         {
-            if (u->ID == SUMO_RUN_R0 && bosswasseen[1]) y += 10;
-            else if (u->ID == ZILLA_RUN_R0 && bosswasseen[2]) y += 20;
+            if (actor->user.ID == SUMO_RUN_R0 && bosswasseen[1]) y += 10;
+            else if (actor->user.ID == ZILLA_RUN_R0 && bosswasseen[2]) y += 20;
         }
 
         if (metertics <= 12 && metertics > 6)
@@ -966,10 +863,10 @@ BossHealthMeter(void)
             color = 22;
 
         DrawTexture(twod, tileGetTexture(5407, true), 85, y, DTA_FullscreenScale, FSMode_Fit320x200,
-            DTA_CenterOffsetRel, true, DTA_TranslationIndex, TRANSLATION(Translation_Remap, 1), TAG_DONE);
+            DTA_CenterOffsetRel, 2, DTA_TranslationIndex, TRANSLATION(Translation_Remap, 1), TAG_DONE);
 
         DrawTexture(twod, tileGetTexture(5406 - metertics, true), 147, y, DTA_FullscreenScale, FSMode_Fit320x200,
-            DTA_CenterOffsetRel, true, DTA_TranslationIndex, TRANSLATION(Translation_Remap, color), TAG_DONE);
+            DTA_CenterOffsetRel, 2, DTA_TranslationIndex, TRANSLATION(Translation_Remap, color), TAG_DONE);
     }
 
 }
@@ -980,10 +877,8 @@ BossHealthMeter(void)
 
 static saveable_code saveable_sumo_code[] =
 {
-    SAVE_CODE(SetupSumo),
     SAVE_CODE(NullSumo),
     SAVE_CODE(DoSumoMove),
-    //SAVE_CODE(InitSumoCharge),
     SAVE_CODE(DoSumoRumble),
     SAVE_CODE(InitSumoFart),
     SAVE_CODE(InitSumoStomp),

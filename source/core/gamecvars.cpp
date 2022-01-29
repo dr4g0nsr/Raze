@@ -51,7 +51,7 @@ CVARD(Bool, cl_crosshair, true, CVAR_ARCHIVE, "enable/disable crosshair");
 CVARD(Bool, cl_automsg, false, CVAR_ARCHIVE, "enable/disable automatically sending messages to all players") // Not implemented for Blood
 CVARD(Bool, cl_autorun, true, CVAR_ARCHIVE, "enable/disable autorun")
 
-CVARD(Bool, cl_runmode, true, CVAR_ARCHIVE, "enable/disable modernized run key operation")
+CVARD(Bool, cl_runmode, false, CVAR_ARCHIVE, "enable/disable modernized run key operation")
 
 bool G_CheckAutorun(bool button)
 {
@@ -65,23 +65,30 @@ CVARD(Bool, cl_autosavedeletion, true, CVAR_ARCHIVE, "enable/disable automatic d
 CVARD(Int, cl_maxautosaves, 8, CVAR_ARCHIVE, "number of autosaves to keep before deleting the oldest") // Not implemented for Blood
 CVARD(Bool, cl_obituaries, true, CVAR_ARCHIVE, "enable/disable multiplayer death messages") // Not implemented 
 CVARD(Bool, cl_idplayers, true, CVAR_ARCHIVE, "enable/disable name display when aiming at opponents")
-CVARD(Bool, cl_weaponsway, true, CVAR_ARCHIVE, "enable/disable player weapon swaying")
+CVARD(Bool, cl_weaponsway, true, CVAR_ARCHIVE|CVAR_GLOBALCONFIG, "enable/disable player weapon swaying")
 
 // Todo: Consolidate these to be consistent across games?
-CVARD(Bool, cl_viewbob, true, CVAR_ARCHIVE, "enable/disable player head bobbing")
+CVARD(Bool, cl_viewbob, true, CVAR_ARCHIVE|CVAR_GLOBALCONFIG, "enable/disable player head bobbing")
 CVARD(Bool, cl_viewhbob, true, CVAR_ARCHIVE, "enable/disable view horizontal bobbing") // Only implemented in Blood
 CVARD(Bool, cl_viewvbob, true, CVAR_ARCHIVE, "enable/disable view vertical bobbing") // Only implemented in Blood
 
-CVARD(Bool, cl_interpolate, true, CVAR_ARCHIVE, "enable/disable view interpolation") // only implemented in Blood
-CVARD(Bool, cl_slopetilting, false, CVAR_ARCHIVE, "enable/disable slope tilting") // only implemented in Blood
-CVARD(Int, cl_showweapon, 1, CVAR_ARCHIVE, "enable/disable show weapons") // only implemented in Blood
+CVARD(Bool, cl_interpolate, true, CVAR_ARCHIVE|CVAR_GLOBALCONFIG, "enable/disable view interpolation")
+CVARD(Bool, cl_slopetilting, false, CVAR_ARCHIVE|CVAR_GLOBALCONFIG, "enable/disable slope tilting")
+CVARD(Int, cl_showweapon, 1, CVAR_ARCHIVE|CVAR_GLOBALCONFIG, "enable/disable show weapons")
 CVARD(Bool, cl_sointerpolation, true, CVAR_ARCHIVE, "enable/disable sector object interpolation") // only implemented in SW
-CVARD(Bool, cl_syncinput, false, CVAR_ARCHIVE, "enable/disable synchronized input with game's ticrate") // only implemented in Duke
-CVARD(Bool, cl_smoothsway, false, CVAR_ARCHIVE, "move SW weapon left and right smoothly while bobbing")
+CVARD(Bool, cl_syncinput, false, CVAR_ARCHIVE|CVAR_GLOBALCONFIG, "enable/disable synchronized input with game's tickrate")
+CVARD(Bool, cl_swsmoothsway, true, CVAR_ARCHIVE, "move SW weapon left and right smoothly while bobbing")
 CVARD(Bool, cl_showmagamt, false, CVAR_ARCHIVE, "show the amount of rounds left in the magazine of your weapon on the modern HUD")
 CVARD(Bool, cl_nomeleeblur, false, CVAR_ARCHIVE, "enable/disable blur effect with melee weapons in SW")
-CVARD(Bool, cl_exhumedoldturn, false, CVAR_ARCHIVE, "enable/disable legacy turning speed for Powerslave/Exhumed")
-CVARD(Bool, cl_hudinterpolation, true, CVAR_ARCHIVE, "enable/disable HUD (weapon drawer) interpolation")
+CVARD(Bool, cl_hudinterpolation, true, CVAR_ARCHIVE|CVAR_GLOBALCONFIG, "enable/disable HUD (weapon drawer) interpolation")
+CVARD(Bool, cl_bloodvanillarun, true, CVAR_ARCHIVE, "enable/disable Blood's vanilla run mode")
+CVARD(Bool, cl_bloodvanillabobbing, true, CVAR_ARCHIVE, "enable/disable Blood's vanilla bobbing while not using vanilla run mode")
+CVARD(Bool, cl_bloodvanillaexplosions, false, CVAR_ARCHIVE, "enable/disable Blood's vanilla explosion behavior")
+CVARD(Bool, cl_bloodvanillaenemies, false, CVAR_ARCHIVE, "enable/disable Blood's vanilla enemy behavior")
+CVARD(Bool, cl_bloodqavinterp, true, CVAR_ARCHIVE, "enable/disable Blood's QAV interpolation")
+CVARD(Bool, cl_bloodweapinterp, false, CVAR_ARCHIVE, "enable/disable Blood's weapon interpolation. Depends on 'cl_bloodqavinterp'")
+CVARD(Bool, cl_bloodoldweapbalance, false, CVAR_ARCHIVE, "enable/disable legacy 1.0 weapon handling for Blood")
+CVARD(Bool, cl_loadingscreens, true, CVAR_ARCHIVE|CVAR_GLOBALCONFIG, "enable/disable loading screens for games")
 
 
 CUSTOM_CVARD(Int, cl_autoaim, 1, CVAR_ARCHIVE|CVAR_USERINFO, "enable/disable weapon autoaim")
@@ -93,7 +100,7 @@ CUSTOM_CVARD(Int, cl_autoaim, 1, CVAR_ARCHIVE|CVAR_USERINFO, "enable/disable wea
 CUSTOM_CVARD(Int, cl_weaponswitch, 3, CVAR_ARCHIVE|CVAR_USERINFO, "enable/disable auto weapon switching")
 {
 	if (self < 0) self = 0;
-	if (self > 1 && (g_gameType & GAMEFLAG_SW)) self = 1;
+	if (self > 1 && isSWALL()) self = 1;
 	if (self > 3 && isBlood()) self = 3;
 	if (self > 7) self = 7;
 }
@@ -104,7 +111,6 @@ CUSTOM_CVARD(Bool, snd_ambience, true, CVAR_ARCHIVE | CVAR_GLOBALCONFIG | CVAR_N
 {
 	gi->SetAmbience(self);
 }
-CVARD(Bool, snd_enabled, true, CVAR_ARCHIVE|CVAR_GLOBALCONFIG, "enables/disables sound effects")
 CVARD(Bool, snd_tryformats, true, CVAR_ARCHIVE|CVAR_GLOBALCONFIG, "enables/disables automatic discovery of replacement sounds and music in .flac and .ogg formats")
 
 CVARD(Bool, mus_restartonload, false, CVAR_ARCHIVE, "restart the music when loading a saved game with the same map or not")
@@ -146,7 +152,7 @@ CCMD(sizeup)
 	}
 	else
 	{
-		hud_scalefactor = hud_scalefactor + 0.04;
+		hud_scalefactor = hud_scalefactor + 0.04f;
 	}
 }
 
@@ -162,7 +168,7 @@ CCMD(sizedown)
 	}
 	else
 	{
-		hud_scalefactor = hud_scalefactor - 0.04;
+		hud_scalefactor = hud_scalefactor - 0.04f;
 	}
 }
 
@@ -314,7 +320,7 @@ CVAR(String, usermapfolder, "", CVAR_ARCHIVE);
 CUSTOM_CVAR(Int, playercolor, 0, CVAR_ARCHIVE|CVAR_USERINFO)
 {
 	if (self < 0 || self > 10) self = 0;
-	else ;// gi->PlayerColorChanged(); // this part is game specific
+	//else ;// gi->PlayerColorChanged(); // this part is game specific
 }
 
 // Will only become useful if the obituary system gets overhauled and for localization

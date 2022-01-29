@@ -43,7 +43,7 @@ class LmfPlayer : SkippableScreenJob
 		fn = filename;
 		return self;
 	}
-	
+
 	override void Start()
 	{
 		decoder = LMFDecoder.Create(fn);
@@ -269,7 +269,7 @@ class MapScreen : ScreenJob
 	int x;
 	int delta;
 	int nIdleSeconds;
-	
+
 	int curYPos, destYPos;
 	int nLevel, nLevelNew, nLevelBest;
 
@@ -330,7 +330,7 @@ class MapScreen : ScreenJob
 				}
 				return true;
 			}
-		
+
 			if (key == InputEvent.KEY_DOWNARROW || key == InputEvent.KEY_PAD_DPAD_DOWN || key == InputEvent.Key_kpad_2 || binding ~== "+move_backward")
 			{
 				if (curYPos == destYPos && nLevelNew > 0)
@@ -345,7 +345,7 @@ class MapScreen : ScreenJob
 				}
 				return true;
 			}
-			if (!Raze.specialKeyEvent(ev)) jobstate = skipped;
+			if (!System.specialKeyEvent(ev)) jobstate = skipped;
 			return true;
 		}
 		return false;
@@ -382,9 +382,9 @@ class MapScreen : ScreenJob
 	override void Draw(double smoothratio)
 	{
 		int currentclock = int((ticks + smoothratio) * 120 / GameTicRate);
+		int myCurYPos = curYPos == destYPos? curYPos : curYPos - int((1. - smoothratio) * delta);
+		int tileY = myCurYPos;
 
-		int tileY = curYPos;
-		
 		// Draw the background screens
 		for (int i = 0; i < 10; i++)
 		{
@@ -392,12 +392,12 @@ class MapScreen : ScreenJob
 			Exhumed.DrawAbs(tex, x, tileY);
 			tileY -= 200;
 		}
-		
+
 		// for each level - drawing the 'level completed' on-fire smoke markers
 		for (int i = 0; i < 20; i++)
 		{
 			int screenY = (i >> 1) * -200;
-			
+
 			if (nLevelBest >= i) // check if the player has finished this level
 			{
 				for (int j = 0; j < MapLevelFires[i * FIRE_SIZE]; j++)
@@ -407,29 +407,29 @@ class MapScreen : ScreenJob
 					int nFireType = MapLevelFires[elem + FIRE_TYPE];
 					int x = MapLevelFires[elem + FIRE_XOFS];
 					int y = MapLevelFires[elem + FIRE_YOFS];
-					
+
 					String nTile = String.Format("MAPFIRE_%d%d", nFireType+1, nFireFrame+1);
 					int smokeX = x + FireTilesX[nFireType*3 + nFireFrame];
-					int smokeY = y + FireTilesY[nFireType*3 + nFireFrame] + curYPos + screenY;
-					
+					int smokeY = y + FireTilesY[nFireType*3 + nFireFrame] + myCurYPos + screenY;
+
 					// Use rotatesprite to trim smoke in widescreen
 					Exhumed.DrawAbs(nTile, smokeX, smokeY);
 					// Todo: mask out the sides of the screen if the background is not widescreen.
 				}
 			}
-			
+
 			int t = (((currentclock & 16) >> 4));
-			
+
 			String nTile = String.Format("MapPlaque%d_%02d", t+1, i+1);
-			
+
 			int nameX = mapPlaqueX[i];
-			int nameY = mapPlaqueY[i] + curYPos + screenY;
-			
+			int nameY = mapPlaqueY[i] + myCurYPos + screenY;
+
 			// Draw level name plaque
 			Exhumed.DrawAbs(nTile, nameX, nameY);
-			
+
 			int shade = 96;
-			
+
 			if (nLevelNew == i)
 			{
 				shade = (Raze.bsin(16 * currentclock) + 31) >> 8;
@@ -438,65 +438,16 @@ class MapScreen : ScreenJob
 			{
 				shade = 31;
 			}
-			
+
 			int textY = nameY + MapPlaqueTextY[i];
 			int textX = nameX + MapPlaqueTextX[i];
 			nTile = String.Format("MapPlaqueText_%02d", i+1);
-			
+
 			// draw the text, alternating between red and black
 			Exhumed.DrawAbs(nTile, textX, textY, shade);
 		}
 	}
 
-}
-
-//---------------------------------------------------------------------------
-//
-// 
-//
-//---------------------------------------------------------------------------
-
-class TextOverlay
-{
-	int nHeight;
-	double nCrawlY;
-	int palette;
-	BrokenLines screentext;
-
-	void Init(String text, int pal)
-	{
-		screentext = SmallFont.BreakLines(StringTable.Localize(text), 320);
-		nCrawlY = 199;
-		nHeight = screentext.Count() * 10;
-		palette = pal;
-	}
-
-	void DisplayText()
-	{
-		if (nHeight + nCrawlY > 0)
-		{
-			double y = nCrawlY;
-			for (int i = 0; i < screentext.Count() && y <= 199; i++)
-			{
-				if (y >= -10) 
-				{
-					int x = 160 - screenText.StringWidth(i)/2;
-					Screen.DrawText(SmallFont, Font.CR_UNDEFINED, x, y, screentext.StringAt(i), DTA_FullscreenScale, FSMode_Fit320x200, DTA_TranslationIndex, palette);
-				}
-				y += 10;
-			}
-		}
-	}
-
-	bool AdvanceCinemaText(double clock)
-	{
-		if (nHeight + nCrawlY > 0 || musplaying.handle)
-		{
-			nCrawlY = 199 - clock / 15.;
-			return false;
-		}
-		return true;
-	}
 }
 
 //---------------------------------------------------------------------------
@@ -520,17 +471,17 @@ class Cinema : SkippableScreenJob
 		cinematile = TexMan.CheckForTexture(bgTexture, TexMan.Type_Any);
 		textov = new("TextOverlay");
 		palette =  Translation.MakeID(Translation_BasePalette, pal);
-		textov.Init(text, palette);
+		textov.Init(text, Font.CR_NATIVEPAL, palette);
 		cdtrack = cdtrk;
 		return self;
 	}
-	
+
 	override void Start()
 	{
-		Raze.StopAllSounds();
+		System.StopAllSounds();
 		if (cdtrack != -1)
 		{
-			Exhumed.playCDtrack(cdtrack, false);
+			Exhumed.playCDtrack(cdtrack+2, false);
 		}
 	}
 
@@ -543,7 +494,7 @@ class Cinema : SkippableScreenJob
 	{
 		Screen.DrawTexture(cinematile, false, 0, 0, DTA_FullscreenEx, FSMode_ScaleToFit43, DTA_TranslationIndex, palette);
 		textov.DisplayText();
-		done = textov.AdvanceCinemaText((ticks + smoothratio) * (120. / GameTicRate));
+		done = textov.ScrollText((ticks + smoothratio) * (120. / GameTicRate));
 	}
 }
 
@@ -652,7 +603,7 @@ class LastLevelCinema : ScreenJob
 
 	override bool OnEvent(InputEvent ev)
 	{
-		if (ev.type == InputEvent.Type_KeyDown && !Raze.specialKeyEvent(ev)) skiprequest = true;
+		if (ev.type == InputEvent.Type_KeyDown && !System.specialKeyEvent(ev)) skiprequest = true;
 		return true;
 	}
 
@@ -775,7 +726,7 @@ class ExCredits : ScreenJob
 
 	override bool OnEvent(InputEvent ev)
 	{
-		if (ev.type == InputEvent.Type_KeyDown && !Raze.specialKeyEvent(ev)) skiprequest = true;
+		if (ev.type == InputEvent.Type_KeyDown && !System.specialKeyEvent(ev)) skiprequest = true;
 		return true;
 	}
 
@@ -796,6 +747,7 @@ class ExCredits : ScreenJob
 		if (ticks >= pagetime || skiprequest)
 		{
 			page++;
+			pagelines.Clear();
 			if (page < credits.Size())
 				credits[page].Split(pagelines, "\n");
 			else
@@ -805,9 +757,8 @@ class ExCredits : ScreenJob
 					jobstate = finished;
 					return;
 				}
-				pagelines.Clear();
 			}
-			pagetime = ticks + 60; // 
+			pagetime = ticks + 90; // 
 		}
 	}
 
@@ -815,17 +766,17 @@ class ExCredits : ScreenJob
 	{
 		int y = 100 - ((10 * (pagelines.Size() - 1)) / 2);
 
+		int ptime = clamp((pagetime - ticks - smoothratio) * 1000 / GameTicRate, 0, 2000); // in milliseconds
+		int light;
+
+		if (ptime < 255) light = ptime;
+		else if (ptime > 2000 - 255) light = 2000 - ptime;
+		else light = 255;
+
+		let colr = Color(255, light, light, light);
+
 		for (int i = 0; i < pagelines.Size(); i++)
 		{
-			int ptime = clamp((pagetime - ticks - smoothratio) * 1000 / GameTicRate, 0, 2000); // in milliseconds
-			int light;
-
-			if (ptime < 255) light = ptime;
-			else if (ptime > 2000 - 255) light = 2000 - ptime;
-			else light = 255;
-
-			let colr = Color(light, light, light);
-
 			int nStringWidth = SmallFont.StringWidth(pagelines[i]);
 			Screen.DrawText(SmallFont, Font.CR_UNTRANSLATED, 160 - nStringWidth / 2, y, pagelines[i], DTA_FullscreenScale, FSMode_Fit320x200, DTA_Color, colr);
 			y += 10;
@@ -917,9 +868,9 @@ class ExhumedCutscenes
 	//
 	//---------------------------------------------------------------------------
 
-	void BuildGameOverScene(ScreenJobRunner runner, MapRecord map)
+	static void BuildGameOverScene(ScreenJobRunner runner)
 	{
-		Raze.StopMusic();
+		System.StopMusic();
 		Exhumed.PlayLocalSound(ExhumedSnd.kSoundJonLaugh2, 0, false, CHANF_UI);
 		runner.Append(ImageScreen.CreateNamed("Gameover", ScreenJob.fadein | ScreenJob.fadeout, 0x7fffffff, Translation.MakeID(Translation_BasePalette, 16)));
 	}

@@ -114,7 +114,7 @@ template<class T, int fill = 1> void ArrayResize(T *self, int amount)
 	{
 		// This must ensure that all new entries get cleared.
 		const int fillCount = int(self->Size() - oldSize);
-		if (fillCount > 0) memset(&(*self)[oldSize], 0, sizeof(*self)[0] * fillCount);
+		if (fillCount > 0) memset((void*)&(*self)[oldSize], 0, sizeof(*self)[0] * fillCount);
 	}
 }
 
@@ -130,7 +130,7 @@ template<> unsigned int ArrayReserve(TArray<DObject*> *self, int amount)
 
 	if (fillCount > 0)
 		memset(&(*self)[oldSize], 0, sizeof(DObject*) * fillCount);
-	
+
 	return oldSize;
 }
 
@@ -1004,6 +1004,22 @@ DEFINE_ACTION_FUNCTION_NATIVE(FDynArray_String, Push, ArrayPush<FDynArray_String
 	PARAM_SELF_STRUCT_PROLOGUE(FDynArray_String);
 	PARAM_STRING(val);
 	ACTION_RETURN_INT(self->Push(val));
+}
+
+DEFINE_ACTION_FUNCTION(FDynArray_String, PushV)
+{
+	PARAM_SELF_STRUCT_PROLOGUE(FDynArray_String);
+	PARAM_VA_POINTER(va_reginfo);	// Get the hidden type information array
+	VMVa_List args = { param + 1, 0, numparam - 2, va_reginfo + 1 };
+	while (args.curindex < args.numargs)
+	{
+		if (args.reginfo[args.curindex] == REGT_STRING)
+		{
+			self->Push(args.args[args.curindex++].s());
+		}
+		else ThrowAbortException(X_OTHER, "Invalid parameter in pushv, string expected");
+	}
+	ACTION_RETURN_INT(self->Size() - 1);
 }
 
 DEFINE_ACTION_FUNCTION_NATIVE(FDynArray_String, Pop, ArrayPop<FDynArray_String>)

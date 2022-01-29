@@ -32,10 +32,9 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 
 BEGIN_SW_NS
 
-short f_c = 3;
+int f_c = 3;
 
-void
-MapColors(short num, COLOR_MAP cm, short create, uint8_t *tempbuf)
+void MapColors(int num, COLOR_MAP cm, int create, uint8_t *tempbuf)
 {
     int i;
     float inc;
@@ -54,7 +53,7 @@ MapColors(short num, COLOR_MAP cm, short create, uint8_t *tempbuf)
     inc = cm.ToRange/((float)cm.FromRange);
 
     for (i = 0; i < cm.FromRange; i++)
-        tempbuf[i + cm.FromColor] = (i*inc) + cm.ToColor;
+        tempbuf[i + cm.FromColor] = uint8_t((i*inc) + cm.ToColor);
 }
 
 
@@ -110,8 +109,7 @@ static COLOR_MAP PlayerColorMap[PLAYER_COLOR_MAPS][1] =
 
 };
 
-void
-InitPalette(void)
+void GameInterface::loadPalette(void)
 {
     static COLOR_MAP AllToRed[] =
     {
@@ -213,14 +211,25 @@ InitPalette(void)
     static COLOR_MAP MenuHighlight = {16, 16, RED, FIRE};
 
     unsigned int i;
-    short play;
+    int play;
     uint8_t tempbuf[256];
+
+    paletteLoadFromDisk();
+    auto pal = fileSystem.LoadFile("3drealms.pal", 0);
+    if (pal.Size() >= 768)
+    {
+        for (auto& c : pal)
+            c <<= 2;
+
+        paletteSetColorTable(DREALMSPAL, pal.Data(), true, true);
+    }
+
 
     //
     // Dive palettes
     //
-#define FOG_AMT 60 // is 15 in SWP.
-#define LAVA_AMT 44 // is 11 in SWP.
+    const int FOG_AMT = 60; // is 15 in SWP.
+    const int LAVA_AMT = 44; // is 11 in SWP.
 
     for (i = 0; i < 256; i++)
         tempbuf[i] = i;

@@ -27,7 +27,7 @@
 #include "vulkan/system/vk_builders.h"
 #include "vulkan/system/vk_framebuffer.h"
 #include "hw_cvars.h"
-#include "templates.h"
+
 
 VkRenderBuffers::VkRenderBuffers()
 {
@@ -239,13 +239,8 @@ void VkRenderBuffers::CreateShadowmap()
 
 	ImageBuilder builder;
 	builder.setSize(gl_shadowmap_quality, 1024);
-	builder.setFormat(SceneNormalFormat);
+	builder.setFormat(VK_FORMAT_R32_SFLOAT);
 	builder.setUsage(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
-	if (!builder.isFormatSupported(fb->device, VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT))
-	{
-		SceneNormalFormat = VK_FORMAT_R8G8B8A8_UNORM;
-		builder.setFormat(SceneNormalFormat);
-	}
 	Shadowmap.Image = builder.create(fb->device);
 	Shadowmap.Image->SetDebugName("VkRenderBuffers.Shadowmap");
 
@@ -260,12 +255,12 @@ void VkRenderBuffers::CreateShadowmap()
 
 	if (!ShadowmapSampler)
 	{
-		SamplerBuilder builder;
-		builder.setMipmapMode(VK_SAMPLER_MIPMAP_MODE_NEAREST);
-		builder.setMinFilter(VK_FILTER_NEAREST);
-		builder.setMagFilter(VK_FILTER_NEAREST);
-		builder.setAddressMode(VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
-		ShadowmapSampler = builder.create(fb->device);
+		SamplerBuilder samplerBuilder;
+		samplerBuilder.setMipmapMode(VK_SAMPLER_MIPMAP_MODE_NEAREST);
+		samplerBuilder.setMinFilter(VK_FILTER_NEAREST);
+		samplerBuilder.setMagFilter(VK_FILTER_NEAREST);
+		samplerBuilder.setAddressMode(VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
+		ShadowmapSampler = samplerBuilder.create(fb->device);
 		ShadowmapSampler->SetDebugName("VkRenderBuffers.ShadowmapSampler");
 	}
 }

@@ -374,7 +374,15 @@ void RunNetSpecs (int player, int buf)
 			while (stream < end)
 			{
 				int type = ReadByte (&stream);
-				Net_DoCommand (type, &stream, player);
+				try
+				{
+					Net_DoCommand(type, &stream, player);
+				}
+				catch (...)
+				{
+					NetSpecs[player][buf].SetData(NULL, 0);
+					throw;
+				}
 			}
 #if 0
 			if (!demorecording)
@@ -400,7 +408,7 @@ void StartChunk (int id, uint8_t **stream)
 void FinishChunk (uint8_t **stream)
 {
 	int len;
-	
+
 	if (!lenspot)
 		return;
 

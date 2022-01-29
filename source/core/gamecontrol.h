@@ -11,6 +11,7 @@
 #include "stats.h"
 #include "i_time.h"
 #include "palentry.h"
+#include "build.h"
 
 EXTERN_CVAR(Bool, hud_textfont)
 
@@ -31,8 +32,7 @@ extern bool crouch_toggle;
 struct MapRecord;
 extern MapRecord* g_nextmap;
 extern int g_nextskill;	
-
-extern FMemArena dump;	// this is for memory blocks than cannot be deallocated without some huge effort. Put them in here so that they do not register on shutdown.
+extern int g_bossexit;
 
 extern FStringCVar* const CombatMacros[];
 void CONFIG_ReadCombatMacros();
@@ -42,8 +42,8 @@ int GetAutomapZoom(int gZoom);
 
 void DrawCrosshair(int deftile, int health, double xdelta, double ydelta, double scale, PalEntry color = 0xffffffff);
 void updatePauseStatus();
-void DeferedStartGame(MapRecord* map, int skill, bool nostopsound = false);
-void ChangeLevel(MapRecord* map, int skill);
+void DeferredStartGame(MapRecord* map, int skill, bool nostopsound = false);
+void ChangeLevel(MapRecord* map, int skill, bool bossexit = false);
 void CompleteLevel(MapRecord* map);
 
 struct UserConfig
@@ -73,18 +73,6 @@ struct UserConfig
 };
 
 extern UserConfig userConfig;
-
-extern int nomusic;
-extern bool nosound;
-inline int MusicEnabled() // int return is for scripting
-{
-	return mus_enabled && !nomusic;
-}
-
-inline int SoundEnabled()
-{
-	return snd_enabled && !nosound;
-}
 
 
 enum
@@ -143,7 +131,7 @@ struct GrpInfo
 	TArray<FString> tobedeleted;
 	TArray<FString> loadfiles;
 	TArray<FString> loadart;
-	TArray<FString> mpepisodes;
+	TArray<FString> exclepisodes;
 	uint32_t FgColor = 0, BgColor = 0;
 };
 
@@ -204,6 +192,11 @@ inline bool isShareware()
 	return g_gameType & GAMEFLAG_SHAREWARE;
 }
 
+inline bool isDukeLike()
+{
+	return g_gameType & (GAMEFLAG_NAM | GAMEFLAG_NAPALM | GAMEFLAG_WW2GI | GAMEFLAG_DUKE | GAMEFLAG_RRALL);
+}
+
 inline bool isBlood()
 {
 	return g_gameType & GAMEFLAG_BLOOD;
@@ -214,15 +207,18 @@ inline bool isSWALL()
 	return g_gameType & (GAMEFLAG_SW | GAMEFLAG_SWWANTON | GAMEFLAG_SWTWINDRAG);
 }
 
+inline bool isExhumed()
+{
+	return g_gameType & GAMEFLAG_PSEXHUMED;
+}
+
+
 TArray<GrpEntry> GrpScan();
 void S_PauseSound(bool notmusic, bool notsfx);
 void S_ResumeSound(bool notsfx);
 void S_SetSoundPaused(int state);
 
-enum
-{
-	MaxSmoothRatio = FRACUNIT
-};
+const int MaxSmoothRatio = FRACUNIT;
 
 FString G_GetDemoPath();
 
@@ -240,3 +236,46 @@ extern int lastTic;
 
 extern int PlayClock;
 
+enum gameaction_t : int
+{
+	ga_nothing,
+	ga_level,				// Switch to play mode without any initialization
+	ga_intro,
+	ga_intermission,
+
+	ga_startup,				// go back to intro after uninitializing the game state
+	ga_mainmenu,			// go back to main menu after uninitializing the game state
+	ga_mainmenunostopsound,	// Same but doesn't stop playing sounds.
+	ga_creditsmenu,			// go to the credits menu after uninitializing the game state
+	ga_newgame,				// start a new game
+	ga_recordgame,			// start a new demo recording (later)
+	ga_loadgame,			// load a savegame and resume play.
+	ga_loadgameplaydemo,	// load a savegame and play a demo.
+	ga_autoloadgame,		// load last autosave and resume play.
+	ga_savegame,			// save the game
+	ga_autosave,			// autosave the game (for triggering a save from within the game.)
+	ga_completed,			// Level was exited.
+	ga_nextlevel,			// Actually start the next level.
+	ga_loadgamehidecon,
+	ga_newgamenostopsound,	// start a new game
+	ga_endscreenjob,
+
+	ga_fullconsole,
+};
+extern gameaction_t		gameaction;
+
+struct SpawnRec
+{
+	FName clsname;
+	PClass* cls;
+	int param;
+
+	PClass* Class()
+	{
+		if (!cls && clsname != NAME_None) cls = PClass::FindClass(clsname);
+		clsname = NAME_None;
+		return cls;
+	}
+};
+using SpawnMap = TMap<int, SpawnRec>;
+inline SpawnMap spawnMap;

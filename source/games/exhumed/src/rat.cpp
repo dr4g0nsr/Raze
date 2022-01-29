@@ -25,23 +25,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 BEGIN_PS_NS
 
-short nMinChunk;
-short nPlayerPic;
-short nMaxChunk;
-
-struct Rat
-{
-    short nFrame;
-    short nAction;
-    short nSprite;
-    short nRun;
-    short nTarget;
-    short nCount;
-    short nIndex;
-};
-
-
-TArray<Rat> RatList;
+int nMinChunk;
+int nPlayerPic;
+int nMaxChunk;
 
 static actionSeq RatSeq[] = {
     {0, 1},
@@ -51,22 +37,6 @@ static actionSeq RatSeq[] = {
     {0, 1}
 };
 
-FSerializer& Serialize(FSerializer& arc, const char* keyname, Rat& w, Rat* def)
-{
-    if (arc.BeginObject(keyname))
-    {
-        arc("run", w.nRun)
-            ("frame", w.nFrame)
-            ("action", w.nAction)
-            ("sprite", w.nSprite)
-            ("target", w.nTarget)
-            ("count", w.nCount)
-            ("index", w.nIndex)
-            .EndObject();
-    }
-    return arc;
-}
-
 void SerializeRat(FSerializer& arc)
 {
     if (arc.BeginObject("rat"))
@@ -74,14 +44,12 @@ void SerializeRat(FSerializer& arc)
         arc("minchunk", nMinChunk)
             ("maxchunk", nMaxChunk)
             ("playerpic", nPlayerPic)
-            ("list", RatList)
             .EndObject();
     }
 }
 
 void InitRats()
 {
-    RatList.Clear();
     nMinChunk = 9999;
     nMaxChunk = -1;
 
@@ -99,311 +67,301 @@ void InitRats()
     nPlayerPic = seq_GetSeqPicnum(kSeqJoe, 120, 0);
 }
 
-void SetRatVel(short nSprite)
+void SetRatVel(DExhumedActor* pActor)
 {
-    sprite[nSprite].xvel = bcos(sprite[nSprite].ang, -2);
-    sprite[nSprite].yvel = bsin(sprite[nSprite].ang, -2);
+    pActor->spr.xvel = bcos(pActor->spr.ang, -2);
+    pActor->spr.yvel = bsin(pActor->spr.ang, -2);
 }
 
-int BuildRat(short nSprite, int x, int y, int z, short nSector, int nAngle)
+void BuildRat(DExhumedActor* pActor, int x, int y, int z, sectortype* pSector, int nAngle)
 {
-    auto nRat = RatList.Reserve(1);
-
-    if (nSprite < 0)
+    if (pActor == nullptr)
     {
-        nSprite = insertsprite(nSector, 108);
-        assert(nSprite >= 0 && nSprite < kMaxSprites);
-
-        sprite[nSprite].x = x;
-        sprite[nSprite].y = y;
-        sprite[nSprite].z = z;
+        pActor = insertActor(pSector, 108);
     }
     else
     {
-        nAngle = sprite[nSprite].ang;
-        changespritestat(nSprite, 108);
+        x = pActor->spr.pos.X;
+        y = pActor->spr.pos.Y;
+        z = pActor->spr.pos.Z;
+        nAngle = pActor->spr.ang;
+
+        ChangeActorStat(pActor, 108);
     }
 
-    sprite[nSprite].cstat = 0x101;
-    sprite[nSprite].shade = -12;
-    sprite[nSprite].xoffset = 0;
-    sprite[nSprite].yoffset = 0;
-    sprite[nSprite].picnum = 1;
-    sprite[nSprite].pal = sector[sprite[nSprite].sectnum].ceilingpal;
-    sprite[nSprite].clipdist = 30;
-    sprite[nSprite].ang = nAngle;
-    sprite[nSprite].xrepeat = 50;
-    sprite[nSprite].yrepeat = 50;
-    sprite[nSprite].xvel = 0;
-    sprite[nSprite].yvel = 0;
-    sprite[nSprite].zvel = 0;
-    sprite[nSprite].lotag = runlist_HeadRun() + 1;
-    sprite[nSprite].hitag = 0;
-    sprite[nSprite].extra = -1;
+    pActor->spr.cstat = CSTAT_SPRITE_BLOCK_ALL;
+    pActor->spr.shade = -12;
+    pActor->spr.xoffset = 0;
+    pActor->spr.yoffset = 0;
+    pActor->spr.picnum = 1;
+    pActor->spr.pal = pActor->sector()->ceilingpal;
+    pActor->spr.clipdist = 30;
+    pActor->spr.ang = nAngle;
+    pActor->spr.xrepeat = 50;
+    pActor->spr.yrepeat = 50;
+    pActor->spr.xvel = 0;
+    pActor->spr.yvel = 0;
+    pActor->spr.zvel = 0;
+    pActor->spr.lotag = runlist_HeadRun() + 1;
+    pActor->spr.hitag = 0;
+    pActor->spr.extra = -1;
 
     if (nAngle >= 0) {
-        RatList[nRat].nAction = 2;
+        pActor->nAction = 2;
     }
     else {
-        RatList[nRat].nAction = 4;
+        pActor->nAction = 4;
     }
 
-    RatList[nRat].nFrame = 0;
-    RatList[nRat].nSprite = nSprite;
-    RatList[nRat].nTarget = -1;
-    RatList[nRat].nCount = RandomSize(5);
-    RatList[nRat].nIndex = RandomSize(3);
+    pActor->nFrame = 0;
+    pActor->pTarget = nullptr;
+    pActor->nCount = RandomSize(5);
+    pActor->nPhase = RandomSize(3);
 
-    sprite[nSprite].owner = runlist_AddRunRec(sprite[nSprite].lotag - 1, nRat | 0x240000);
+    pActor->spr.owner = runlist_AddRunRec(pActor->spr.lotag - 1, pActor, 0x240000);
 
-    RatList[nRat].nRun = runlist_AddRunRec(NewRun, nRat | 0x240000);
-    return 0;
+    pActor->nRun = runlist_AddRunRec(NewRun, pActor, 0x240000);
 }
 
-int FindFood(short nSprite)
+DExhumedActor* FindFood(DExhumedActor* pActor)
 {
-    short nSector = sprite[nSprite].sectnum;
-    int x = sprite[nSprite].x;
-    int y = sprite[nSprite].y;
-    int z = sprite[nSprite].z;
+    auto pSector = pActor->sector();
+    int x = pActor->spr.pos.X;
+    int y = pActor->spr.pos.Y;
+    int z = pActor->spr.pos.Z;
 
-    int z2 = (z + sector[nSector].ceilingz) / 2;
+    int z2 = (z + pSector->ceilingz) / 2;
 
     if (nChunkTotal)
     {
-        int nSprite2 = nChunkSprite[RandomSize(7) % nChunkTotal];
-        if (nSprite2 != -1)
-        {
-            if (cansee(x, y, z2, nSector, sprite[nSprite2].x, sprite[nSprite2].y, sprite[nSprite2].z, sprite[nSprite2].sectnum)) {
-                return nSprite2;
+        DExhumedActor* pActor2 = nChunkSprite[RandomSize(7) % nChunkTotal];
+		if (pActor2 != nullptr)
+		{
+            if (cansee(x, y, z2, pSector, pActor2->spr.pos.X, pActor2->spr.pos.Y, pActor2->spr.pos.Z, pActor2->sector())) {
+                return pActor2;
             }
         }
     }
 
     if (!nBodyTotal) {
-        return -1;
+        return nullptr;
     }
 
-    int nSprite2 = nBodySprite[RandomSize(7) % nBodyTotal];
-    if (nSprite2 != -1)
+    DExhumedActor* pActor2 = nBodySprite[RandomSize(7) % nBodyTotal];
+    if (pActor2 != nullptr)
     {
-        if (nPlayerPic == sprite[nSprite2].picnum)
+        if (nPlayerPic == pActor2->spr.picnum)
         {
-            if (cansee(x, y, z, nSector, sprite[nSprite2].x, sprite[nSprite2].y, sprite[nSprite2].z, sprite[nSprite2].sectnum)) {
-                return nSprite2;
+            if (cansee(x, y, z, pSector, pActor2->spr.pos.X, pActor2->spr.pos.Y, pActor2->spr.pos.Z, pActor2->sector())) {
+                return pActor2;
             }
         }
     }
 
-    return -1;
+    return nullptr;
 }
 
-void FuncRat(int a, int nDamage, int nRun)
+void AIRat::RadialDamage(RunListEvent* ev)
 {
-    short nRat = RunData[nRun].nVal;
-    short nSprite = RatList[nRat].nSprite;
-    short nAction = RatList[nRat].nAction;
+    auto pActor = ev->pObjActor;
+    if (!pActor) return;
+
+    ev->nDamage = runlist_CheckRadialDamage(pActor);
+    Damage(ev);
+}
+
+void AIRat::Damage(RunListEvent* ev)
+{
+    auto pActor = ev->pObjActor;
+    if (!pActor) return;
+
+    if (ev->nDamage)
+    {
+        pActor->spr.cstat = 0;
+        pActor->spr.xvel = 0;
+        pActor->spr.yvel = 0;
+        pActor->nAction = 3;
+        pActor->nFrame = 0;
+    }
+}
+
+void AIRat::Draw(RunListEvent* ev)
+{
+    auto pActor = ev->pObjActor;
+    if (!pActor) return;
+    int nAction = pActor->nAction;
+
+    seq_PlotSequence(ev->nParam, SeqOffsets[kSeqRat] + RatSeq[nAction].a, pActor->nFrame, RatSeq[nAction].b);
+}
+
+
+void AIRat::Tick(RunListEvent* ev)
+{
+    auto pActor = ev->pObjActor;
+    if (!pActor) return;
+
+    int nAction = pActor->nAction;
 
     bool bVal = false;
 
-    int nMessage = a & kMessageMask;
+    int nSeq = SeqOffsets[kSeqRat] + RatSeq[nAction].a;
+    pActor->spr.picnum = seq_GetSeqPicnum2(nSeq, pActor->nFrame);
 
-    switch (nMessage)
+    seq_MoveSequence(pActor, nSeq, pActor->nFrame);
+
+    pActor->nFrame++;
+    if (pActor->nFrame >= SeqSize[nSeq])
     {
-        default:
-        {
-            Printf("unknown msg %d for Rathead\n", nMessage);
+        bVal = true;
+        pActor->nFrame = 0;
+    }
+
+    DExhumedActor* pTarget = pActor->pTarget;
+
+    Gravity(pActor);
+
+    switch (nAction)
+    {
+    default:
+        return;
+
+    case 0:
+    {
+        pActor->nCount--;
+        if (pActor->nCount > 0) {
             return;
         }
 
-        case 0xA0000:
+        int xVal = abs(pActor->spr.pos.X - pTarget->spr.pos.X);
+        int yVal = abs(pActor->spr.pos.Y - pTarget->spr.pos.Y);
+
+        if (xVal > 50 || yVal > 50)
         {
-            nDamage = runlist_CheckRadialDamage(nSprite);
-            // fall through to 0x80000
-            fallthrough__;
-        }
-        case 0x80000:
-        {
-            if (nDamage)
-            {
-                sprite[nSprite].cstat = 0;
-                sprite[nSprite].xvel = 0;
-                sprite[nSprite].yvel = 0;
-                RatList[nRat].nAction = 3;
-                RatList[nRat].nFrame = 0;
-            }
+            pActor->nAction = 2;
+            pActor->nFrame = 0;
+            pActor->pTarget = nullptr;
+
+            pActor->spr.xvel = 0;
+            pActor->spr.yvel = 0;
             return;
         }
 
-        case 0x90000:
+        pActor->nFrame ^= 1;
+        pActor->nCount = RandomSize(5) + 4;
+        pActor->nPhase--;
+
+        if (pActor->nPhase <= 0)
         {
-            seq_PlotSequence(a & 0xFFFF, SeqOffsets[kSeqRat] + RatSeq[nAction].a, RatList[nRat].nFrame, RatSeq[nAction].b);
+            auto pFoodSprite = FindFood(pActor);
+            if (pFoodSprite == nullptr) {
+                return;
+            }
+
+            pActor->pTarget = pFoodSprite;
+
+            PlotCourseToSprite(pActor, pFoodSprite);
+            SetRatVel(pActor);
+
+            pActor->nAction = 1;
+            pActor->nPhase = 900;
+            pActor->nFrame = 0;
+        }
+
+        return;
+    }
+    case 1:
+    {
+        pActor->nPhase--;
+
+        if (pActor->nPhase <= 0)
+        {
+            pActor->nAction = 2;
+            pActor->nFrame = 0;
+            pActor->pTarget = nullptr;
+
+            pActor->spr.xvel = 0;
+            pActor->spr.yvel = 0;
+        }
+
+        MoveCreature(pActor);
+
+        int xVal = abs(pActor->spr.pos.X - pTarget->spr.pos.X);
+        int yVal = abs(pActor->spr.pos.Y - pTarget->spr.pos.Y);
+
+        if (xVal >= 50 || yVal >= 50)
+        {
+            pActor->nCount--;
+            if (pActor->nCount < 0)
+            {
+                PlotCourseToSprite(pActor, pTarget);
+                SetRatVel(pActor);
+
+                pActor->nCount = 32;
+            }
+
             return;
         }
 
-        case 0x20000:
-        {
-            int nSeq = SeqOffsets[kSeqRat] + RatSeq[nAction].a;
-            sprite[nSprite].picnum = seq_GetSeqPicnum2(nSeq, RatList[nRat].nFrame);
+        pActor->nAction = 0;
+        pActor->nFrame = 0;
+        pActor->nPhase = RandomSize(3);
 
-            seq_MoveSequence(nSprite, nSeq, RatList[nRat].nFrame);
-
-            RatList[nRat].nFrame++;
-            if (RatList[nRat].nFrame >= SeqSize[nSeq])
-            {
-                bVal = true;
-                RatList[nRat].nFrame = 0;
-            }
-
-            short nTarget = RatList[nRat].nTarget;
-
-            Gravity(nSprite);
-
-            switch (nAction)
-            {
-                default:
-                    return;
-
-                case 0:
-                {
-                    RatList[nRat].nCount--;
-                    if (RatList[nRat].nCount > 0) {
-                        return;
-                    }
-
-                    int xVal = abs(sprite[nSprite].x - sprite[nTarget].x);
-                    int yVal = abs(sprite[nSprite].y - sprite[nTarget].y);
-
-                    if (xVal > 50 || yVal > 50)
-                    {
-                        RatList[nRat].nAction = 2;
-                        RatList[nRat].nFrame  = 0;
-                        RatList[nRat].nTarget = -1;
-
-                        sprite[nSprite].xvel = 0;
-                        sprite[nSprite].yvel = 0;
-                        return;
-                    }
-
-                    RatList[nRat].nFrame ^= 1;
-                    RatList[nRat].nCount = RandomSize(5) + 4;
-                    RatList[nRat].nIndex--;
-
-                    if (RatList[nRat].nIndex <= 0)
-                    {
-                        short nFoodSprite = FindFood(nSprite);
-                        if (nFoodSprite == -1) {
-                            return;
-                        }
-
-                        RatList[nRat].nTarget = nFoodSprite;
-
-                        PlotCourseToSprite(nSprite, nFoodSprite);
-                        SetRatVel(nSprite);
-
-                        RatList[nRat].nAction = 1;
-                        RatList[nRat].nIndex = 900;
-                        RatList[nRat].nFrame = 0;
-                    }
-
-                    return;
-                }
-                case 1:
-                {
-                    RatList[nRat].nIndex--;
-
-                    if (RatList[nRat].nIndex <= 0)
-                    {
-                        RatList[nRat].nAction = 2;
-                        RatList[nRat].nFrame = 0;
-                        RatList[nRat].nTarget = -1;
-
-                        sprite[nSprite].xvel = 0;
-                        sprite[nSprite].yvel = 0;
-                    }
-
-                    MoveCreature(nSprite);
-
-                    int xVal = abs(sprite[nSprite].x - sprite[nTarget].x);
-                    int yVal = abs(sprite[nSprite].y - sprite[nTarget].y);
-
-                    if (xVal >= 50 || yVal >= 50)
-                    {
-                        RatList[nRat].nCount--;
-                        if (RatList[nRat].nCount < 0)
-                        {
-                            PlotCourseToSprite(nSprite, nTarget);
-                            SetRatVel(nSprite);
-
-                            RatList[nRat].nCount = 32;
-                        }
-
-                        return;
-                    }
-
-                    RatList[nRat].nAction = 0;
-                    RatList[nRat].nFrame  = 0;
-                    RatList[nRat].nIndex = RandomSize(3);
-
-                    sprite[nSprite].xvel = 0;
-                    sprite[nSprite].yvel = 0;
-                    return;
-                }
-                case 2:
-                {
-                    if (sprite[nSprite].xvel || sprite[nSprite].yvel || sprite[nSprite].zvel) {
-                        MoveCreature(nSprite);
-                    }
-
-                    RatList[nRat].nCount--;
-                    if (RatList[nRat].nCount <= 0)
-                    {
-                        RatList[nRat].nTarget = FindFood(nSprite);
-
-                        if (RatList[nRat].nTarget <= -1)
-                        {
-                            RatList[nRat].nCount = RandomSize(6);
-                            if (sprite[nSprite].xvel || sprite[nSprite].yvel)
-                            {
-                                sprite[nSprite].xvel = 0;
-                                sprite[nSprite].yvel = 0;
-                                return;
-                            }
-
-                            sprite[nSprite].ang = RandomSize(11);
-                            SetRatVel(nSprite);
-                            return;
-                        }
-                        else
-                        {
-                            PlotCourseToSprite(nSprite, RatList[nRat].nTarget);
-                            SetRatVel(nSprite);
-                            RatList[nRat].nAction = 1;
-                            RatList[nRat].nIndex = 900;
-                            RatList[nRat].nFrame = 0;
-                            return;
-                        }
-                    }
-
-                    return;
-                }
-                case 3:
-                {
-                    if (bVal)
-                    {
-                        runlist_DoSubRunRec(sprite[nSprite].owner);
-                        runlist_FreeRun(sprite[nSprite].lotag - 1);
-                        runlist_SubRunRec(RatList[nRat].nRun);
-
-                        sprite[nSprite].cstat = 0x8000;
-                        mydeletesprite(nSprite);
-                    }
-                    return;
-                }
-            }
-
-            break;
+        pActor->spr.xvel = 0;
+        pActor->spr.yvel = 0;
+        return;
+    }
+    case 2:
+    {
+        if (pActor->spr.xvel || pActor->spr.yvel || pActor->spr.zvel) {
+            MoveCreature(pActor);
         }
+
+        pActor->nCount--;
+        if (pActor->nCount <= 0)
+        {
+            pActor->pTarget = FindFood(pActor);
+
+            if (pActor->pTarget == nullptr)
+            {
+                pActor->nCount = RandomSize(6);
+                if (pActor->spr.xvel || pActor->spr.yvel)
+                {
+                    pActor->spr.xvel = 0;
+                    pActor->spr.yvel = 0;
+                    return;
+                }
+
+                pActor->spr.ang = RandomSize(11);
+                SetRatVel(pActor);
+                return;
+            }
+            else
+            {
+                PlotCourseToSprite(pActor, pActor->pTarget);
+                SetRatVel(pActor);
+                pActor->nAction = 1;
+                pActor->nPhase = 900;
+                pActor->nFrame = 0;
+                return;
+            }
+        }
+
+        return;
+    }
+    case 3:
+    {
+        if (bVal)
+        {
+            runlist_DoSubRunRec(pActor->spr.owner);
+            runlist_FreeRun(pActor->spr.lotag - 1);
+            runlist_SubRunRec(pActor->nRun);
+
+            pActor->spr.cstat = CSTAT_SPRITE_INVISIBLE;
+            DeleteActor(pActor);
+        }
+        return;
+    }
     }
 }
+
 END_PS_NS

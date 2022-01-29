@@ -28,9 +28,9 @@ Modifications for JonoF's port by Jonathon Fowler (jf@jonof.id.au)
 
 #include "ns.h"	// Must come before everything else!
 
+#include "screenjob_.h"
 #include "gamestate.h"
 #include "duke3d.h"
-#include "sbar.h"
 #include "m_argv.h"
 #include "mapinfo.h"
 #include "texturemanager.h"
@@ -71,7 +71,7 @@ void GameInterface::Ticker()
 
 		global_random = krand();
 		movedummyplayers();//ST 13
-		
+
 		for (int i = connecthead; i >= 0; i = connectpoint2[i])
 		{
 			if (playrunning())
@@ -85,7 +85,7 @@ void GameInterface::Ticker()
 				fi.checksectors(i);
 			}
 		}
-		
+
 		fi.think();
 
 		if ((everyothertime & 1) == 0)
@@ -127,9 +127,13 @@ void GameInterface::Render()
 {
 	drawtime.Reset();
 	drawtime.Clock();
+
 	videoSetBrightness(thunder_brightness);
-	double const smoothRatio = playrunning() ? I_GetTimeFrac() * MaxSmoothRatio : MaxSmoothRatio;
-	displayrooms(screenpeek, smoothRatio);
+	double const smoothRatio = !playrunning() || !cl_interpolate || cl_capfps ? MaxSmoothRatio : I_GetTimeFrac() * MaxSmoothRatio;
+	if (!isRR())
+		moveclouds(smoothRatio);
+
+	displayrooms(screenpeek, smoothRatio, false);
 	drawoverlays(smoothRatio);
 	drawtime.Unclock();
 }
@@ -142,6 +146,7 @@ void GameInterface::Render()
 
 void GameInterface::NextLevel(MapRecord* map, int skill)
 {
+	if (skill != -1) ud.player_skill = skill + 1;
 	enterlevel(map, 0);
 }
 

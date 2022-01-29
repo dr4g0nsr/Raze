@@ -65,7 +65,6 @@ EXTERN_CVAR(Bool, gl_texture)
 static int BufferLock = 0;
 
 TArray<VSMatrix> matrixArray;
-void Draw2D(F2DDrawer* drawer, FRenderState& state);
 
 GLInstance GLInterface;
 
@@ -84,8 +83,8 @@ void GLInstance::Draw(EDrawType type, size_t start, size_t count)
 {
 	assert (BufferLock > 0);
 	applyMapFog();
-	renderState.vindex = start;
-	renderState.vcount = count;
+	renderState.vindex = (int)start;
+	renderState.vcount = (int)count;
 	renderState.primtype = type;
 	rendercommands.Push(renderState);
 	clearMapFog();
@@ -115,7 +114,7 @@ void GLInstance::DoDraw()
 				}
 				else
 				{
-					FHWModelRenderer mr(*screen->RenderState(), 0);
+					FHWModelRenderer mr(*screen->RenderState(), -1);
 					state.SetDepthFunc(DF_LEqual);
 					state.EnableTexture(true);
 					rs.model->BuildVertexBuffer(&mr);
@@ -156,6 +155,15 @@ void GLInstance::SetPalswap(int index)
 void GLInstance::SetFade(int index)
 {
 	renderState.FogColor = lookups.getFade(index);
+}
+
+extern int globalpal;
+void GLInstance::SetShade(int32_t shade, int numshades)
+{
+	// Ugh... This particular palette does not fade to black. Should be handled better. 
+	// It's really too bad that everything runs through here without being able to identify it anymore.
+	renderState.drawblack = (!(g_gameType & GAMEFLAG_PSEXHUMED) || globalpal != 4) ? shade > numshades : false;
+	renderState.Shade = min(shade, numshades - 1);
 }
 
 bool PolymostRenderState::Apply(FRenderState& state, GLState& oldState)
@@ -325,7 +333,7 @@ void PM_WriteSavePic(FileWriter* file, int width, int height)
 
 	screen->SetViewportRects(&bounds);
 	twodpsp.Clear();
-	bool didit = gi->GenerateSavePic();
+	/*bool didit =*/ gi->GenerateSavePic();
 
 	float Brightness = 8.f / (r_scenebrightness + 8.f);
 	screen->PostProcessScene(false, 0, Brightness, []() {
@@ -334,7 +342,7 @@ void PM_WriteSavePic(FileWriter* file, int width, int height)
 
 	xdim = oldx;
 	ydim = oldy;
-	videoSetViewableArea(oldwindowxy1.x, oldwindowxy1.y, oldwindowxy2.x, oldwindowxy2.y);
+	videoSetViewableArea(oldwindowxy1.X, oldwindowxy1.Y, oldwindowxy2.X, oldwindowxy2.Y);
 
 	// The 2D drawers can contain some garbage from the dirty render setup. Get rid of that first.
 	twod->Clear();
@@ -411,14 +419,10 @@ int32_t r_scenebrightness = 0;
 
 void videoShowFrame(int32_t w)
 {
-	if (gl_ssao)
-	{
-		screen->AmbientOccludeScene(GLInterface.GetProjectionM5());
-		// To do: the translucent part of the scene should be drawn here, but the render setup in the games is really too broken to do SSAO.
+	int oldssao = gl_ssao;
 
-		//glDrawBuffers(1, buffers);
-	}
-
+	// These two features do not really work with Polymost because the rendered scene does not provide it
+	gl_ssao = 0;
 	float Brightness = 8.f / (r_scenebrightness + 8.f);
 
 	screen->PostProcessScene(false, 0, Brightness, []() {
@@ -428,15 +432,5 @@ void videoShowFrame(int32_t w)
 	screen->mVertexData->Reset();
 	screen->mViewpoints->Clear();
 
-	videoSetBrightness(0);	// immediately reset this after rendering so that the value doesn't stick around in the backend.
-
-							// After finishing the frame, reset everything for the next frame. This needs to be done better.
-	if (!w)
-	{
-		screen->BeginFrame();
-		bool useSSAO = (gl_ssao != 0);
-		screen->SetSceneRenderTarget(useSSAO);
-		twodpsp.Clear();
-		twod->Clear();
-	}
+	gl_ssao = oldssao;
 }

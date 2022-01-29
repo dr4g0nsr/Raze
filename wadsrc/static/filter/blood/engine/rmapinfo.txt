@@ -11,11 +11,12 @@ cutscenes
 	{
 		function = BloodCutscenes.BuildLoading
 	}
-	
+
 }
 
 gameinfo
 {
 	summaryscreen = BloodCutscenes.BuildSPSummary
 	mpsummaryscreen = BloodCutscenes.BuildMPSummary
+	statusbarclass = BloodStatusBar
 }

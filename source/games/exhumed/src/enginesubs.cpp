@@ -38,29 +38,43 @@ void precache()
 {
     if (!r_precache) return;
 
-    int i;
-
-    for (i = 0; i < numsectors; i++)
+    for (auto& sect: sector)
     {
-        short j = sector[i].ceilingpicnum;
-        markTileForPrecache(j, sector[i].ceilingpal);
-        j = sector[i].floorpicnum;
-        markTileForPrecache(j, sector[i].floorpal);
+        int j = sect.ceilingpicnum;
+        markTileForPrecache(j, sect.ceilingpal);
+        if (picanm[j].sf & PICANM_ANIMTYPE_MASK)
+            for (int k = 1; k <= picanm[j].num; k++)  markTileForPrecache(j + k, sect.ceilingpal);
+
+        j = sect.floorpicnum;
+        markTileForPrecache(j, sect.floorpal);
+        if (picanm[j].sf & PICANM_ANIMTYPE_MASK)
+            for (int k = 1; k <= picanm[j].num; k++)  markTileForPrecache(j + k, sect.floorpal);
     }
 
-    for (i = 0; i < numwalls; i++)
+    for(auto& wal : wall)
     {
-        short j = wall[i].picnum;
-        markTileForPrecache(j, wall[i].pal);
-    }
+        int j = wal.picnum;
+        markTileForPrecache(j, wal.pal);
+        if (picanm[j].sf & PICANM_ANIMTYPE_MASK)
+            for (int k = 1; k <= picanm[j].num; k++)  markTileForPrecache(j + k, wal.pal);
 
-    for (i = 0; i < kMaxSprites; i++)
-    {
-        if (sprite[i].statnum < kMaxStatus)
+        if (wal.twoSided())
         {
-            short j = sprite[i].picnum;
-            markTileForPrecache(j, sprite[i].pal);
+            j = wal.overpicnum;
+            markTileForPrecache(j, wal.pal);
+            if (picanm[j].sf & PICANM_ANIMTYPE_MASK)
+                for (int k = 1; k <= picanm[j].num; k++)  markTileForPrecache(j + k, wal.pal);
+
         }
+    }
+
+	ExhumedSpriteIterator it;
+	while (auto ac = it.Next())
+    {
+        int j = ac->spr.picnum;
+        markTileForPrecache(j, ac->spr.pal);
+        if (picanm[j].sf & PICANM_ANIMTYPE_MASK)
+            for (int k = 1; k <= picanm[j].num; k++)  markTileForPrecache(j + k, ac->spr.pal);
     }
     precacheMarkedTiles();
 }

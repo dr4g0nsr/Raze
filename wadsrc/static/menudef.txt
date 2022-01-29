@@ -20,9 +20,12 @@ LISTMENU "MainMenu"
 		animatedtransition
 		DukeLogo
 		DukeTextItem "$MNU_NEWGAME", "n", "EpisodeMenu"
+		//DukeTextItem "$MNU_NEWGAME", "m", "MultiMenu" // In EDuke this replaces "New Game" when in networking mode. Kept here as a reminder.
 		DukeTextItem "$MNU_MULTIPLAYER", "m", "MultiMenu"
 		DukeTextItem "$MNU_LOADGAME", "l", "LoadGameMenu"
 		DukeTextItem "$MNU_OPTIONS", "o", "OptionsMenu"
+		DukeTextItem "$MNU_HELP", "h", "HelpMenu"
+		DukeTextItem "$MNU_CREDITS", "c", "CreditsMenu"
 		DukeTextItem "$MNU_QUITGAME", "q", "QuitMenu"
 	}
 	ifgame(Blood)
@@ -31,18 +34,20 @@ LISTMENU "MainMenu"
 		position 160, 45
 		Linespacing 20
 		BloodTextItem "$MNU_NEWGAME", "n", "EpisodeMenu"
-		BloodTextItem "$MNU_MULTIPLAYER", "m", "MultiMenu"
+		//BloodTextItem "$MNU_MULTIPLAYER", "m", "MultiMenu"
 		BloodTextItem "$MNU_OPTIONS", "o", "OptionsMenu"
 		BloodTextItem "$MNU_LOADGAME", "l", "LoadGameMenu"
 		BloodTextItem "$MNU_HELP", "h", "HelpMenu"
 		BloodTextItem "$MNU_CREDITS", "c", "CreditsMenu"
 		BloodTextItem "$MNU_QUITGAME", "q", "QuitMenu"
 		BloodDripDrawer
+		animated
 	}
 	ifgame(ShadowWarrior)
 	{
 		Position 55, 32
 		Linespacing 17
+		class SWMainMenu
 		SWLogo
 		SWTextItem "$MNU_NEWGAME", "n", "EpisodeMenu"
 		SWTextItem "$MNU_LOADGAME", "l", "LoadGameMenu"
@@ -63,10 +68,11 @@ LISTMENU "MainMenu"
 		class ExhumedMainMenu
 		Position 160, 65
 		linespacing 22
+		Animated
 		ExhumedPlasma
-		ExhumedTextItem "$MNU_NEWGAME", "n", "StartGameNoSkill", 0
+		ExhumedTextItem "$MNU_NEWGAME", "n", "EpisodeMenu"
 		ExhumedTextItem "$MNU_LOADGAME", "l", "LoadGameMenu"
-		ExhumedTextItem "$TXT_EX_MAP00", "m", "StartGameNoSkill", 1
+		//ExhumedTextItem "$TXT_EX_MAP00", "m", "StartGameNoSkill", 1
 		ExhumedTextItem "$MNU_OPTIONS", "v", "OptionsMenu"
 		ExhumedTextItem "$MNU_QUITGAME", "q", "QuitMenu"
 	}
@@ -109,11 +115,13 @@ LISTMENU "IngameMenu"
 		BloodTextItem "$MNU_ENDGAME", "e", "EndgameMenu"
 		BloodTextItem "$MNU_QUITGAME", "q", "QuitMenu"
 		BloodDripDrawer
+		animated
 	}
 	ifgame(ShadowWarrior)
 	{
 		Position 55, 32
 		Linespacing 17
+		class SWMainMenu
 		SWLogo
 		SWTextItem "$MNU_NEWGAME", "n", "EpisodeMenu"
 		SWTextItem "$MNU_LOADGAME", "l", "LoadGameMenu"
@@ -134,10 +142,12 @@ LISTMENU "IngameMenu"
 		class ExhumedMainMenu
 		Position 160, 65
 		linespacing 22
+		Animated
 		ExhumedLogo
-		ExhumedTextItem "$MNU_NEWGAME", "n", "StartGameNoSkill", 0
+		ExhumedTextItem "$MNU_NEWGAME", "n", "EpisodeMenu", 0
 		ExhumedTextItem "$MNU_LOADGAME", "l", "LoadGameMenu"
-		ExhumedTextItem "$TXT_EX_MAP00", "m", "StartGameNoSkill", 1
+		ExhumedTextItem "$MNU_SAVEGAME", "s", "SaveGameMenu"
+		//ExhumedTextItem "$TXT_EX_MAP00", "m", "StartGameNoSkill", 1
 		ExhumedTextItem "$MNU_OPTIONS", "v", "OptionsMenu"
 		ExhumedTextItem "$MNU_QUITGAME", "q", "QuitMenu"
 	}
@@ -165,6 +175,7 @@ LISTMENU "EpisodeMenu"
 		Linespacing 20
 		CaptionItem "$MNU_EPISODES"
 		BloodDripDrawer
+		animated
 	}
 	ifgame(ShadowWarrior)
 	{
@@ -172,6 +183,34 @@ LISTMENU "EpisodeMenu"
 		Position 35, 32
 		Linespacing 17
 	}
+	ifgame(Exhumed)
+	{
+		class ExhumedMainMenu
+		Position 160, 65
+		linespacing 22
+	}
+}
+
+LISTMENU "MultiMenu"
+{
+	Size 320, 200
+	ifgame(Duke)
+	{
+		position 160, 48
+		Linespacing 20
+		captionItem "$MNU_SELECTMP"
+		animatedtransition
+		DukeTextItem "$MP_JOIN", "n", "MultiplayerJoin"
+		DukeTextItem "$MP_SETUP", "n", "NewPlayerMenu"
+	}
+}
+
+LISTMENU "MultiplayerJoin"
+{
+		position 160, 48
+		Linespacing 20
+		captionItem "$MP_JOIN"
+		animatedtransition
 }
 
 LISTMENU "SkillMenu"
@@ -190,12 +229,21 @@ LISTMENU "SkillMenu"
 		Linespacing 20
 		CaptionItem "$MNU_DIFFICULTY"
 		BloodDripDrawer
+		animated
 	}
 	ifgame(ShadowWarrior)
 	{
+		class SWMainMenu
 		CaptionItem "$MNU_DIFFICULTY"
 		Position 35, 32
 		Linespacing 17
+	}
+	ifgame(Exhumed)
+	{
+		class ExhumedMainMenu
+		Position 160, 65
+		linespacing 22
+		CaptionItem "$MNU_DIFFICULTY"
 	}
 }
 
@@ -209,7 +257,7 @@ ImageScroller "HelpMenu"
 {
 	ifgame(Duke, Nam, WW2GI, Redneck, RedneckRides)
 	{
-		
+
 		ImageItem "TEXTSTORY"
 		ImageItem "F1HELP"
 		ifgame(RedneckRides)
@@ -227,6 +275,7 @@ ImageScroller "HelpMenu"
 		QAVDrawer "Help4.qav"
 		QAVDrawer "Help5.qav"
 		QAVDrawer "Help3b.qav"
+		animated
 	}
 	ifgame(ShadowWarrior)
 	{
@@ -272,11 +321,10 @@ ImageScroller "CreditsMenu"
 			DukeCredits2
 			DukeCredits3
 		}
-		animatedtransition
 	}
 	ifgame(Redneck)
 	{
-		TextBackground "MENUSCREEN"
+		// TextBackground "MENUSCREEN"
 		TextBackgroundBrightness 0.5
 		TextFont "SmallFont"
 		TextScale 0.45
@@ -308,7 +356,7 @@ ImageScroller "CreditsMenu"
 	}
 	ifgame(RedneckRides)
 	{
-		TextBackground "MENUSCREEN"
+		// TextBackground "MENUSCREEN"
 		TextBackgroundBrightness 0.5
 		TextFont "SmallFont"
 		TextScale 0.45
@@ -347,6 +395,7 @@ ImageScroller "CreditsMenu"
 	ifgame(blood)
 	{
 		QAVDrawer "Credits.qav"
+		animated
 	}
 	ifgame(ShadowWarrior)
 	{
@@ -367,7 +416,7 @@ ImageScroller "CreditsMenu"
 		ImageItem "TilePIELogo"
 	}
 }
-	
+
 //-------------------------------------------------------------------------------------------
 //
 // Base definition for load game menu. Only the configurable part is done here
@@ -393,7 +442,20 @@ ListMenu "SaveGameMenu"
 	Class "SaveMenu"	// uses its own implementation
 	CaptionItem "$MNU_SAVEGAME"
 }
-	
+
+//-------------------------------------------------------------------------------------------
+//
+// Base definition for user map menu. Only the configurable part is done here
+//
+//-------------------------------------------------------------------------------------------
+
+ListMenu "UsermapMenu"
+{
+	Position 0, 40
+	Class "UsermapMenu"	// uses its own implementation
+	CaptionItem "$MNU_USERMAP"
+}
+
 //-------------------------------------------------------------------------------------------
 //
 // The generic options menus start here
@@ -463,7 +525,7 @@ OptionMenu "OptionsMenu" protected
 	SafeCommand	"$OPTMNU_RESETTOSAVED",	"reset2saved"
 	//Command "$OPTMNU_CONSOLE",			"menuconsole"
 }	
-	
+
 //-------------------------------------------------------------------------------------------
 //
 // Controls Menu
@@ -522,7 +584,7 @@ OptionMenu "ActionControlsMenu" protected
 	StaticText ""
 	Control    "$CNTRLMNU_MOUSELOOK"        , "+mouse_aiming"
 	Control    "$CNTRLMNU_MLOOKTOGGLE"		, "togglemouseaim"
-	
+
 	Control    "$CNTRLMNU_AIMUP"           , "+aim_up"
 	Control    "$CNTRLMNU_AIMDOWN"         , "+aim_down"
 	Control    "$CNTRLMNU_LOOKUP"           , "+look_up"
@@ -613,7 +675,7 @@ OptionMenu "InventoryControlsMenu" protected
 	StaticText ""
 	Control    "$CNTRLMNU_NEXTITEM"     , "invnext"
 	Control    "$CNTRLMNU_PREVIOUSITEM" , "invprev"
-	
+
 	// Item numbers here are are defined by the games' internal order.
 	ifgame(Duke)
 	{
@@ -945,6 +1007,18 @@ OptionValue "WeapSwitch"
 	3, "$PLRMNU_PREFERRED"
 }
 
+OptionValue "ExplosBehavior"
+{
+	0, "$OPTVAL_DEFAULT"
+	1, "$OPTVAL_OLD"
+}
+
+OptionValue "EnemyBehavior"
+{
+	0, "$OPTVAL_DEFAULT"
+	1, "$OPTVAL_OLD"
+}
+
 
 OptionMenu GameplayOptions protected
 {
@@ -966,10 +1040,14 @@ OptionMenu GameplayOptions protected
 	ifgame(Blood)
 	{
 		Option "$PLRMNU_EQUIP", "cl_weaponswitch", "WeapSwitch"
+		Option "$EXPLOS_BEHAVIOR", "cl_bloodvanillaexplosions", "ExplosBehavior"
+		Option "$ENEMY_BEHAVIOR", "cl_bloodvanillaenemies", "EnemyBehavior"
 	}
-	ifgame(Exhumed)
+	StaticText ""
+	ifgame(Blood)
 	{
-	    Option "$PLRMNU_EXHUMEDOLDTURN", "cl_exhumedoldturn", "OnOff"
+		Option "$PLRMNU_BLDQAVINTERP", "cl_bloodqavinterp", "OnOff"
+		Option "$PLRMNU_BLDWEAPINTERP", "cl_bloodweapinterp", "OnOff", "cl_bloodqavinterp"
 	}
 	// StaticText ""
 	// Option "Record Demo", "m_recstat", "OnOff"
@@ -1012,16 +1090,29 @@ OptionValue "Multisample"
 	32, "$OPTVAL_32X"
 }
 
+OptionValue "Precision"
+{
+	0, "$OPTVAL_SPEED"
+	1, "$OPTVAL_QUALITY"
+}
+
+OptionValue "VideoRenderers"
+{
+        0, "Polymost"
+        1, "Raze3D"
+}
 
 OptionMenu "VideoOptions" protected
 {
 	Title "$DSPLYMNU_TITLE"
-	
+
 	Submenu "$OPTMNU_HUD", "HUDOptions"
 	Submenu "$RENDER_OPTIONS", "RenderOptions"
 	Submenu "$AUTOMAPMNU_TITLE", "AutomapOptions"
 	Submenu "$GLMNU_POSTPROCESS", "PostProcessMenu"
 	Submenu "$GLTEXMNU_TITLE", "GLTextureGLOptions"
+	StaticText ""
+	Option "Renderer",							vid_renderer,					"VideoRenderers"
 	StaticText ""
 
 	Slider "$DSPLYMNU_GAMMA",					"vid_gamma",					0.75, 3.0, 0.05, 2
@@ -1031,9 +1122,9 @@ OptionMenu "VideoOptions" protected
 	Slider "$DSPLYMNU_AMBIENT_LIGHT",			"r_ambientlight",  				0.5, 4.0, 0.1
 
 	StaticText ""
-	Option "$DSPLYMNU_VOXELS",					"r_voxels",					"OnOff"
+	Option "$DSPLYMNU_VOXELS",					"r_voxels",						"OnOff"
 	Option "$DSPLYMNU_SHADOWS",					"r_shadows",					"OnOff"
-	Option "$DSPLYMNU_SLOPETILT",				"cl_slopetilting",					"OnOff"
+	Option "$DSPLYMNU_SLOPETILT",				"cl_slopetilting",				"OnOff"
 	Option "$GLPREFMNU_ENVIRONMENTMAPMIRROR",	gl_mirror_envmap,				"OnOff"
 	ifnotgame(Blood, Exhumed)
 	{
@@ -1044,12 +1135,14 @@ OptionMenu "VideoOptions" protected
 		Option "$DSPLYMNU_VIEWBOB",					"cl_viewvbob",					"OnOff"
 		Option "$DSPLYMNU_VIEWSWAY",				"cl_viewhbob",					"OnOff"
 	}
-	StaticText ""
-	Slider "$DSPLYMNU_FOV",						"r_fov",					60, 130, 10, 1
+	Slider "$DSPLYMNU_FOV",						"r_fov",						60, 130, 10, 1
 
 	StaticText ""
-	Option "$GLTEXMNU_TEXFILTER",		gl_texture_filter,				"FilterModes"
-	Option "$GLTEXMNU_ANISOTROPIC",		gl_texture_filter_anisotropic,				"Anisotropy"
+	Option "$GLPREFMNU_RENDERQUALITY",			gl_seamless,					"Precision"
+
+	StaticText ""
+	Option "$GLTEXMNU_TEXFILTER",				gl_texture_filter,				"FilterModes"
+	Option "$GLTEXMNU_ANISOTROPIC",				gl_texture_filter_anisotropic,	"Anisotropy"
 	StaticText " "
 	Option "$GLPREFMNU_MULTISAMPLE", 			gl_multisample,					"Multisample"
 
@@ -1089,13 +1182,66 @@ OptionValue "LookupOrder"
 	1, "$OPTVAL_REVERSEFIRST"
 }
 
+OptionValue "HqResizeModes"
+{
+   0, "$OPTVAL_OFF"
+   1, "$OPTVAL_SCALENX"
+   2, "$OPTVAL_HQNX"
+   3, "$OPTVAL_HQNXMMX"
+   4, "$OPTVAL_NXBRZ"
+   5, "$OPTVAL_OLD_NXBRZ"
+   6, "$OPTVAL_NORMALNX"
+}
+
+OptionValue "HqResizeMultipliers"
+{
+   1, "$OPTVAL_OFF"
+   2, "2x"
+   3, "3x"
+   4, "4x"
+   5, "5x"
+   6, "6x"
+}
+
+OptionValue "HqResizeModesNoMMX"
+{
+   0, "$OPTVAL_OFF"
+   1, "$OPTVAL_SCALENX"
+   2, "$OPTVAL_HQNX"
+   4, "$OPTVAL_NXBRZ"
+   5, "$OPTVAL_OLD_NXBRZ"
+   6, "$OPTVAL_NORMALNX"
+}
+
+OptionValue "FogMode"
+{
+	0, "$OPTVAL_OFF"
+	1, "$OPTVAL_STANDARD"
+	2, "$OPTVAL_RADIAL"
+}
+
+OptionValue "LightModes"
+{
+	0, "$GLPREFMNU_ORIGINAL"
+	1, "$GLPREFMNU_NATURAL"
+	2, "$GLPREFMNU_HIGHCONTRAST"
+}
+
+OptionValue "SSAOModes"
+{
+	0, "$OPTVAL_OFF"
+	1, "$OPTVAL_LOW"
+	2, "$OPTVAL_MEDIUM"
+	3, "$OPTVAL_HIGH"
+}
+
 OptionMenu "PostProcessMenu"
 {
 	Title "$GLMNU_POSTPROCESS"
-	//Option "$GLPREFMNU_BLOOM",		 			gl_bloom,						"OnOff"
+	Option "$GLPREFMNU_BLOOM",		 			gl_bloom,						"OnOff"
 	Option "$GLPREFMNU_LENS",		 			gl_lens,						"OnOff"
-	//Option "$GLPREFMNU_SSAO",		 			gl_ssao,						"SSAOModes"
-	//Slider "$GLPREFMNU_SSAO_PORTALS",			gl_ssao_portals,				0.0, 4.0, 1.0, 0
+	Option "$GLPREFMNU_SSAO",		 			gl_ssao,						"SSAOModes"
+	Slider "$GLPREFMNU_SSAO_PORTALS",			gl_ssao_portals,				0.0, 4.0, 1.0, 0
 	Option "$GLPREFMNU_FXAA",		 			gl_fxaa,						"FXAAQuality"
 	Option "$GLPREFMNU_DITHER",		 			gl_dither_bpc,					"DitherModes"
 	Option "$GLPREFMNU_TONEMAP", 				gl_tonemap,						"TonemapModes"
@@ -1104,8 +1250,6 @@ OptionMenu "PostProcessMenu"
 	Option "$GLPREFMNU_PALTONEMAPORDER",		gl_paltonemap_reverselookup,	"LookupOrder"
 }
 
-
-
 OptionMenu "AutomapOptions"
 {
 	Title "$AUTOMAPMNU_TITLE"
@@ -1113,6 +1257,8 @@ OptionMenu "AutomapOptions"
 	StaticText ""
 	Option "$AUTOMAPMNU_ROTATE",				"am_rotate",					"OnOff"
 	Option "$AUTOMAPMNU_FOLLOW",				"am_followplayer",				"OnOff"
+	Slider "$AUTOMAPMNU_LINEALPHA",				"am_linealpha", 0.1, 1.0, 0.1, 1
+	Slider "$AUTOMAPMNU_LINETHICKNESS",			"am_linethickness", 1, 8, 1, 0
 
 	// todo:
 	//CVAR(Bool, am_textfont, false, CVAR_ARCHIVE)
@@ -1149,8 +1295,6 @@ OptionMenu "GLTextureGLOptions" protected
 	Option "$GLTEXMNU_PRECACHETEX",		gl_precache,					"YesNo"
 	Class "GLTextureGLOptions"
 }
-
-
 //-------------------------------------------------------------------------------------------
 //
 // HUD options
@@ -1192,17 +1336,18 @@ OptionMenu "HUDOptions" protected
 	Slider "$DSPLYMNU_STATSCALE",				"hud_statscale",			0.36, 1.0, 0.04, 2
 
 	StaticText ""
+	Option "$DSPLYMNU_SHOWMAPNAME",				"hud_showmapname",	OnOff
+
+	StaticText ""
 	Option "$DSPLYMNU_MESSAGES",				"hud_messages",				"HudMessages"
 	Option "$DSPLYMNU_MESSAGEDISP",				"con_notify_advanced",		"HudMessageStyle"
 	Option "$MSGMNU_CENTERMESSAGES",			"con_centernotify", 		"OnOff", "con_notify_advanced"
 	Option "$MSGMNU_PULSEMESSAGES",				"con_pulsetext", 			"OnOff", "con_notify_advanced"
 	Slider "$MSGMNU_MESSAGESCALE", 				"con_notifyscale", 			0.36, 1.0, 0.04, 2
 
-	ifnotgame(Exhumed)
-	{
-		StaticText ""
-		Option "$DSPLYMNU_CLIPAMT",				"cl_showmagamt",	OnOff
-	}
+	StaticText ""
+	Option "$DSPLYMNU_CLIPAMT",				"cl_showmagamt",	OnOff
+
 	StaticText ""
 	Option "$DSPLYMNU_CROSSHAIR",				"cl_crosshair",	OnOff
 	Slider "$DSPLYMNU_CROSSHAIRSCALE",			"crosshairscale",		0.25, 1.0, 0.125, 2
@@ -1224,8 +1369,14 @@ OptionMenu "RenderOptions"
 	Option "$RENDER_TC", "hw_hightile", "OnOff"
 	Option "$RENDER_CACHE", "r_precache", "OnOff"
 	StaticText ""
-	Option "$RENDER_PALETTEEMU", "hw_useindexedcolortextures", "OnOff"
-	Option "$RENDER_PALINTER", "hw_shadeinterpolate", "OnOff", "hw_useindexedcolortextures"
+	// Exhumed's lighting system does not work with the enhanced modes.
+	ifnotgame(Exhumed)
+	{
+		Option "$GLPREFMNU_SECLIGHTMODE",			"hw_lightmode",					"LightModes"
+	}
+	Option "$GLPREFMNU_FOGMODE",				gl_fogmode,						"FogMode"
+	Option "$RENDER_PALETTEEMU",				"hw_useindexedcolortextures",	"OnOff"
+	Option "$RENDER_PALINTER",					"hw_shadeinterpolate",			"OnOff", "hw_useindexedcolortextures"
 	StaticText ""
 	Option "$RENDER_MODELS", "hw_models", "OnOff"
 }
@@ -1361,7 +1512,7 @@ OptionMenu AdvSoundOptions protected
 	Option "$ADVSNDMNU_LOOKUPMUS",			"mus_extendedlookup", "OnOff"
 	Option "$ADVSNDMNU_LOOKUPSND",			"snd_extendedlookup", "OnOff"
 	StaticText " "
-	
+
 	//Option "$ADVSNDMNU_HRTF",				"snd_hrtf", "AutoOffOn"
 	StaticText " "
 	//Option "$SNDMNU_BACKGROUND",			"i_soundinbackground", "OnOff"
@@ -1503,6 +1654,8 @@ OptionValue MaxFps
 	120, "$OPTVAL_120FPS"
 	144, "$OPTVAL_144FPS"
 	200, "$OPTVAL_200FPS"
+	244, "$OPTVAL_244FPS"
+	360, "$OPTVAL_360FPS"
 }
 
 OptionValue GPUSwitch
@@ -1518,6 +1671,7 @@ OptionValue PreferBackend
 	1, "$OPTVAL_VULKAN"
 	// Enable when HAVE_SOFTPOLY will be defined
 	//2, "$OPTVAL_SOFTPOLY"
+	3, "$OPTVAL_OPENGLES"
 }
 
 OptionMenu VideoModeMenu protected
@@ -1608,6 +1762,45 @@ OptionValue Autosave
 	2,	"$OPTVAL_NEVER"
 }
 
+OptionValue Endoom
+{
+	0.0, "$OPTVAL_OFF"
+	1.0, "$OPTVAL_ON"
+	2.0, "$OPTVAL_ONLYMODIFIED"
+}
+
+
+/*=======================================
+ *
+ * Language menu 
+ * (most languages are still incomplete, only DE, PT and RO are done.)
+ *
+ *=======================================*/
+
+OptionString "LanguageOptions"
+{
+	"auto", "Auto"
+	"default", "English (US)"
+	"eng", "English (UK)"
+	"cs", "Česky (Czech)"
+	"de", "Deutsch (German)"
+	//"es", "Español (España) (Castilian Spanish)"
+	//"esm", "Español (Latino) (Latin American Spanish)"
+	//"eo", "Esperanto"
+	//"fi", "Suomi (Finnish)"
+	//"fr", "Français (French)"
+	//"it", "Italiano (Italian)"
+	//"jp", "日本語 (Japanese)"
+	//"ko", "한국어 (Korean)"
+	//"nl", "Nederlands (Dutch)"
+	"pl", "Polski (Polish)"
+	//"ptg", "Português (European Portuguese)"
+	"pt", "Português do Brasil (Brazilian Portuguese)"
+	"ro", "Română (Romanian)"
+	//"ru", "Русский (Russian)"
+	//"sr", "Српски (Serbian)"
+}
+
 OptionMenu "MiscOptions" protected
 {
 	Title "$MISCMNU_TITLE"
@@ -1635,7 +1828,12 @@ OptionMenu "MiscOptions" protected
 		Option "$MISCMNU_NINJA",				"sw_ninjahack", "OnOff"
 	}
 	//StaticText " "
-	//Option "$OPTMNU_LANGUAGE", "language", "LanguageOptions" - not ready yet
+	Option "$OPTMNU_LANGUAGE", "language", "LanguageOptions"
+	IfOption(Windows)
+	{
+		StaticText " "
+		Option	"$DSPLYMNU_SHOWENDOOM",			"showendoom", "Endoom"
+	}
 
 }
 
@@ -1866,7 +2064,7 @@ OptionMenu "EngineCredits1a"
 	title "$MNU_CREDITS"
 	Submenu " ---->", "EngineCredits1b"
 	StaticText "Raze QA", 1
-	
+
 	StaticText "sinisterseed                        ", 0
 	StaticText "Major Cooke       Dynamo            ", 0
 	StaticText "Nash Muhandes     Martin Howe       ", 0
@@ -1921,7 +2119,7 @@ OptionMenu "EngineCredits2a"
 	StaticText "Alexey \"Nuke.YKT\" Skrybykin", 0
 	StaticText "sirlemonhead", 0
 }
-	
+
 OptionMenu "EngineCredits2b"
 {
 	title "$MNU_CREDITS"
@@ -1932,14 +2130,14 @@ OptionMenu "EngineCredits2b"
 	StaticText "MaxED             Kinsie            ", 0
 	StaticText "Maxi Clouds                         ", 0
 }
-	
+
 OptionMenu "EngineCredits3"
 {
 	title "$MNU_CREDITS"
 	//Submenu " ---->", "EngineCredits"	// This creates a circular dependency which makes the search tool crash.
 	StaticText "The EDuke32 team thanks the following people", 1
 	StaticText "for their contributions:", 1
-	
+
 	StaticText "Alexey Skrybykin  Bioman            Brandon Bergren  ", 0
 	StaticText "Charlie Honig     Dan Gaskill       David Koenig     ", 0
 	StaticText "Ed Coolidge       Emile Belanger    Fox              ", 0
@@ -1952,4 +2150,4 @@ OptionMenu "EngineCredits3"
 	StaticText "Ryan Gordon       Stephen Anthony   tueidj           ", 0
 	StaticText "Pär \"Parkar\" Karlsson", 0
 }
-	
+

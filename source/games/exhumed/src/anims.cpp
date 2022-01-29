@@ -25,26 +25,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 BEGIN_PS_NS
 
-short nMagicSeq = -1;
-short nPreMagicSeq  = -1;
-short nSavePointSeq = -1;
-FreeListArray<Anim, kMaxAnims> AnimList;
+int nMagicSeq = -1;
+int nPreMagicSeq  = -1;
+int nSavePointSeq = -1;
 
-
-FSerializer& Serialize(FSerializer& arc, const char* keyname, Anim& w, Anim* def)
-{
-    if (arc.BeginObject(keyname))
-    {
-        arc("seq", w.nSeq)
-            ("val1", w.field_2)
-            ("val2", w.field_4)
-            ("sprite", w.nSprite)
-            ("runrec", w.AnimRunRec)
-            ("flags", w.AnimFlags)
-            .EndObject();
-    }
-    return arc;
-}
 
 void SerializeAnim(FSerializer& arc)
 {
@@ -53,265 +37,222 @@ void SerializeAnim(FSerializer& arc)
         arc("magic", nMagicSeq)
             ("premagic", nPreMagicSeq)
             ("savepoint", nSavePointSeq)
-            ("list", AnimList)
             .EndObject();
     }
 }
 
 void InitAnims()
 {
-    AnimList.Clear();
     nMagicSeq     = SeqOffsets[kSeqItems] + 21;
     nPreMagicSeq  = SeqOffsets[kSeqMagic2];
     nSavePointSeq = SeqOffsets[kSeqItems] + 12;
 }
 
-void DestroyAnim(int nAnim)
+void DestroyAnim(DExhumedActor* pActor)
 {
-    short nSprite = AnimList[nAnim].nSprite;
-
-    if (nSprite >= 0)
+    if (pActor)
     {
-        StopSpriteSound(nSprite);
-        runlist_SubRunRec(AnimList[nAnim].AnimRunRec);
-        runlist_DoSubRunRec(sprite[nSprite].extra);
-        runlist_FreeRun(sprite[nSprite].lotag - 1);
+        StopActorSound(pActor);
+        runlist_SubRunRec(pActor->nRun);
+        runlist_DoSubRunRec(pActor->spr.extra);
+        runlist_FreeRun(pActor->spr.lotag - 1);
+        DeleteActor(pActor);
     }
-
-    AnimList.Release(nAnim);
 }
 
-int BuildAnim(int nSprite, int val, int val2, int x, int y, int z, int nSector, int nRepeat, int nFlag)
+DExhumedActor* BuildAnim(DExhumedActor* pActor, int val, int val2, int x, int y, int z, sectortype* pSector, int nRepeat, int nFlag)
 {
-    int nAnim = AnimList.Get();
-	if (nAnim < 0) {
-		return -1;
-	}
-
-    if (nSprite == -1) {
-        nSprite = insertsprite(nSector, 500);
+    if (pActor == nullptr) {
+        pActor = insertActor(pSector, 500);
     }
-
-    sprite[nSprite].x = x;
-    sprite[nSprite].y = y;
-    sprite[nSprite].z = z;
-    sprite[nSprite].cstat = 0;
+    pActor->spr.pos.X = x;
+    pActor->spr.pos.Y = y;
+    pActor->spr.pos.Z = z;
+    pActor->spr.cstat = 0;
 
     if (nFlag & 4)
     {
-        sprite[nSprite].pal = 4;
-        sprite[nSprite].shade = -64;
+        pActor->spr.pal = 4;
+        pActor->spr.shade = -64;
     }
     else
     {
-        sprite[nSprite].pal = 0;
-        sprite[nSprite].shade = -12;
+        pActor->spr.pal = 0;
+        pActor->spr.shade = -12;
     }
 
-    sprite[nSprite].clipdist = 10;
-    sprite[nSprite].xrepeat = nRepeat;
-    sprite[nSprite].yrepeat = nRepeat;
-    sprite[nSprite].picnum = 1;
-    sprite[nSprite].ang = 0;
-    sprite[nSprite].xoffset = 0;
-    sprite[nSprite].yoffset = 0;
-    sprite[nSprite].xvel = 0;
-    sprite[nSprite].yvel = 0;
-    sprite[nSprite].zvel = 0;
-    sprite[nSprite].backuppos();
+    pActor->spr.clipdist = 10;
+    pActor->spr.xrepeat = nRepeat;
+    pActor->spr.yrepeat = nRepeat;
+    pActor->spr.picnum = 1;
+    pActor->spr.ang = 0;
+    pActor->spr.xoffset = 0;
+    pActor->spr.yoffset = 0;
+    pActor->spr.xvel = 0;
+    pActor->spr.yvel = 0;
+    pActor->spr.zvel = 0;
+    pActor->backuppos();
 
     // CHECKME - where is hitag set otherwise?
-    if (sprite[nSprite].statnum < 900) {
-        sprite[nSprite].hitag = -1;
+    if (pActor->spr.statnum < 900) {
+        pActor->spr.hitag = -1;
     }
 
-    sprite[nSprite].lotag = runlist_HeadRun() + 1;
-    sprite[nSprite].owner = -1;
-    sprite[nSprite].extra = runlist_AddRunRec(sprite[nSprite].lotag - 1, nAnim | 0x100000);
+    pActor->spr.lotag = runlist_HeadRun() + 1;
+    pActor->spr.owner = -1;
+    pActor->spr.extra = runlist_AddRunRec(pActor->spr.lotag - 1, pActor, 0x100000);
 
-    AnimList[nAnim].AnimRunRec = runlist_AddRunRec(NewRun, nAnim | 0x100000);
-    AnimList[nAnim].nSprite = nSprite;
-    AnimList[nAnim].AnimFlags = nFlag;
-    AnimList[nAnim].field_2 = 0;
-    AnimList[nAnim].nSeq = SeqOffsets[val] + val2;
-    AnimList[nAnim].field_4 = 256;
+    pActor->nRun = runlist_AddRunRec(NewRun, pActor, 0x100000);
+    pActor->nAction = nFlag;
+    pActor->nIndex = 0;
+    pActor->nIndex2 = SeqOffsets[val] + val2;
+    pActor->pTarget = nullptr;
+    pActor->nDamage = pActor->nRun;
+    pActor->nPhase = ITEM_MAGIC;
 
     if (nFlag & 0x80) {
-        sprite[nSprite].cstat |= 0x2; // set transluscence
+        pActor->spr.cstat |= CSTAT_SPRITE_TRANSLUCENT; // set transluscence
     }
 
-    return nAnim;
+    return pActor;
 }
 
-short GetAnimSprite(short nAnim)
+void AIAnim::Tick(RunListEvent* ev)
 {
-    return AnimList[nAnim].nSprite;
-}
+    auto pActor = ev->pObjActor;
+    if (!pActor) return;
 
-void FuncAnim(int a, int, int nRun)
-{
-    short nAnim = RunData[nRun].nVal;
-    assert(nAnim >= 0 && nAnim < kMaxAnims);
+    int nIndex2 = pActor->nIndex2;
+    int nIndex = pActor->nIndex;
 
-    short nSprite = AnimList[nAnim].nSprite;
-    short nSeq = AnimList[nAnim].nSeq;
-
-    assert(nSprite != -1);
-
-    int nMessage = a & 0x7F0000;
-
-    switch (nMessage)
+    if (!(pActor->spr.cstat & CSTAT_SPRITE_INVISIBLE))
     {
-        case 0x20000:
+        seq_MoveSequence(pActor, nIndex2, nIndex);
+    }
+
+    if (pActor->spr.statnum == kStatIgnited)
+    {
+        DExhumedActor* pIgniter = pActor->pTarget;
+
+        if (pIgniter)
         {
-            short var_1C = AnimList[nAnim].field_2;
+            pActor->spr.pos.X = pIgniter->spr.pos.X;
+            pActor->spr.pos.Y = pIgniter->spr.pos.Y;
+            pActor->spr.pos.Z = pIgniter->spr.pos.Z;
 
-            if (!(sprite[nSprite].cstat & 0x8000))
+            if (pIgniter->sector() != pActor->sector())
             {
-                seq_MoveSequence(nSprite, nSeq, var_1C);
-            }
-
-            if (sprite[nSprite].statnum == kStatIgnited)
-            {
-                short nSpriteB = sprite[nSprite].hitag;
-                if (nSpriteB > -1)
+                if (!pIgniter->sector())
                 {
-                    sprite[nSprite].x = sprite[nSpriteB].x;
-                    sprite[nSprite].y = sprite[nSpriteB].y;
-                    sprite[nSprite].z = sprite[nSpriteB].z;
-
-                    if (sprite[nSpriteB].sectnum != sprite[nSprite].sectnum)
-                    {
-                        if (sprite[nSpriteB].sectnum < 0 || sprite[nSpriteB].sectnum >= kMaxSectors)
-                        {
-                            DestroyAnim(nAnim);
-                            mydeletesprite(nSprite);
-                            return;
-                        }
-                        else
-                        {
-                            mychangespritesect(nSprite, sprite[nSpriteB].sectnum);
-                        }
-                    }
-
-                    if (!var_1C)
-                    {
-                        if (sprite[nSpriteB].cstat != 0x8000)
-                        {
-                            short hitag2 = sprite[nSpriteB].hitag;
-                            sprite[nSpriteB].hitag--;
-
-                            if (hitag2 >= 15)
-                            {
-                                runlist_DamageEnemy(nSpriteB, -1, (sprite[nSpriteB].hitag - 14) * 2);
-
-                                if (sprite[nSpriteB].shade < 100)
-                                {
-                                    sprite[nSpriteB].pal = 0;
-                                    sprite[nSpriteB].shade++;
-                                }
-
-                                if (!(sprite[nSpriteB].cstat & 101))
-                                {
-                                    DestroyAnim(nAnim);
-                                    mydeletesprite(nSprite);
-                                    return;
-                                }
-                            }
-                            else
-                            {
-                                sprite[nSpriteB].hitag = 1;
-                                DestroyAnim(nAnim);
-                                mydeletesprite(nSprite);
-                            }
-                        }
-                        else
-                        {
-                            sprite[nSpriteB].hitag = 1;
-                            DestroyAnim(nAnim);
-                            mydeletesprite(nSprite);
-                        }
-                    }
-                }
-            }
-
-            AnimList[nAnim].field_2++;
-            if (AnimList[nAnim].field_2 >= SeqSize[nSeq])
-            {
-                if (AnimList[nAnim].AnimFlags & 0x10)
-                {
-                    AnimList[nAnim].field_2 = 0;
-                }
-                else if (nSeq == nPreMagicSeq)
-                {
-                    AnimList[nAnim].field_2 = 0;
-                    AnimList[nAnim].nSeq = nMagicSeq;
-                    short nAnimSprite = AnimList[nAnim].nSprite;
-                    AnimList[nAnim].AnimFlags |= 0x10;
-                    sprite[nAnimSprite].cstat |= 2;
-                }
-                else if (nSeq == nSavePointSeq)
-                {
-                    AnimList[nAnim].field_2 = 0;
-                    AnimList[nAnim].nSeq++;
-                    AnimList[nAnim].AnimFlags |= 0x10;
+                    DestroyAnim(pActor);
+                    return;
                 }
                 else
                 {
-                    DestroyAnim(nAnim);
-                    mydeletesprite(nSprite);
+                    ChangeActorSect(pActor, pIgniter->sector());
                 }
-                return;
             }
 
-            return;
-        }
+            if (!nIndex)
+            {
+                if (pIgniter->spr.cstat != CSTAT_SPRITE_INVISIBLE)
+                {
+                    int hitag2 = pIgniter->spr.hitag;
+                    pIgniter->spr.hitag--;
 
-        case 0x90000:
-        {
-            seq_PlotSequence(a & 0xFFFF, nSeq, AnimList[nAnim].field_2, 0x101);
-            mytsprite[a & 0xFFFF].owner = -1;
-            return;
-        }
+                    if (hitag2 >= 15)
+                    {
+                        runlist_DamageEnemy(pIgniter, nullptr, (pIgniter->spr.hitag - 14) * 2);
 
-        case 0xA0000:
-        {
-            return;
-        }
+                        if (pIgniter->spr.shade < 100)
+                        {
+                            pIgniter->spr.pal = 0;
+                            pIgniter->spr.shade++;
+                        }
 
-        default:
+                        if (!(pIgniter->spr.cstat & CSTAT_SPRITE_BLOCK_ALL)) // was 101 (decimal), GDX had 0x101 which appears to be correct.
+                        {
+		                    DestroyAnim(pActor);
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        pIgniter->spr.hitag = 1;
+	                    DestroyAnim(pActor);
+                    }
+                }
+                else
+                {
+                    pIgniter->spr.hitag = 1;
+                    DestroyAnim(pActor);
+                }
+            }
+        }
+    }
+
+    pActor->nIndex++;
+    if (pActor->nIndex >= SeqSize[nIndex2])
+    {
+        if (pActor->nAction & 0x10)
         {
-            Printf("unknown msg %x for anim\n", a & 0x7F0000);
-            return;
+            pActor->nIndex = 0;
+        }
+        else if (nIndex2 == nPreMagicSeq)
+        {
+            pActor->nIndex = 0;
+            pActor->nIndex2 = nMagicSeq;
+            pActor->nAction |= 0x10;
+            pActor->spr.cstat |= CSTAT_SPRITE_TRANSLUCENT;
+        }
+        else if (nIndex2 == nSavePointSeq)
+        {
+            pActor->nIndex = 0;
+            pActor->nIndex2++;
+            pActor->nAction |= 0x10;
+        }
+        else
+        {
+            DestroyAnim(pActor);
         }
     }
 }
 
-void BuildExplosion(short nSprite)
+void AIAnim::Draw(RunListEvent* ev)
 {
-    short nSector = sprite[nSprite].sectnum;
+    auto pActor = ev->pObjActor;
+    if (!pActor) return;
+    int nIndex2 = pActor->nIndex2;
+
+    seq_PlotSequence(ev->nParam, nIndex2, pActor->nIndex, 0x101);
+    ev->pTSprite->ownerActor = nullptr;
+}
+
+void BuildExplosion(DExhumedActor* pActor)
+{
+    auto pSector = pActor->sector();
 
     int edx = 36;
 
-    if (SectFlag[nSector] & kSectUnderwater)
+    if (pSector->Flag & kSectUnderwater)
     {
         edx = 75;
     }
-    else if (sprite[nSprite].z == sector[nSector].floorz)
+    else if (pActor->spr.pos.Z == pActor->sector()->floorz)
     {
         edx = 34;
     }
 
-    BuildAnim(-1, edx, 0, sprite[nSprite].x, sprite[nSprite].y, sprite[nSprite].z, sprite[nSprite].sectnum, sprite[nSprite].xrepeat, 4);
+    BuildAnim(nullptr, edx, 0, pActor->spr.pos.X, pActor->spr.pos.Y, pActor->spr.pos.Z, pActor->sector(), pActor->spr.xrepeat, 4);
 }
 
-int BuildSplash(int nSprite, int nSector)
+void BuildSplash(DExhumedActor* pActor, sectortype* pSector)
 {
     int nRepeat, nSound;
 
-    if (sprite[nSprite].statnum != 200)
+    if (pActor->spr.statnum != 200)
     {
-        nRepeat = sprite[nSprite].xrepeat + (RandomWord() % sprite[nSprite].xrepeat);
+        nRepeat = pActor->spr.xrepeat + (RandomWord() % pActor->spr.xrepeat);
         nSound = kSound0;
     }
     else
@@ -320,7 +261,7 @@ int BuildSplash(int nSprite, int nSector)
         nSound = kSound1;
     }
 
-    int bIsLava = SectFlag[nSector] & kSectLava;
+    int bIsLava = pSector->Flag & kSectLava;
 
     int edx, nFlag;
 
@@ -335,13 +276,11 @@ int BuildSplash(int nSprite, int nSector)
         nFlag = 0;
     }
 
-    int nAnim = BuildAnim(-1, edx, 0, sprite[nSprite].x, sprite[nSprite].y, sector[nSector].floorz, nSector, nRepeat, nFlag);
+    auto pSpawned = BuildAnim(nullptr, edx, 0, pActor->spr.pos.X, pActor->spr.pos.Y, pSector->floorz, pSector, nRepeat, nFlag);
 
     if (!bIsLava)
     {
-        D3PlayFX(StaticSound[nSound] | 0xa00, AnimList[nAnim].nSprite);
+        D3PlayFX(StaticSound[nSound] | 0xa00, pSpawned);
     }
-
-    return AnimList[nAnim].nSprite;
 }
 END_PS_NS

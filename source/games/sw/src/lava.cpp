@@ -67,7 +67,7 @@ DECISION LavaSurprised[] =
 DECISION LavaEvasive[] =
 {
     {10,   InitActorEvade  },
-    {1024, NULL            }
+    {1024, nullptr            }
 };
 
 DECISION LavaLostTarget[] =
@@ -149,7 +149,7 @@ STATE s_LavaStand[5][1] =
 };
 
 
-STATEp sg_LavaStand[] =
+STATE* sg_LavaStand[] =
 {
     s_LavaStand[0],
     s_LavaStand[1],
@@ -203,7 +203,7 @@ STATE s_LavaRun[5][4] =
 };
 
 
-STATEp sg_LavaRun[] =
+STATE* sg_LavaRun[] =
 {
     &s_LavaRun[0][0],
     &s_LavaRun[1][0],
@@ -287,7 +287,7 @@ STATE s_LavaThrow[5][10] =
 };
 
 
-STATEp sg_LavaThrow[] =
+STATE* sg_LavaThrow[] =
 {
     &s_LavaThrow[0][0],
     &s_LavaThrow[1][0],
@@ -361,7 +361,7 @@ STATE s_LavaFlame[5][8] =
 };
 
 
-STATEp sg_LavaFlame[] =
+STATE* sg_LavaFlame[] =
 {
     &s_LavaFlame[0][0],
     &s_LavaFlame[1][0],
@@ -389,37 +389,37 @@ STATE s_LavaDead[] =
     {LAVA_DEAD, LAVA_DIE_RATE, DoActorDebris, &s_LavaDead[0]},
 };
 
-STATEp sg_LavaDie[] =
+STATE* sg_LavaDie[] =
 {
     s_LavaDie
 };
 
-STATEp sg_LavaDead[] =
+STATE* sg_LavaDead[] =
 {
     s_LavaDead
 };
 
 /*
-STATEp *Stand[MAX_WEAPONS];
-STATEp *Run;
-STATEp *Jump;
-STATEp *Fall;
-STATEp *Crawl;
-STATEp *Swim;
-STATEp *Fly;
-STATEp *Rise;
-STATEp *Sit;
-STATEp *Look;
-STATEp *Climb;
-STATEp *Pain;
-STATEp *Death1;
-STATEp *Death2;
-STATEp *Dead;
-STATEp *DeathJump;
-STATEp *DeathFall;
-STATEp *CloseAttack[2];
-STATEp *Attack[6];
-STATEp *Special[2];
+STATE* *Stand[MAX_WEAPONS];
+STATE* *Run;
+STATE* *Jump;
+STATE* *Fall;
+STATE* *Crawl;
+STATE* *Swim;
+STATE* *Fly;
+STATE* *Rise;
+STATE* *Sit;
+STATE* *Look;
+STATE* *Climb;
+STATE* *Pain;
+STATE* *Death1;
+STATE* *Death2;
+STATE* *Dead;
+STATE* *DeathJump;
+STATE* *DeathFall;
+STATE* *CloseAttack[2];
+STATE* *Attack[6];
+STATE* *Special[2];
 */
 
 
@@ -427,92 +427,80 @@ ACTOR_ACTION_SET LavaActionSet =
 {
     sg_LavaStand,
     sg_LavaRun,
-    NULL, //sg_LavaJump,
-    NULL, //sg_LavaFall,
-    NULL, //sg_LavaCrawl,
-    NULL, //sg_LavaSwim,
-    NULL, //sg_LavaFly,
-    NULL, //sg_LavaRise,
-    NULL, //sg_LavaSit,
-    NULL, //sg_LavaLook,
-    NULL, //climb
-    NULL, //pain
+    nullptr, //sg_LavaJump,
+    nullptr, //sg_LavaFall,
+    nullptr, //sg_LavaCrawl,
+    nullptr, //sg_LavaSwim,
+    nullptr, //sg_LavaFly,
+    nullptr, //sg_LavaRise,
+    nullptr, //sg_LavaSit,
+    nullptr, //sg_LavaLook,
+    nullptr, //climb
+    nullptr, //pain
     sg_LavaDie,
-    NULL, //sg_LavaHariKari,
+    nullptr, //sg_LavaHariKari,
     sg_LavaDead,
-    NULL, //sg_LavaDeathJump,
-    NULL, //sg_LavaDeathFall,
+    nullptr, //sg_LavaDeathJump,
+    nullptr, //sg_LavaDeathFall,
     {sg_LavaFlame},
     {1024},
     {sg_LavaFlame, sg_LavaThrow, sg_LavaThrow, sg_LavaThrow},
     {256, 512, 768, 1024},
-    {NULL},
-    NULL,
-    NULL
+    {nullptr},
+    nullptr,
+    nullptr
 };
 
-int
-SetupLava(short SpriteNum)
+int SetupLava(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u;
     ANIMATOR DoActorDecide;
 
-    if (TEST(sp->cstat, CSTAT_SPRITE_RESTORE))
+    if (!(actor->spr.cstat & CSTAT_SPRITE_RESTORE))
     {
-        u = User[SpriteNum].Data();
-        ASSERT(u);
-    }
-    else
-    {
-        u = SpawnUser(SpriteNum,LAVA_RUN_R0,s_LavaRun[0]);
-        u->Health = 100;
+        SpawnUser(actor, LAVA_RUN_R0, s_LavaRun[0]);
+        actor->user.Health = 100;
     }
 
-    ChangeState(SpriteNum, s_LavaRun[0]);
-    u->Attrib = &LavaAttrib;
-    DoActorSetSpeed(SpriteNum, NORM_SPEED);
-    u->StateEnd = s_LavaDie;
-    u->Rot = sg_LavaRun;
+    ChangeState(actor, s_LavaRun[0]);
+    actor->user.Attrib = &LavaAttrib;
+    DoActorSetSpeed(actor, NORM_SPEED);
+    actor->user.StateEnd = s_LavaDie;
+    actor->user.Rot = sg_LavaRun;
 
-    EnemyDefaults(SpriteNum, &LavaActionSet, &LavaPersonality);
-    sp->xrepeat = sp->yrepeat = 110;
-    sp->clipdist = (512) >> 2;
-    SET(u->Flags, SPR_XFLIP_TOGGLE|SPR_ELECTRO_TOLERANT);
+    EnemyDefaults(actor, &LavaActionSet, &LavaPersonality);
+    actor->spr.xrepeat = actor->spr.yrepeat = 110;
+    actor->spr.clipdist = (512) >> 2;
+    actor->user.Flags |= (SPR_XFLIP_TOGGLE|SPR_ELECTRO_TOLERANT);
 
-    u->loz = sp->z;
+    actor->user.loz = actor->spr.pos.Z;
 
     return 0;
 }
 
-int NullLava(short SpriteNum)
+int NullLava(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
+    if (actor->user.Flags & (SPR_SLIDING))
+        DoActorSlide(actor);
 
-    if (TEST(u->Flags,SPR_SLIDING))
-        DoActorSlide(SpriteNum);
+    KeepActorOnFloor(actor);
 
-    KeepActorOnFloor(SpriteNum);
-
-    DoActorSectorDamage(SpriteNum);
+    DoActorSectorDamage(actor);
     return 0;
 }
 
-int DoLavaMove(short SpriteNum)
+int DoLavaMove(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
+    if (actor->user.Flags & (SPR_SLIDING))
+        DoActorSlide(actor);
 
-    if (TEST(u->Flags,SPR_SLIDING))
-        DoActorSlide(SpriteNum);
-
-    if (u->track >= 0)
-        ActorFollowTrack(SpriteNum, ACTORMOVETICS);
+    if (actor->user.track >= 0)
+        ActorFollowTrack(actor, ACTORMOVETICS);
     else
-        (*u->ActorActionFunc)(SpriteNum);
+        (*actor->user.ActorActionFunc)(actor);
 
-    KeepActorOnFloor(SpriteNum);
+    KeepActorOnFloor(actor);
 
-    DoActorSectorDamage(SpriteNum);
+    DoActorSectorDamage(actor);
     return 0;
 }
 
@@ -521,7 +509,6 @@ int DoLavaMove(short SpriteNum)
 
 static saveable_code saveable_lava_code[] =
 {
-    SAVE_CODE(SetupLava),
     SAVE_CODE(NullLava),
     SAVE_CODE(DoLavaMove),
 };

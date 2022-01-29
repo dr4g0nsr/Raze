@@ -84,11 +84,13 @@ void paletteSetColorTable(int32_t id, uint8_t const* table, bool notransparency,
 
 void paletteLoadFromDisk(void)
 {
-    for (auto & x : glblend)
+    for (auto& x : glblend)
+    {
         x = defaultglblend;
+    }
 
-	auto fil = fileSystem.OpenFileReader("palette.dat");
-	if (!fil.isOpen())
+    auto fil = fileSystem.OpenFileReader("palette.dat");
+    if (!fil.isOpen())
         return;
 
     // Base palette
@@ -121,7 +123,7 @@ void paletteLoadFromDisk(void)
     }
 
     // Read base shade table (lookuptables 0).
-    int length = numshades * 256;
+    unsigned length = numshades * 256;
     auto buffer = fil.Read(length);
     if (buffer.Size() != length) return;
     lookups.setTable(0, buffer.Data());
@@ -249,7 +251,6 @@ void LookupTableInfo::postLoadLookups()
 {
     int numpalettes = GPalette.NumTranslations(Translation_BasePalettes);
     if (numpalettes == 0) return;
-    auto basepalette = GPalette.GetTranslation(Translation_BasePalettes, 0);
 
     for (int i = 0; i < numpalettes; i++)
     {
@@ -303,6 +304,7 @@ void LookupTableInfo::postLoadLookups()
     }
     colorswap(&GPalette.GlobalBrightmap);
     std::swap(GPalette.BaseColors[0], GPalette.BaseColors[255]);
+    GPalette.Remap[0] = 255;
 }
 
 //==========================================================================
@@ -424,7 +426,7 @@ glblend_t glblend[MAXBLENDTABS];
 
 void videoSetPalette(int palid)
 {
-	curbasepal = (GPalette.GetTranslation(Translation_BasePalettes, palid) == nullptr)? 0 : palid;
+    curbasepal = (GPalette.GetTranslation(Translation_BasePalettes, palid) == nullptr)? 0 : palid;
 }
 
 //==========================================================================
@@ -487,9 +489,9 @@ void DrawFullscreenBlends()
     // These get prepended to the 2D drawer so they must be submitted in reverse order of drawing.
     if (tint_blood_r | tint_blood_g | tint_blood_b)
     {
-        PalEntry color2(255, std::max(-tint_blood_r, 0), std::max(-tint_blood_g, 0), std::max(-tint_blood_b, 0));
+        PalEntry color2(255, max(-tint_blood_r, 0), max(-tint_blood_g, 0), max(-tint_blood_b, 0));
         twod->AddColorOnlyQuad(0, 0, twod->GetWidth(), twod->GetHeight(), color2, &LegacyRenderStyles[STYLE_Subtract], true);
-        PalEntry color(255, std::max(tint_blood_r, 0), std::max(tint_blood_g, 0), std::max(tint_blood_b, 0));
+        PalEntry color(255, max(tint_blood_r, 0), max(tint_blood_g, 0), max(tint_blood_b, 0));
         twod->AddColorOnlyQuad(0, 0, twod->GetWidth(), twod->GetHeight(), color, &LegacyRenderStyles[STYLE_Add], true);
     }
 

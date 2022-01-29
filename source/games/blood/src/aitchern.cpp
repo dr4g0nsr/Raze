@@ -23,17 +23,16 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #include "ns.h"	// Must come before everything else!
 
-#include "compat.h"
 #include "build.h"
 
 #include "blood.h"
 
 BEGIN_BLD_NS
 
-static void sub_72580(DBloodActor *);
-static void sub_725A4(DBloodActor *);
-static void sub_72850(DBloodActor *);
-static void sub_72934(DBloodActor *);
+static void sub_72580(DBloodActor*);
+static void sub_725A4(DBloodActor*);
+static void sub_72850(DBloodActor*);
+static void sub_72934(DBloodActor*);
 
 
 AISTATE tchernobogIdle = { kAiStateIdle, 0, -1, 0, NULL, NULL, sub_725A4, NULL };
@@ -48,318 +47,284 @@ AISTATE tcherno13AA28 = { kAiStateChase, 8, -1, 60, NULL, aiMoveTurn, NULL, &tch
 
 void sub_71A90(int, DBloodActor* actor)
 {
-    XSPRITE* pXSprite = &actor->x();
-    spritetype* pSprite = &actor->s();
-    spritetype *pTarget = &sprite[pXSprite->target];
-    XSPRITE *pXTarget = &xsprite[pTarget->extra];
-    int nTarget = pTarget->index;
-    int nOwner = pSprite->owner;
-    if (pXTarget->burnTime == 0)
-        evPost(nTarget, 3, 0, kCallbackFXFlameLick);
-    actBurnSprite(nOwner, pXTarget, 40);
-    if (Chance(0x6000))
-        aiNewState(actor, &tcherno13A9D4);
+	if (!actor->ValidateTarget(__FUNCTION__)) return;
+	auto target = actor->GetTarget();
+	if (target->xspr.burnTime == 0)
+		evPostActor(target, 0, kCallbackFXFlameLick);
+	actBurnSprite(actor->GetOwner(), target, 40);
+	if (Chance(0x6000))
+		aiNewState(actor, &tcherno13A9D4);
 }
 
 void sub_71BD4(int, DBloodActor* actor)
 {
-    XSPRITE* pXSprite = &actor->x();
-    spritetype* pSprite = &actor->s();
-    DUDEINFO *pDudeInfo = getDudeInfo(pSprite->type);
-    int height = pSprite->yrepeat*pDudeInfo->eyeHeight;
-    ///assert(pXSprite->target >= 0 && pXSprite->target < kMaxSprites);
-    if (!(pXSprite->target >= 0 && pXSprite->target < kMaxSprites)) {
-        Printf(PRINT_HIGH, "pXSprite->target >= 0 && pXSprite->target < kMaxSprites");
-        return;
-    }
-    int x = pSprite->x;
-    int y = pSprite->y;
-    int z = height;
-    TARGETTRACK tt = { 0x10000, 0x10000, 0x100, 0x55, 0x100000 };
-    Aim aim;
-    aim.dx = CosScale16(pSprite->ang);
-    aim.dy = SinScale16(pSprite->ang);
-    aim.dz = actor->dudeSlope;
-    int nClosest = 0x7fffffff;
-    int nSprite2;
-    StatIterator it(kStatDude);
-    while ((nSprite2 = it.NextIndex()) >= 0)
-    {
-        spritetype *pSprite2 = &sprite[nSprite2];
-        if (pSprite == pSprite2 || !(pSprite2->flags&8))
-            continue;
-        int x2 = pSprite2->x;
-        int y2 = pSprite2->y;
-        int z2 = pSprite2->z;
-        int nDist = approxDist(x2-x, y2-y);
-        if (nDist == 0 || nDist > 0x2800)
-            continue;
-        if (tt.at10)
-        {
-            int t = DivScale(nDist, tt.at10, 12);
-            x2 += (xvel[nSprite2]*t)>>12;
-            y2 += (yvel[nSprite2]*t)>>12;
-            z2 += (zvel[nSprite2]*t)>>8;
-        }
-        int tx = x+MulScale(Cos(pSprite->ang), nDist, 30);
-        int ty = y+MulScale(Sin(pSprite->ang), nDist, 30);
-        int tz = z+MulScale(actor->dudeSlope, nDist, 10);
-        int tsr = MulScale(9460, nDist, 10);
-        int top, bottom;
-        GetSpriteExtents(pSprite2, &top, &bottom);
-        if (tz-tsr > bottom || tz+tsr < top)
-            continue;
-        int dx = (tx-x2)>>4;
-        int dy = (ty-y2)>>4;
-        int dz = (tz-z2)>>8;
-        int nDist2 = ksqrt(dx*dx+dy*dy+dz*dz);
-        if (nDist2 < nClosest)
-        {
-            int nAngle = getangle(x2-x, y2-y);
-            int nDeltaAngle = ((nAngle-pSprite->ang+1024)&2047)-1024;
-            if (abs(nDeltaAngle) <= tt.at8)
-            {
-                int tz = pSprite2->z-pSprite->z;
-                if (cansee(x, y, z, pSprite->sectnum, x2, y2, z2, pSprite2->sectnum))
-                {
-                    nClosest = nDist2;
-                    aim.dx = CosScale16(nAngle);
-                    aim.dy = SinScale16(nAngle);
-                    aim.dz = DivScale(tz, nDist, 10);
-                }
-                else
-                    aim.dz = tz;
-            }
-        }
-    }
-    actFireMissile(pSprite, -350, 0, aim.dx, aim.dy, aim.dz, kMissileFireballTchernobog);
-    actFireMissile(pSprite, 350, 0, aim.dx, aim.dy, aim.dz, kMissileFireballTchernobog);
+	DUDEINFO* pDudeInfo = getDudeInfo(actor->spr.type);
+	int height = actor->spr.yrepeat * pDudeInfo->eyeHeight;
+	if (!actor->ValidateTarget(__FUNCTION__)) return;
+	int x = actor->spr.pos.X;
+	int y = actor->spr.pos.Y;
+	int z = height;
+	TARGETTRACK tt = { 0x10000, 0x10000, 0x100, 0x55, 0x100000 };
+	Aim aim;
+	aim.dx = bcos(actor->spr.ang);
+	aim.dy = bsin(actor->spr.ang);
+	aim.dz = actor->dudeSlope;
+	int nClosest = 0x7fffffff;
+	BloodStatIterator it(kStatDude);
+	while (auto actor2 = it.Next())
+	{
+		if (actor == actor2 || !(actor2->spr.flags & 8))
+			continue;
+		int x2 = actor2->spr.pos.X;
+		int y2 = actor2->spr.pos.Y;
+		int z2 = actor2->spr.pos.Z;
+		int nDist = approxDist(x2 - x, y2 - y);
+		if (nDist == 0 || nDist > 0x2800)
+			continue;
+		if (tt.at10)
+		{
+			int t = DivScale(nDist, tt.at10, 12);
+			x2 += (actor->vel.X * t) >> 12;
+			y2 += (actor->vel.Y * t) >> 12;
+			z2 += (actor->vel.Z * t) >> 8;
+		}
+		int tx = x + MulScale(Cos(actor->spr.ang), nDist, 30);
+		int ty = y + MulScale(Sin(actor->spr.ang), nDist, 30);
+		int tz = z + MulScale(actor->dudeSlope, nDist, 10);
+		int tsr = MulScale(9460, nDist, 10);
+		int top, bottom;
+		GetActorExtents(actor2, &top, &bottom);
+		if (tz - tsr > bottom || tz + tsr < top)
+			continue;
+		int dx = (tx - x2) >> 4;
+		int dy = (ty - y2) >> 4;
+		int dz = (tz - z2) >> 8;
+		int nDist2 = ksqrt(dx * dx + dy * dy + dz * dz);
+		if (nDist2 < nClosest)
+		{
+			int nAngle = getangle(x2 - x, y2 - y);
+			int nDeltaAngle = ((nAngle - actor->spr.ang + 1024) & 2047) - 1024;
+			if (abs(nDeltaAngle) <= tt.at8)
+			{
+				int tz1 = actor2->spr.pos.Z - actor->spr.pos.Z;
+				if (cansee(x, y, z, actor->sector(), x2, y2, z2, actor2->sector()))
+				{
+					nClosest = nDist2;
+					aim.dx = bcos(nAngle);
+					aim.dy = bsin(nAngle);
+					aim.dz = DivScale(tz1, nDist, 10);
+				}
+				else
+					aim.dz = tz1;
+			}
+		}
+	}
+	actFireMissile(actor, -350, 0, aim.dx, aim.dy, aim.dz, kMissileFireballTchernobog);
+	actFireMissile(actor, 350, 0, aim.dx, aim.dy, aim.dz, kMissileFireballTchernobog);
 }
 
 void sub_720AC(int, DBloodActor* actor)
 {
-    XSPRITE* pXSprite = &actor->x();
-    spritetype* pSprite = &actor->s();
-    ///assert(pXSprite->target >= 0 && pXSprite->target < kMaxSprites);
-    if (!(pXSprite->target >= 0 && pXSprite->target < kMaxSprites)) {
-        Printf(PRINT_HIGH, "pXSprite->target >= 0 && pXSprite->target < kMaxSprites");
-        return;
-    }
-    DUDEINFO *pDudeInfo = getDudeInfo(pSprite->type);
-    int height = pSprite->yrepeat*pDudeInfo->eyeHeight;
-    int ax, ay, az;
-    ax = CosScale16(pSprite->ang);
-    ay = SinScale16(pSprite->ang);
-    int x = pSprite->x;
-    int y = pSprite->y;
-    int z = height;
-    TARGETTRACK tt = { 0x10000, 0x10000, 0x100, 0x55, 0x100000 };
-    Aim aim;
-    aim.dx = ax;
-    aim.dy = ay;
-    aim.dz = actor->dudeSlope;
-    int nClosest = 0x7fffffff;
-    az = 0;
-    int nSprite2;
-    StatIterator it(kStatDude);
-    while ((nSprite2 = it.NextIndex()) >= 0)
-    {
-        spritetype *pSprite2 = &sprite[nSprite2];
-        if (pSprite == pSprite2 || !(pSprite2->flags&8))
-            continue;
-        int x2 = pSprite2->x;
-        int y2 = pSprite2->y;
-        int z2 = pSprite2->z;
-        int nDist = approxDist(x2-x, y2-y);
-        if (nDist == 0 || nDist > 0x2800)
-            continue;
-        if (tt.at10)
-        {
-            int t = DivScale(nDist, tt.at10, 12);
-            x2 += (xvel[nSprite2]*t)>>12;
-            y2 += (yvel[nSprite2]*t)>>12;
-            z2 += (zvel[nSprite2]*t)>>8;
-        }
-        int tx = x+MulScale(Cos(pSprite->ang), nDist, 30);
-        int ty = y+MulScale(Sin(pSprite->ang), nDist, 30);
-        int tz = z+MulScale(actor->dudeSlope, nDist, 10);
-        int tsr = MulScale(9460, nDist, 10);
-        int top, bottom;
-        GetSpriteExtents(pSprite2, &top, &bottom);
-        if (tz-tsr > bottom || tz+tsr < top)
-            continue;
-        int dx = (tx-x2)>>4;
-        int dy = (ty-y2)>>4;
-        int dz = (tz-z2)>>8;
-        int nDist2 = ksqrt(dx*dx+dy*dy+dz*dz);
-        if (nDist2 < nClosest)
-        {
-            int nAngle = getangle(x2-x, y2-y);
-            int nDeltaAngle = ((nAngle-pSprite->ang+1024)&2047)-1024;
-            if (abs(nDeltaAngle) <= tt.at8)
-            {
-                int tz = pSprite2->z-pSprite->z;
-                if (cansee(x, y, z, pSprite->sectnum, x2, y2, z2, pSprite2->sectnum))
-                {
-                    nClosest = nDist2;
-                    aim.dx = CosScale16(nAngle);
-                    aim.dy = SinScale16(nAngle);
-                    aim.dz = DivScale(tz, nDist, 10);
-                }
-                else
-                    aim.dz = tz;
-            }
-        }
-    }
-    actFireMissile(pSprite, 350, 0, aim.dx, aim.dy, -aim.dz, kMissileFireballTchernobog);
-    actFireMissile(pSprite, -350, 0, ax, ay, az, kMissileFireballTchernobog);
+	if (!actor->ValidateTarget(__FUNCTION__)) return;
+
+	DUDEINFO* pDudeInfo = getDudeInfo(actor->spr.type);
+	int height = actor->spr.yrepeat * pDudeInfo->eyeHeight;
+	int ax, ay, az;
+	ax = bcos(actor->spr.ang);
+	ay = bsin(actor->spr.ang);
+	int x = actor->spr.pos.X;
+	int y = actor->spr.pos.Y;
+	int z = height;
+	TARGETTRACK tt = { 0x10000, 0x10000, 0x100, 0x55, 0x100000 };
+	Aim aim;
+	aim.dx = ax;
+	aim.dy = ay;
+	aim.dz = actor->dudeSlope;
+	int nClosest = 0x7fffffff;
+	az = 0;
+	BloodStatIterator it(kStatDude);
+	while (auto actor2 = it.Next())
+	{
+		if (actor == actor2 || !(actor2->spr.flags & 8))
+			continue;
+		int x2 = actor2->spr.pos.X;
+		int y2 = actor2->spr.pos.Y;
+		int z2 = actor2->spr.pos.Z;
+		int nDist = approxDist(x2 - x, y2 - y);
+		if (nDist == 0 || nDist > 0x2800)
+			continue;
+		if (tt.at10)
+		{
+			int t = DivScale(nDist, tt.at10, 12);
+			x2 += (actor->vel.X * t) >> 12;
+			y2 += (actor->vel.Y * t) >> 12;
+			z2 += (actor->vel.Z * t) >> 8;
+		}
+		int tx = x + MulScale(Cos(actor->spr.ang), nDist, 30);
+		int ty = y + MulScale(Sin(actor->spr.ang), nDist, 30);
+		int tz = z + MulScale(actor->dudeSlope, nDist, 10);
+		int tsr = MulScale(9460, nDist, 10);
+		int top, bottom;
+		GetActorExtents(actor2, &top, &bottom);
+		if (tz - tsr > bottom || tz + tsr < top)
+			continue;
+		int dx = (tx - x2) >> 4;
+		int dy = (ty - y2) >> 4;
+		int dz = (tz - z2) >> 8;
+		int nDist2 = ksqrt(dx * dx + dy * dy + dz * dz);
+		if (nDist2 < nClosest)
+		{
+			int nAngle = getangle(x2 - x, y2 - y);
+			int nDeltaAngle = ((nAngle - actor->spr.ang + 1024) & 2047) - 1024;
+			if (abs(nDeltaAngle) <= tt.at8)
+			{
+				int tz1 = actor2->spr.pos.Z - actor->spr.pos.Z;
+				if (cansee(x, y, z, actor->sector(), x2, y2, z2, actor2->sector()))
+				{
+					nClosest = nDist2;
+					aim.dx = bcos(nAngle);
+					aim.dy = bsin(nAngle);
+					aim.dz = DivScale(tz1, nDist, 10);
+				}
+				else
+					aim.dz = tz1;
+			}
+		}
+	}
+	actFireMissile(actor, 350, 0, aim.dx, aim.dy, -aim.dz, kMissileFireballTchernobog);
+	actFireMissile(actor, -350, 0, ax, ay, az, kMissileFireballTchernobog);
 }
 
 static void sub_72580(DBloodActor* actor)
 {
-    auto pXSprite = &actor->x();
-    auto pSprite = &actor->s();
-    aiChooseDirection(pSprite, pXSprite, pXSprite->goalAng);
-    aiThinkTarget(actor);
+	aiChooseDirection(actor, actor->xspr.goalAng);
+	aiThinkTarget(actor);
 }
 
 static void sub_725A4(DBloodActor* actor)
 {
-    auto pXSprite = &actor->x();
-    auto pSprite = &actor->s();
-    ///assert(pSprite->type >= kDudeBase && pSprite->type < kDudeMax);
-    if (!(pSprite->type >= kDudeBase && pSprite->type < kDudeMax)) {
-        Printf(PRINT_HIGH, "pSprite->type >= kDudeBase && pSprite->type < kDudeMax");
-        return;
-    }
-    DUDEINFO *pDudeInfo = getDudeInfo(pSprite->type);
-    DUDEEXTRA_at6_u2 *pDudeExtraE = &gDudeExtra[pSprite->extra].at6.u2;
-    if (pDudeExtraE->xval2 && pDudeExtraE->xval1 < 10)
-        pDudeExtraE->xval1++;
-    else if (pDudeExtraE->xval1 >= 10 && pDudeExtraE->xval2)
-    {
-        pXSprite->goalAng += 256;
-        POINT3D *pTarget = &baseSprite[pSprite->index];
-        aiSetTarget(pXSprite, pTarget->x, pTarget->y, pTarget->z);
-        aiNewState(actor, &tcherno13AA28);
-        return;
-    }
-    if (Chance(pDudeInfo->alertChance))
-    {
-        for (int p = connecthead; p >= 0; p = connectpoint2[p])
-        {
-            PLAYER *pPlayer = &gPlayer[p];
-            if (pPlayer->pXSprite->health == 0 || powerupCheck(pPlayer, kPwUpShadowCloak) > 0)
-                continue;
-            int x = pPlayer->pSprite->x;
-            int y = pPlayer->pSprite->y;
-            int z = pPlayer->pSprite->z;
-            int nSector = pPlayer->pSprite->sectnum;
-            int dx = x-pSprite->x;
-            int dy = y-pSprite->y;
-            int nDist = approxDist(dx, dy);
-            if (nDist > pDudeInfo->seeDist && nDist > pDudeInfo->hearDist)
-                continue;
-            if (!cansee(x, y, z, nSector, pSprite->x, pSprite->y, pSprite->z-((pDudeInfo->eyeHeight*pSprite->yrepeat)<<2), pSprite->sectnum))
-                continue;
-            int nDeltaAngle = ((getangle(dx,dy)+1024-pSprite->ang)&2047)-1024;
-            if (nDist < pDudeInfo->seeDist && abs(nDeltaAngle) <= pDudeInfo->periphery)
-            {
-                pDudeExtraE->xval1 = 0;
-                aiSetTarget(pXSprite, pPlayer->nSprite);
-                aiActivateDude(&bloodActors[pXSprite->reference]);
-            }
-            else if (nDist < pDudeInfo->hearDist)
-            {
-                pDudeExtraE->xval1 = 0;
-                aiSetTarget(pXSprite, x, y, z);
-                aiActivateDude(&bloodActors[pXSprite->reference]);
-            }
-            else
-                continue;
-            break;
-        }
-    }
+	if (!(actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax)) {
+		Printf(PRINT_HIGH, "actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax");
+		return;
+	}
+	DUDEINFO* pDudeInfo = getDudeInfo(actor->spr.type);
+	DUDEEXTRA_STATS* pDudeExtraE = &actor->dudeExtra.stats;
+	if (pDudeExtraE->active && pDudeExtraE->thinkTime < 10)
+		pDudeExtraE->thinkTime++;
+	else if (pDudeExtraE->thinkTime >= 10 && pDudeExtraE->active)
+	{
+		actor->xspr.goalAng += 256;
+		POINT3D* pTarget = &actor->basePoint;
+		aiSetTarget(actor, pTarget->X, pTarget->Y, pTarget->Z);
+		aiNewState(actor, &tcherno13AA28);
+		return;
+	}
+	if (Chance(pDudeInfo->alertChance))
+	{
+		for (int p = connecthead; p >= 0; p = connectpoint2[p])
+		{
+			PLAYER* pPlayer = &gPlayer[p];
+			if (pPlayer->actor->xspr.health == 0 || powerupCheck(pPlayer, kPwUpShadowCloak) > 0)
+				continue;
+			int x = pPlayer->actor->spr.pos.X;
+			int y = pPlayer->actor->spr.pos.Y;
+			int z = pPlayer->actor->spr.pos.Z;
+			auto pSector = pPlayer->actor->sector();
+			int dx = x - actor->spr.pos.X;
+			int dy = y - actor->spr.pos.Y;
+			int nDist = approxDist(dx, dy);
+			if (nDist > pDudeInfo->seeDist && nDist > pDudeInfo->hearDist)
+				continue;
+			if (!cansee(x, y, z, pSector, actor->spr.pos.X, actor->spr.pos.Y, actor->spr.pos.Z - ((pDudeInfo->eyeHeight * actor->spr.yrepeat) << 2), actor->sector()))
+				continue;
+			int nDeltaAngle = ((getangle(dx, dy) + 1024 - actor->spr.ang) & 2047) - 1024;
+			if (nDist < pDudeInfo->seeDist && abs(nDeltaAngle) <= pDudeInfo->periphery)
+			{
+				pDudeExtraE->thinkTime = 0;
+				aiSetTarget(actor, pPlayer->actor);
+				aiActivateDude(actor);
+			}
+			else if (nDist < pDudeInfo->hearDist)
+			{
+				pDudeExtraE->thinkTime = 0;
+				aiSetTarget(actor, x, y, z);
+				aiActivateDude(actor);
+			}
+			else
+				continue;
+			break;
+		}
+	}
 }
 
 static void sub_72850(DBloodActor* actor)
 {
-    auto pXSprite = &actor->x();
-    auto pSprite = &actor->s();
-    ///assert(pSprite->type >= kDudeBase && pSprite->type < kDudeMax);
-    if (!(pSprite->type >= kDudeBase && pSprite->type < kDudeMax)) {
-        Printf(PRINT_HIGH, "pSprite->type >= kDudeBase && pSprite->type < kDudeMax");
-        return;
-    }
-    DUDEINFO *pDudeInfo = getDudeInfo(pSprite->type);
-    int dx = pXSprite->targetX-pSprite->x;
-    int dy = pXSprite->targetY-pSprite->y;
-    int nAngle = getangle(dx, dy);
-    int nDist = approxDist(dx, dy);
-    aiChooseDirection(pSprite, pXSprite, nAngle);
-    if (nDist < 512 && abs(pSprite->ang - nAngle) < pDudeInfo->periphery)
-        aiNewState(actor, &tchernobogSearch);
-    aiThinkTarget(actor);
+	if (!(actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax)) {
+		Printf(PRINT_HIGH, "actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax");
+		return;
+	}
+	DUDEINFO* pDudeInfo = getDudeInfo(actor->spr.type);
+	int dx = actor->xspr.TargetPos.X - actor->spr.pos.X;
+	int dy = actor->xspr.TargetPos.Y - actor->spr.pos.Y;
+	int nAngle = getangle(dx, dy);
+	int nDist = approxDist(dx, dy);
+	aiChooseDirection(actor, nAngle);
+	if (nDist < 512 && abs(actor->spr.ang - nAngle) < pDudeInfo->periphery)
+		aiNewState(actor, &tchernobogSearch);
+	aiThinkTarget(actor);
 }
 
 static void sub_72934(DBloodActor* actor)
 {
-    auto pXSprite = &actor->x();
-    auto pSprite = &actor->s();
-    if (pXSprite->target == -1)
-    {
-        aiNewState(actor, &tcherno13A9B8);
-        return;
-    }
-    ///assert(pSprite->type >= kDudeBase && pSprite->type < kDudeMax);
-    if (!(pSprite->type >= kDudeBase && pSprite->type < kDudeMax)) {
-        Printf(PRINT_HIGH, "pSprite->type >= kDudeBase && pSprite->type < kDudeMax");
-        return;
-    }
-    DUDEINFO *pDudeInfo = getDudeInfo(pSprite->type);
-    ///assert(pXSprite->target >= 0 && pXSprite->target < kMaxSprites);
-    if (!(pXSprite->target >= 0 && pXSprite->target < kMaxSprites)) {
-        Printf(PRINT_HIGH, "pXSprite->target >= 0 && pXSprite->target < kMaxSprites");
-        return;
-    }
-    spritetype *pTarget = &sprite[pXSprite->target];
-    XSPRITE *pXTarget = &xsprite[pTarget->extra];
-    int dx = pTarget->x-pSprite->x;
-    int dy = pTarget->y-pSprite->y;
-    aiChooseDirection(pSprite, pXSprite, getangle(dx, dy));
-    if (pXTarget->health == 0)
-    {
-        aiNewState(actor, &tchernobogSearch);
-        return;
-    }
-    if (IsPlayerSprite(pTarget) && powerupCheck(&gPlayer[pTarget->type-kDudePlayer1], kPwUpShadowCloak) > 0)
-    {
-        aiNewState(actor, &tchernobogSearch);
-        return;
-    }
-    int nDist = approxDist(dx, dy);
-    if (nDist <= pDudeInfo->seeDist)
-    {
-        int nDeltaAngle = ((getangle(dx,dy)+1024-pSprite->ang)&2047)-1024;
-        int height = (pDudeInfo->eyeHeight*pSprite->yrepeat)<<2;
-        if (cansee(pTarget->x, pTarget->y, pTarget->z, pTarget->sectnum, pSprite->x, pSprite->y, pSprite->z - height, pSprite->sectnum))
-        {
-            if (nDist < pDudeInfo->seeDist && abs(nDeltaAngle) <= pDudeInfo->periphery)
-            {
-                aiSetTarget(pXSprite, pXSprite->target);
-                if (nDist < 0x1f00 && nDist > 0xd00 && abs(nDeltaAngle) < 85)
-                    aiNewState(actor, &tcherno13AA0C);
-                else if (nDist < 0xd00 && nDist > 0xb00 && abs(nDeltaAngle) < 85)
-                    aiNewState(actor, &tcherno13A9D4);
-                else if (nDist < 0xb00 && nDist > 0x500 && abs(nDeltaAngle) < 85)
-                    aiNewState(actor, &tcherno13A9F0);
-                return;
-            }
-        }
-    }
+	if (actor->GetTarget() == nullptr)
+	{
+		aiNewState(actor, &tcherno13A9B8);
+		return;
+	}
+	if (!(actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax)) {
+		Printf(PRINT_HIGH, "actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax");
+		return;
+	}
+	DUDEINFO* pDudeInfo = getDudeInfo(actor->spr.type);
+	if (!actor->ValidateTarget(__FUNCTION__)) return;
+	auto target = actor->GetTarget();
 
-    aiNewState(actor, &tcherno13A9B8);
-    pXSprite->target = -1;
+	int dx = target->spr.pos.X - actor->spr.pos.X;
+	int dy = target->spr.pos.Y - actor->spr.pos.Y;
+	aiChooseDirection(actor, getangle(dx, dy));
+	if (target->xspr.health == 0)
+	{
+		aiNewState(actor, &tchernobogSearch);
+		return;
+	}
+	if (target->IsPlayerActor() && powerupCheck(&gPlayer[target->spr.type - kDudePlayer1], kPwUpShadowCloak) > 0)
+	{
+		aiNewState(actor, &tchernobogSearch);
+		return;
+	}
+	int nDist = approxDist(dx, dy);
+	if (nDist <= pDudeInfo->seeDist)
+	{
+		int nDeltaAngle = ((getangle(dx, dy) + 1024 - actor->spr.ang) & 2047) - 1024;
+		int height = (pDudeInfo->eyeHeight * actor->spr.yrepeat) << 2;
+		if (cansee(target->spr.pos.X, target->spr.pos.Y, target->spr.pos.Z, target->sector(), actor->spr.pos.X, actor->spr.pos.Y, actor->spr.pos.Z - height, actor->sector()))
+		{
+			if (nDist < pDudeInfo->seeDist && abs(nDeltaAngle) <= pDudeInfo->periphery)
+			{
+				aiSetTarget(actor, actor->GetTarget());
+				if (nDist < 0x1f00 && nDist > 0xd00 && abs(nDeltaAngle) < 85)
+					aiNewState(actor, &tcherno13AA0C);
+				else if (nDist < 0xd00 && nDist > 0xb00 && abs(nDeltaAngle) < 85)
+					aiNewState(actor, &tcherno13A9D4);
+				else if (nDist < 0xb00 && nDist > 0x500 && abs(nDeltaAngle) < 85)
+					aiNewState(actor, &tcherno13A9F0);
+				return;
+			}
+		}
+	}
+
+	aiNewState(actor, &tcherno13A9B8);
+	actor->SetTarget(nullptr);
 }
 
 END_BLD_NS

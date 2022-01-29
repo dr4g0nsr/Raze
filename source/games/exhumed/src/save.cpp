@@ -30,9 +30,7 @@ BEGIN_PS_NS
 
 void SerializeState(FSerializer& arc);
 void SerializeAnim(FSerializer& arc);
-void SerializeBubbles(FSerializer& arc);
 void SerializeBullet(FSerializer& arc);
-void SerializeGrenade(FSerializer& arc);
 void SerializeGun(FSerializer& arc);
 void SerializeInit(FSerializer& arc);
 void SerializeItems(FSerializer& arc);
@@ -48,19 +46,8 @@ void SerializeSnake(FSerializer& arc);
 void SerializeSwitch(FSerializer& arc);
 void SerializeView(FSerializer& arc);
 
-void SerializeAnubis(FSerializer& arc);
-void SerializeFish(FSerializer& arc);
-void SerializeLavadude(FSerializer& arc);
-void SerializeLion(FSerializer& arc);
-void SerializeMummy(FSerializer& arc);
 void SerializeQueen(FSerializer& arc);
 void SerializeRat(FSerializer& arc);
-void SerializeRex(FSerializer& arc);
-void SerializeRoach(FSerializer& arc);
-void SerializeScorpion(FSerializer& arc);
-void SerializeSet(FSerializer& arc);
-void SerializeSpider(FSerializer& arc);
-void SerializeWasp(FSerializer& arc);
 
 void GameInterface::SerializeGameState(FSerializer& arc)
 {
@@ -68,9 +55,7 @@ void GameInterface::SerializeGameState(FSerializer& arc)
 	{
 		SerializeState(arc);
 		SerializeAnim(arc);
-		SerializeBubbles(arc);
 		SerializeBullet(arc);
-		SerializeGrenade(arc);
 		SerializeGun(arc);
 		SerializeInit(arc);
 		SerializeItems(arc);
@@ -86,35 +71,14 @@ void GameInterface::SerializeGameState(FSerializer& arc)
 		SerializeSwitch(arc);
 		SerializeView(arc);
 
-		SerializeAnubis(arc);
-		SerializeFish(arc);
-		SerializeLavadude(arc);
-		SerializeLion(arc);
-		SerializeMummy(arc);
 		SerializeQueen(arc);
 		SerializeRat(arc);
-		SerializeRex(arc);
-		SerializeRoach(arc);
-		SerializeScorpion(arc);
-		SerializeSet(arc);
-		SerializeSpider(arc);
-		SerializeWasp(arc);
+		arc.EndObject();
 	}
 	if (arc.isReading())
 	{
 
 		// reset the sky in case it hasn't been done yet.
-		psky_t* pSky = tileSetupSky(DEFAULTPSKY);
-		pSky->tileofs[0] = 0;
-		pSky->tileofs[1] = 0;
-		pSky->tileofs[2] = 0;
-		pSky->tileofs[3] = 0;
-		pSky->yoffs = 256;
-		pSky->yoffs2 = 256;
-		pSky->lognumtiles = 2;
-		pSky->horizfrac = 65536;
-		pSky->yscale = 65536;
-		parallaxtype = 2;
 		g_visibility = 1024;
 
 		if (currentLevel->gameflags & LEVEL_EX_ALTSOUND)
@@ -133,7 +97,6 @@ void GameInterface::SerializeGameState(FSerializer& arc)
 		}
 
 		Mus_ResumeSaved();
-		RefreshStatus();
 	}
 }
 

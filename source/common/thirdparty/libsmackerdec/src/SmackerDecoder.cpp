@@ -69,7 +69,7 @@ SmackerHandle Smacker_Open(const char* fileName)
 	classInstances.push_back(newDecoder);
 
 	// get a handle ID
-	newHandle.instanceIndex = classInstances.size() - 1;
+	newHandle.instanceIndex = int(classInstances.size()) - 1;
 
 	// loaded ok, make handle valid
 	newHandle.isValid = true;
@@ -243,9 +243,9 @@ const char *kSMK4iD = "SMK4";
  * Context used for code reconstructing
  */
 typedef struct HuffContext {
-    int length;
-    int maxlength;
-    int current;
+    int length = 0;
+    int maxlength = 0;
+    int current = 0;
 
 	std::vector<uint32_t> bits;
 	std::vector<int> lengths;
@@ -987,8 +987,6 @@ int SmackerDecoder::DecodeAudio(uint32_t size, SmackerAudioTrack &track)
 		return -1;
     }
 
-    memset(h, 0, sizeof(HuffContext) * 4);
-
     // Initialize
     for (i = 0; i < (1 << (sampleBits + stereo)); i++) {
         h[i].length = 256;
@@ -1116,7 +1114,7 @@ void SmackerDecoder::GotoFrame(uint32_t frameNum)
     currentFrame = 0;
     nextPos = firstFrameFilePos;
 
-    for (int i = 0; i < frameNum + 1; i++)
+    for (unsigned i = 0; i < frameNum + 1; i++)
         GetNextFrame();
 }
 
@@ -1144,7 +1142,7 @@ uint32_t SmackerDecoder::GetAudioData(uint32_t trackIndex, int16_t *audioBuffer)
 	SmackerAudioTrack *track = &audioTracks[trackIndex];
 
 	if (track->bytesReadThisFrame) {
-		memcpy(audioBuffer, track->buffer, std::min(track->bufferSize, track->bytesReadThisFrame));
+		memcpy(audioBuffer, track->buffer, min(track->bufferSize, track->bytesReadThisFrame));
 	}
 
 	return track->bytesReadThisFrame;

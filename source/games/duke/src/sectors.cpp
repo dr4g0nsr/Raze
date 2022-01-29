@@ -39,8 +39,6 @@ source as it is released.
 #include "dukeactor.h"
 #include "interpolate.h"
 
-using std::min;
-using std::max;
 // PRIMITIVE
 BEGIN_DUKE_NS
 
@@ -53,7 +51,7 @@ static int interptype[] = { Interp_Sect_Floorz, Interp_Sect_Ceilingz, Interp_Wal
 //---------------------------------------------------------------------------
 static bool haltsoundhack;
 
-int callsound(int sn, DDukeActor* whatsprite)
+int callsound(sectortype* sn, DDukeActor* whatsprite, bool endstate)
 {
 	if (!isRRRA() && haltsoundhack)
 	{
@@ -64,17 +62,16 @@ int callsound(int sn, DDukeActor* whatsprite)
 	DukeSectIterator it(sn);
 	while (auto act = it.Next())
 	{
-		auto si = act->s;
-		if (si->picnum == MUSICANDSFX && si->lotag < 1000)
+		if (act->spr.picnum == MUSICANDSFX && act->spr.lotag < 1000)
 		{
 			if (whatsprite == nullptr) whatsprite = act;
 
-			int snum = si->lotag;
+			int snum = act->spr.lotag;
 			auto flags = S_GetUserFlags(snum);
 
 			// Reset if the desired actor isn't playing anything.
-			bool hival = S_IsSoundValid(si->hitag);
-			if (act->temp_data[0] == 1 && !hival)
+			bool hival = S_IsSoundValid(act->spr.hitag);
+			if (act->temp_data[0] == 1 && !hival && !endstate)
 			{
 				if (!S_CheckActorSoundPlaying(act->temp_actor, snum))
 					act->temp_data[0] = 0;
@@ -86,25 +83,25 @@ int callsound(int sn, DDukeActor* whatsprite)
 				{
 					if (snum)
 					{
-						if (si->hitag && snum != si->hitag)
-							S_StopSound(si->hitag, act->temp_actor);
+						if (act->spr.hitag && snum != act->spr.hitag)
+							S_StopSound(act->spr.hitag, act->temp_actor);
 						S_PlayActorSound(snum, whatsprite);
 						act->temp_actor = whatsprite;
 					}
 
-					if ((sector[si->sectnum].lotag & 0xff) != ST_22_SPLITTING_DOOR)
+					if ((act->sector()->lotag & 0xff) != ST_22_SPLITTING_DOOR)
 						act->temp_data[0] = 1;
 				}
 			}
-			else if (si->hitag < 1000)
+			else if (act->spr.hitag < 1000)
 			{
-				if ((flags & SF_LOOP) || (si->hitag && si->hitag != si->lotag))
-					S_StopSound(si->lotag, act->temp_actor);
-				if (si->hitag) S_PlayActorSound(si->hitag, whatsprite);
+				if ((flags & SF_LOOP) || (act->spr.hitag && act->spr.hitag != act->spr.lotag))
+					S_StopSound(act->spr.lotag, act->temp_actor);
+				if (act->spr.hitag) S_PlayActorSound(act->spr.hitag, whatsprite);
 				act->temp_data[0] = 0;
 				act->temp_actor = whatsprite;
 			}
-			return si->lotag;
+			return act->spr.lotag;
 		}
 	}
 	return -1;
@@ -122,17 +119,17 @@ int check_activator_motion(int lotag)
 	DukeStatIterator it(STAT_ACTIVATOR);
 	while (auto act = it.Next())
 	{
-		if (act->s->lotag == lotag)
+		if (act->spr.lotag == lotag)
 		{
 			for (int j = animatecnt - 1; j >= 0; j--)
-				if (act->s->sectnum == animatesect[j])
+				if (act->sector() == animatesect[j])
 					return(1);
 
 			DukeStatIterator it1(STAT_EFFECTOR);
 			while (auto act2 = it1.Next())
 			{
-				if (act->s->sectnum == act2->s->sectnum)
-					switch (act2->s->lotag)
+				if (act->sector() == act2->sector())
+					switch (act2->spr.lotag)
 					{
 					case SE_11_SWINGING_DOOR:
 					case SE_30_TWO_WAY_TRAIN:
@@ -141,6 +138,7 @@ int check_activator_motion(int lotag)
 						break;
 					case SE_18_INCREMENTAL_SECTOR_RISE_FALL:
 						if (isRRRA()) break;
+						[[fallthrough]];
 					case SE_20_STRETCH_BRIDGE:
 					case SE_31_FLOOR_RISE_FALL:
 					case SE_32_CEILING_RISE_FALL:
@@ -216,13 +214,13 @@ bool isanearoperator(int lotag)
 
 int findplayer(const DDukeActor* actor, int* d)
 {
-	short j, closest_player;
+	int j, closest_player;
 	int x, closest;
-	auto s = &actor->s->pos;
+	auto s = &actor->spr.pos;
 
 	if (ud.multimode < 2)
 	{
-		if (d) *d = abs(ps[myconnectindex].oposx - s->x) + abs(ps[myconnectindex].oposy - s->y) + ((abs(ps[myconnectindex].oposz - s->z + (28 << 8))) >> 4);
+		if (d) *d = abs(ps[myconnectindex].opos.X - s->X) + abs(ps[myconnectindex].opos.Y - s->Y) + ((abs(ps[myconnectindex].opos.Z - s->Z + (28 << 8))) >> 4);
 		return myconnectindex;
 	}
 
@@ -231,8 +229,8 @@ int findplayer(const DDukeActor* actor, int* d)
 
 	for (j = connecthead; j >= 0; j = connectpoint2[j])
 	{
-		x = abs(ps[j].oposx - s->x) + abs(ps[j].oposy - s->y) + ((abs(ps[j].oposz - s->z + (28 << 8))) >> 4);
-		if (x < closest && ps[j].GetActor()->s->extra > 0)
+		x = abs(ps[j].opos.X - s->X) + abs(ps[j].opos.Y - s->Y) + ((abs(ps[j].opos.Z - s->Z + (28 << 8))) >> 4);
+		if (x < closest && ps[j].GetActor()->spr.extra > 0)
 		{
 			closest_player = j;
 			closest = x;
@@ -251,16 +249,16 @@ int findplayer(const DDukeActor* actor, int* d)
 
 int findotherplayer(int p, int* d)
 {
-	short j, closest_player;
+	int j, closest_player;
 	int x, closest;
 
 	closest = 0x7fffffff;
 	closest_player = p;
 
 	for (j = connecthead; j >= 0; j = connectpoint2[j])
-		if (p != j && ps[j].GetActor()->s->extra > 0)
+		if (p != j && ps[j].GetActor()->spr.extra > 0)
 		{
-			x = abs(ps[j].oposx - ps[p].posx) + abs(ps[j].oposy - ps[p].posy) + (abs(ps[j].oposz - ps[p].posz) >> 4);
+			x = abs(ps[j].opos.X - ps[p].pos.X) + abs(ps[j].opos.Y - ps[p].pos.Y) + (abs(ps[j].opos.Z - ps[p].pos.Z) >> 4);
 
 			if (x < closest)
 			{
@@ -279,28 +277,30 @@ int findotherplayer(int p, int* d)
 //
 //---------------------------------------------------------------------------
 
-int* animateptr(int type, int index)
+int* animateptr(int type, int index, bool write)
 {
 	static int scratch;
 	switch (type)
 	{
 	case anim_floorz:
-		return &sector[index].floorz;
+		return sector[index].floorzptr(!write);
 	case anim_ceilingz:
-		return &sector[index].ceilingz;
+		return sector[index].ceilingzptr(!write);
 	case anim_vertexx:
-		return &wall[index].x;
+		if (write) wall[index].moved();
+		return &wall[index].pos.X;
 	case anim_vertexy:
-		return &wall[index].y;
+		if (write) wall[index].moved();
+		return &wall[index].pos.Y;
 	default:
 		assert(false);
 		return &scratch;
 	}
 }
 
-int* animateptr(int i)
+int* animateptr(int i, bool write)
 {
-	return animateptr(animatetype[i], animatetarget[i]);
+	return animateptr(animatetype[i], animatetarget[i], write);
 }
 
 //---------------------------------------------------------------------------
@@ -311,13 +311,13 @@ int* animateptr(int i)
 
 void doanimations(void)
 {
-	int i, a, p, v, dasect;
+	int i, a, p, v;
 
 	for (i = animatecnt - 1; i >= 0; i--)
 	{
-		a = *animateptr(i);
+		a = *animateptr(i, false);
 		v = animatevel[i] * TICSPERFRAME;
-		dasect = animatesect[i];
+		auto dasectp = animatesect[i];
 
 		if (a == animategoal[i])
 		{
@@ -329,12 +329,13 @@ void doanimations(void)
 			animategoal[i] = animategoal[animatecnt];
 			animatevel[i] = animatevel[animatecnt];
 			animatesect[i] = animatesect[animatecnt];
-			if (sector[animatesect[i]].lotag == ST_18_ELEVATOR_DOWN || sector[animatesect[i]].lotag == ST_19_ELEVATOR_UP)
+			dasectp = animatesect[i];
+			if (dasectp->lotag == ST_18_ELEVATOR_DOWN || dasectp->lotag == ST_19_ELEVATOR_UP)
 				if (animatetype[i] == anim_ceilingz)
 					continue;
 
-			if ((sector[dasect].lotag & 0xff) != ST_22_SPLITTING_DOOR)
-				callsound(dasect, nullptr);
+			if ((dasectp->lotag & 0xff) != ST_22_SPLITTING_DOOR)
+				callsound(dasectp, nullptr, true);
 
 			continue;
 		}
@@ -345,27 +346,27 @@ void doanimations(void)
 		if (animatetype[i] == anim_floorz)
 		{
 			for (p = connecthead; p >= 0; p = connectpoint2[p])
-				if (ps[p].cursectnum == dasect)
-					if ((sector[dasect].floorz - ps[p].posz) < (64 << 8))
+				if (ps[p].cursector == dasectp)
+					if ((dasectp->floorz - ps[p].pos.Z) < (64 << 8))
 						if (ps[p].GetActor()->GetOwner() != nullptr)
 						{
-							ps[p].posz += v;
-							ps[p].poszv = 0;
+							ps[p].pos.Z += v;
+							ps[p].vel.Z = 0;
 						}
 
-			DukeSectIterator it(dasect);
+			DukeSectIterator it(dasectp);
 			while (auto act = it.Next())
 			{
-				if (act->s->statnum != STAT_EFFECTOR)
+				if (act->spr.statnum != STAT_EFFECTOR)
 				{
-					act->s->backupz();
-					act->s->z += v;
-					act->floorz = sector[dasect].floorz + v;
+					act->backupz();
+					act->spr.pos.Z += v;
+					act->floorz = dasectp->floorz + v;
 				}
 			}
 		}
 
-		*animateptr(i) = a;
+		*animateptr(i, true) = a;
 	}
 }
 
@@ -375,11 +376,12 @@ void doanimations(void)
 //
 //---------------------------------------------------------------------------
 
-int getanimationgoal(int animtype, int animtarget)
+int getanimationgoal(int animtype, sectortype* animtargetp)
 {
 	int i, j;
 
 	j = -1;
+	int animtarget = sectnum(animtargetp);
 	for (i = animatecnt - 1; i >= 0; i--)
 		if (animtype == animatetype[i] && animtarget == animatetarget[i])
 		{
@@ -395,7 +397,7 @@ int getanimationgoal(int animtype, int animtarget)
 //
 //---------------------------------------------------------------------------
 
-int setanimation(short animsect, int animtype, int animtarget, int thegoal, int thevel)
+static int dosetanimation(sectortype* animsect, int animtype, int animtarget, int thegoal, int thevel)
 {
 	int i, j;
 
@@ -410,7 +412,7 @@ int setanimation(short animsect, int animtype, int animtarget, int thegoal, int 
 			break;
 		}
 
-	auto animptr = animateptr(animtype, animtarget);
+	auto animptr = animateptr(animtype, animtarget, false);
 	animatesect[j] = animsect;
 	animatetype[j] = animtype;
 	animatetarget[j] = animtarget;
@@ -426,6 +428,17 @@ int setanimation(short animsect, int animtype, int animtarget, int thegoal, int 
 	return(j);
 }
 
+int setanimation(sectortype* animsect, int animtype, walltype* animtarget, int thegoal, int thevel)
+{
+	assert(animtype == anim_vertexx || animtype == anim_vertexy);
+	return dosetanimation(animsect, animtype, wallnum(animtarget), thegoal, thevel);
+}
+
+int setanimation(sectortype* animsect, int animtype, sectortype* animtarget, int thegoal, int thevel)
+{
+	assert(animtype == anim_ceilingz || animtype == anim_floorz);
+	return dosetanimation(animsect, animtype, sectnum(animtarget), thegoal, thevel);
+}
 
 //---------------------------------------------------------------------------
 //
@@ -435,7 +448,7 @@ int setanimation(short animsect, int animtype, int animtarget, int thegoal, int 
 
 bool activatewarpelevators(DDukeActor* actor, int d) //Parm = sectoreffectornum
 {
-	int sn = actor->s->sectnum;
+	auto sect = actor->sector();
 
 	// See if the sector exists
 
@@ -443,10 +456,10 @@ bool activatewarpelevators(DDukeActor* actor, int d) //Parm = sectoreffectornum
 	DDukeActor *act2;
 	while ((act2 = it.Next()))
 	{
-		if (act2->s->lotag == SE_17_WARP_ELEVATOR || (isRRRA() && act2->s->lotag == SE_18_INCREMENTAL_SECTOR_RISE_FALL))
-			if (act2->s->hitag == actor->s->hitag)
-				if ((abs(sector[sn].floorz - actor->temp_data[2]) > act2->s->yvel) ||
-					(sector[act2->s->sectnum].hitag == (sector[sn].hitag - d)))
+		if (act2->spr.lotag == SE_17_WARP_ELEVATOR || (isRRRA() && act2->spr.lotag == SE_18_INCREMENTAL_SECTOR_RISE_FALL))
+			if (act2->spr.hitag == actor->spr.hitag)
+				if ((abs(sect->floorz - actor->temp_data[2]) > act2->spr.yvel) ||
+					(act2->sector()->hitag == (sect->hitag - d)))
 					break;
 	}
 
@@ -466,8 +479,8 @@ bool activatewarpelevators(DDukeActor* actor, int d) //Parm = sectoreffectornum
 	it.Reset(STAT_EFFECTOR);
 	while ((act2 = it.Next()))
 	{
-		if (act2->s->lotag == SE_17_WARP_ELEVATOR || (isRRRA() && act2->s->lotag == SE_18_INCREMENTAL_SECTOR_RISE_FALL))
-			if (act2->s->hitag == actor->s->hitag)
+		if (act2->spr.lotag == SE_17_WARP_ELEVATOR || (isRRRA() && act2->spr.lotag == SE_18_INCREMENTAL_SECTOR_RISE_FALL))
+			if (act2->spr.hitag == actor->spr.hitag)
 			{
 				act2->temp_data[0] = d;
 				act2->temp_data[1] = d; //Make all check warp
@@ -482,85 +495,84 @@ bool activatewarpelevators(DDukeActor* actor, int d) //Parm = sectoreffectornum
 //
 //---------------------------------------------------------------------------
 
-static void handle_st09(int sn, DDukeActor* actor)
+static void handle_st09(sectortype* sptr, DDukeActor* actor)
 {
 	int dax, day, dax2, day2, sp;
-	int wallfind[2];
-	sectortype* sptr = &sector[sn];
-
-	int startwall = sptr->wallptr;
-	int endwall = startwall + sptr->wallnum - 1;
+	walltype* wallfind[2];
 
 	sp = sptr->extra >> 4;
 
 	//first find center point by averaging all points
 	dax = 0L, day = 0L;
-	for (int i = startwall; i <= endwall; i++)
+	for (auto& wal : wallsofsector(sptr))
 	{
-		dax += wall[i].x;
-		day += wall[i].y;
+		dax += wal.pos.X;
+		day += wal.pos.Y;
 	}
-	dax /= (endwall - startwall + 1);
-	day /= (endwall - startwall + 1);
+	dax /= sptr->wallnum;
+	day /= sptr->wallnum;
 
 	//find any points with either same x or same y coordinate
 	//  as center (dax, day) - should be 2 points found.
-	wallfind[0] = -1;
-	wallfind[1] = -1;
-	for (int i = startwall; i <= endwall; i++)
-		if ((wall[i].x == dax) || (wall[i].y == day))
+	wallfind[0] = nullptr;
+	wallfind[1] = nullptr;
+	for (auto& wal : wallsofsector(sptr))
+		if ((wal.pos.X == dax) || (wal.pos.Y == day))
 		{
-			if (wallfind[0] == -1)
-				wallfind[0] = i;
-			else wallfind[1] = i;
+			if (wallfind[0] == nullptr)
+				wallfind[0] = &wal;
+			else wallfind[1] = &wal;
 		}
 
 	for (int j = 0; j < 2; j++)
 	{
-		if ((wall[wallfind[j]].x == dax) && (wall[wallfind[j]].y == day))
+		auto wal = wallfind[j];
+
+		//find what direction door should open by averaging the
+		//  2 neighboring points of wallfind[0] & wallfind[1].
+		auto prevwall = wal - 1;
+		if (prevwall < sptr->firstWall()) prevwall += sptr->wallnum;
+
+		if ((wal->pos.X == dax) && (wal->pos.Y == day))
 		{
-			//find what direction door should open by averaging the
-			//  2 neighboring points of wallfind[0] & wallfind[1].
-			int i = wallfind[j] - 1; if (i < startwall) i = endwall;
-			dax2 = ((wall[i].x + wall[wall[wallfind[j]].point2].x) >> 1) - wall[wallfind[j]].x;
-			day2 = ((wall[i].y + wall[wall[wallfind[j]].point2].y) >> 1) - wall[wallfind[j]].y;
+			dax2 = ((prevwall->pos.X + wal->point2Wall()->pos.X) >> 1) - wal->pos.X;
+			day2 = ((prevwall->pos.Y + wal->point2Wall()->pos.Y) >> 1) - wal->pos.Y;
 			if (dax2 != 0)
 			{
-				dax2 = wall[wall[wall[wallfind[j]].point2].point2].x;
-				dax2 -= wall[wall[wallfind[j]].point2].x;
-				setanimation(sn, anim_vertexx, wallfind[j], wall[wallfind[j]].x + dax2, sp);
-				setanimation(sn, anim_vertexx, i, wall[i].x + dax2, sp);
-				setanimation(sn, anim_vertexx, wall[wallfind[j]].point2, wall[wall[wallfind[j]].point2].x + dax2, sp);
-				callsound(sn, actor);
+				dax2 = wal->point2Wall()->point2Wall()->pos.X;
+				dax2 -= wal->point2Wall()->pos.X;
+				setanimation(sptr, anim_vertexx, wal, wal->pos.X + dax2, sp);
+				setanimation(sptr, anim_vertexx, prevwall, prevwall->pos.X + dax2, sp);
+				setanimation(sptr, anim_vertexx, wal->point2Wall(), wal->point2Wall()->pos.X + dax2, sp);
+				callsound(sptr, actor);
 			}
 			else if (day2 != 0)
 			{
-				day2 = wall[wall[wall[wallfind[j]].point2].point2].y;
-				day2 -= wall[wall[wallfind[j]].point2].y;
-				setanimation(sn, anim_vertexy, wallfind[j], wall[wallfind[j]].y + day2, sp);
-				setanimation(sn, anim_vertexy, i, wall[i].y + day2, sp);
-				setanimation(sn, anim_vertexy, wall[wallfind[j]].point2, wall[wall[wallfind[j]].point2].y + day2, sp);
-				callsound(sn, actor);
+				day2 = wal->point2Wall()->point2Wall()->pos.Y;
+				day2 -= wal->point2Wall()->pos.Y;
+				setanimation(sptr, anim_vertexy, wal, wal->pos.Y + day2, sp);
+				setanimation(sptr, anim_vertexy, prevwall, prevwall->pos.Y + day2, sp);
+				setanimation(sptr, anim_vertexy, wal->point2Wall(), wal->point2Wall()->pos.Y + day2, sp);
+				callsound(sptr, actor);
 			}
 		}
 		else
 		{
-			int i = wallfind[j] - 1; if (i < startwall) i = endwall;
-			dax2 = ((wall[i].x + wall[wall[wallfind[j]].point2].x) >> 1) - wall[wallfind[j]].x;
-			day2 = ((wall[i].y + wall[wall[wallfind[j]].point2].y) >> 1) - wall[wallfind[j]].y;
+			dax2 = ((prevwall->pos.X + wal->point2Wall()->pos.X) >> 1) - wal->pos.X;
+			day2 = ((prevwall->pos.Y + wal->point2Wall()->pos.Y) >> 1) - wal->pos.Y;
 			if (dax2 != 0)
 			{
-				setanimation(sn, anim_vertexx, wallfind[j], dax, sp);
-				setanimation(sn, anim_vertexx, i, dax + dax2, sp);
-				setanimation(sn, anim_vertexx, wall[wallfind[j]].point2, dax + dax2, sp);
-				callsound(sn, actor);
+				setanimation(sptr, anim_vertexx, wal, dax, sp);
+				setanimation(sptr, anim_vertexx, prevwall, dax + dax2, sp);
+				setanimation(sptr, anim_vertexx, wal->point2Wall(), dax + dax2, sp);
+				callsound(sptr, actor);
 			}
 			else if (day2 != 0)
 			{
-				setanimation(sn, anim_vertexy, wallfind[j], day, sp);
-				setanimation(sn, anim_vertexy, i, day + day2, sp);
-				setanimation(sn, anim_vertexy, wall[wallfind[j]].point2, day + day2, sp);
-				callsound(sn, actor);
+				setanimation(sptr, anim_vertexy, wal, day, sp);
+				setanimation(sptr, anim_vertexy, prevwall, day + day2, sp);
+				setanimation(sptr, anim_vertexy, wal->point2Wall(), day + day2, sp);
+				callsound(sptr, actor);
 			}
 		}
 	}
@@ -573,20 +585,19 @@ static void handle_st09(int sn, DDukeActor* actor)
 //
 //---------------------------------------------------------------------------
 
-static void handle_st15(int sn, DDukeActor* actor)
+static void handle_st15(sectortype* sptr, DDukeActor* actor)
 {
-	if (actor->s->picnum != TILE_APLAYER) return;
+	if (!actor->isPlayer()) return;
 
-	sectortype* sptr = &sector[sn];
-	DukeSectIterator it(sn);
+	DukeSectIterator it(sptr);
 	DDukeActor* a2;
 	while ((a2 = it.Next()))
 	{
-		if (a2->s->picnum == SECTOREFFECTOR && a2->s->lotag == ST_17_PLATFORM_UP) break;
+		if (a2->spr.picnum == SECTOREFFECTOR && a2->spr.lotag == ST_17_PLATFORM_UP) break;
 	}
 	if (!a2) return;
 
-	if (actor->s->sectnum == sn)
+	if (actor->sector() == sptr)
 	{
 		if (activatewarpelevators(a2, -1))
 			activatewarpelevators(a2, 1);
@@ -596,7 +607,7 @@ static void handle_st15(int sn, DDukeActor* actor)
 	}
 	else
 	{
-		if (sptr->floorz > a2->s->z)
+		if (sptr->floorz > a2->spr.pos.Z)
 			activatewarpelevators(a2, -1);
 		else
 			activatewarpelevators(a2, 1);
@@ -609,28 +620,25 @@ static void handle_st15(int sn, DDukeActor* actor)
 //
 //---------------------------------------------------------------------------
 
-static void handle_st16(int sn, DDukeActor* actor)
+static void handle_st16(sectortype* sptr, DDukeActor* actor)
 {
-	sectortype* sptr = &sector[sn];
-	int i = getanimationgoal(anim_floorz, sn);
-	int j;
+	int i = getanimationgoal(anim_floorz, sptr);
+	sectortype* sectp;
 
 	if (i == -1)
 	{
-		i = nextsectorneighborz(sn, sptr->floorz, 1, 1);
-		if (i == -1)
+		sectp = nextsectorneighborzptr(sptr, sptr->floorz, 1, 1);
+		if (sectp == nullptr)
 		{
-			i = nextsectorneighborz(sn, sptr->floorz, 1, -1);
-			if (i == -1) return;
-			j = sector[i].floorz;
-			setanimation(sn, anim_floorz, sn, j, sptr->extra);
+			sectp = nextsectorneighborzptr(sptr, sptr->floorz, 1, -1);
+			if (sectp == nullptr) return;
+			setanimation(sptr, anim_floorz, sptr, sectp->floorz, sptr->extra);
 		}
 		else
 		{
-			j = sector[i].floorz;
-			setanimation(sn, anim_floorz, sn, j, sptr->extra);
+			setanimation(sptr, anim_floorz, sptr, sectp->floorz, sptr->extra);
 		}
-		callsound(sn, actor);
+		callsound(sptr, actor);
 	}
 }
 
@@ -640,22 +648,21 @@ static void handle_st16(int sn, DDukeActor* actor)
 //
 //---------------------------------------------------------------------------
 
-static void handle_st18(int sn, DDukeActor* actor)
+static void handle_st18(sectortype* sptr, DDukeActor* actor)
 {
-	sectortype* sptr = &sector[sn];
-	int i = getanimationgoal(anim_floorz, sn);
+	int i = getanimationgoal(anim_floorz, sptr);
 
 	if (i == -1)
 	{
-		i = nextsectorneighborz(sn, sptr->floorz, 1, -1);
-		if (i == -1) i = nextsectorneighborz(sn, sptr->floorz, 1, 1);
-		if (i == -1) return;
-		int j = sector[i].floorz;
+		auto sectp = nextsectorneighborzptr(sptr, sptr->floorz, 1, -1);
+		if (sectp == nullptr) sectp = nextsectorneighborzptr(sptr, sptr->floorz, 1, 1);
+		if (sectp == nullptr) return;
+		int j = sectp->floorz;
 		int q = sptr->extra;
 		int l = sptr->ceilingz - sptr->floorz;
-		setanimation(sn, anim_floorz, sn, j, q);
-		setanimation(sn, anim_ceilingz, sn, j + l, q);
-		callsound(sn, actor);
+		setanimation(sptr, anim_floorz, sptr, j, q);
+		setanimation(sptr, anim_ceilingz, sptr, j + l, q);
+		callsound(sptr, actor);
 	}
 }
 
@@ -665,34 +672,33 @@ static void handle_st18(int sn, DDukeActor* actor)
 //
 //---------------------------------------------------------------------------
 
-static void handle_st29(int sn, DDukeActor* actor)
+static void handle_st29(sectortype* sptr, DDukeActor* actor)
 {
-	sectortype* sptr = &sector[sn];
 	int j;
 
 	if (sptr->lotag & 0x8000)
-		j = sector[nextsectorneighborz(sn, sptr->ceilingz, 1, 1)].floorz;
+		j = safenextsectorneighborzptr(sptr, sptr->ceilingz, 1, 1)->floorz;
 	else
-		j = sector[nextsectorneighborz(sn, sptr->ceilingz, -1, -1)].ceilingz;
+		j = safenextsectorneighborzptr(sptr, sptr->ceilingz, -1, -1)->ceilingz;
 
 	DukeStatIterator it(STAT_EFFECTOR);
 	while (auto act2 = it.Next())
 	{
-		if ((act2->s->lotag == 22) &&
-			(act2->s->hitag == sptr->hitag))
+		if ((act2->spr.lotag == 22) &&
+			(act2->spr.hitag == sptr->hitag))
 		{
-			sector[act2->s->sectnum].extra = -sector[act2->s->sectnum].extra;
+			act2->sector()->extra = -act2->sector()->extra;
 
-			act2->temp_data[0] = sn;
+			act2->temp_data[0] = sectnum(sptr);
 			act2->temp_data[1] = 1;
 		}
 	}
 
 	sptr->lotag ^= 0x8000;
 
-	setanimation(sn, anim_ceilingz, sn, j, sptr->extra);
+	setanimation(sptr, anim_ceilingz, sptr, j, sptr->extra);
 
-	callsound(sn, actor);
+	callsound(sptr, actor);
 }
 
 //---------------------------------------------------------------------------
@@ -701,21 +707,20 @@ static void handle_st29(int sn, DDukeActor* actor)
 //
 //---------------------------------------------------------------------------
 
-static void handle_st20(int sn, DDukeActor* actor)
+static void handle_st20(sectortype* sptr, DDukeActor* actor)
 {
-	sectortype* sptr = &sector[sn];
-	int j;
+	int j = 0;
 REDODOOR:
 
 	if (sptr->lotag & 0x8000)
 	{
 		DDukeActor* a2;
-		DukeSectIterator it(sn);
+		DukeSectIterator it(sptr);
 		while ((a2 = it.Next()))
 		{
-			if (a2->s->statnum == 3 && a2->s->lotag == 9)
+			if (a2->spr.statnum == 3 && a2->spr.lotag == 9)
 			{
-				j = a2->s->z;
+				j = a2->spr.pos.Z;
 				break;
 			}
 		}
@@ -724,9 +729,9 @@ REDODOOR:
 	}
 	else
 	{
-		j = nextsectorneighborz(sn, sptr->ceilingz, -1, -1);
+		auto sectp = nextsectorneighborzptr(sptr, sptr->ceilingz, -1, -1);
 
-		if (j >= 0) j = sector[j].ceilingz;
+		if (sectp) j = sectp->ceilingz;
 		else
 		{
 			sptr->lotag |= 32768;
@@ -736,8 +741,8 @@ REDODOOR:
 
 	sptr->lotag ^= 0x8000;
 
-	setanimation(sn, anim_ceilingz, sn, j, sptr->extra);
-	callsound(sn, actor);
+	setanimation(sptr, anim_ceilingz, sptr, j, sptr->extra);
+	callsound(sptr, actor);
 }
 
 //---------------------------------------------------------------------------
@@ -746,28 +751,27 @@ REDODOOR:
 //
 //---------------------------------------------------------------------------
 
-static void handle_st21(int sn, DDukeActor* actor)
+static void handle_st21(sectortype* sptr, DDukeActor* actor)
 {
-	sectortype* sptr = &sector[sn];
-	int i = getanimationgoal(anim_floorz, sn);
+	int i = getanimationgoal(anim_floorz, sptr);
 	int j;
 	if (i >= 0)
 	{
 		if (animategoal[i] == sptr->ceilingz)
-			animategoal[i] = sector[nextsectorneighborz(sn, sptr->ceilingz, 1, 1)].floorz;
+			animategoal[i] = safenextsectorneighborzptr(sptr, sptr->ceilingz, 1, 1)->floorz;
 		else animategoal[i] = sptr->ceilingz;
 		j = animategoal[i];
 	}
 	else
 	{
 		if (sptr->ceilingz == sptr->floorz)
-			j = sector[nextsectorneighborz(sn, sptr->ceilingz, 1, 1)].floorz;
+			j = safenextsectorneighborzptr(sptr, sptr->ceilingz, 1, 1)->floorz;
 		else j = sptr->ceilingz;
 
 		sptr->lotag ^= 0x8000;
 
-		if (setanimation(sn, anim_floorz, sn, j, sptr->extra) >= 0)
-			callsound(sn, actor);
+		if (setanimation(sptr, anim_floorz, sptr, j, sptr->extra) >= 0)
+			callsound(sptr, actor);
 	}
 }
 
@@ -777,27 +781,26 @@ static void handle_st21(int sn, DDukeActor* actor)
 //
 //---------------------------------------------------------------------------
 
-static void handle_st22(int sn, DDukeActor* actor)
+static void handle_st22(sectortype* sptr, DDukeActor* actor)
 {
-	sectortype* sptr = &sector[sn];
 	int j, q;
 	if ((sptr->lotag & 0x8000))
 	{
 		q = (sptr->ceilingz + sptr->floorz) >> 1;
-		j = setanimation(sn, anim_floorz, sn, q, sptr->extra);
-		j = setanimation(sn, anim_ceilingz, sn, q, sptr->extra);
+		j = setanimation(sptr, anim_floorz, sptr, q, sptr->extra);
+		j = setanimation(sptr, anim_ceilingz, sptr, q, sptr->extra);
 	}
 	else
 	{
-		q = sector[nextsectorneighborz(sn, sptr->floorz, 1, 1)].floorz;
-		j = setanimation(sn, anim_floorz, sn, q, sptr->extra);
-		q = sector[nextsectorneighborz(sn, sptr->ceilingz, -1, -1)].ceilingz;
-		j = setanimation(sn, anim_ceilingz, sn, q, sptr->extra);
+		q = safenextsectorneighborzptr(sptr, sptr->floorz, 1, 1)->floorz;
+		j = setanimation(sptr, anim_floorz, sptr, q, sptr->extra);
+		q = safenextsectorneighborzptr(sptr, sptr->ceilingz, -1, -1)->ceilingz;
+		j = setanimation(sptr, anim_ceilingz, sptr, q, sptr->extra);
 	}
 
 	sptr->lotag ^= 0x8000;
 
-	callsound(sn, actor);
+	callsound(sptr, actor);
 
 }
 
@@ -807,47 +810,47 @@ static void handle_st22(int sn, DDukeActor* actor)
 //
 //---------------------------------------------------------------------------
 
-static void handle_st23(int sn, DDukeActor* actor)
+static void handle_st23(sectortype* sptr, DDukeActor* actor)
 {
 	int q = 0;
-	
+
 	DukeStatIterator it(STAT_EFFECTOR);
 	DDukeActor* act2;
 	while ((act2 = it.Next()))
 	{
-		if (act2->s->lotag == SE_11_SWINGING_DOOR && act2->s->sectnum == sn && !act2->temp_data[4])
+		if (act2->spr.lotag == SE_11_SWINGING_DOOR && act2->sector() == sptr && !act2->temp_data[4])
 		{
 			break;
 		}
 	}
 	if (!act2) return;
 
-	int l = sector[act2->s->sectnum].lotag & 0x8000;
+	int l = act2->sector()->lotag & 0x8000;
 
 	if (act2)
 	{
-		DukeStatIterator it(STAT_EFFECTOR);
+		DukeStatIterator itr(STAT_EFFECTOR);
 
-		while (auto act3 = it.Next())
+		while (auto act3 = itr.Next())
 		{
-			if (l == (sector[act3->s->sectnum].lotag & 0x8000) && act3->s->lotag == SE_11_SWINGING_DOOR && act2->s->hitag == act3->s->hitag && act3->temp_data[4])
+			if (l == (act3->sector()->lotag & 0x8000) && act3->spr.lotag == SE_11_SWINGING_DOOR && act2->spr.hitag == act3->spr.hitag && act3->temp_data[4])
 			{
 				return;
 			}
 		}
 
-		it.Reset(STAT_EFFECTOR);
-		while (auto act3 = it.Next())
+		itr.Reset(STAT_EFFECTOR);
+		while (auto act3 = itr.Next())
 		{
-			if (l == (sector[act3->s->sectnum].lotag & 0x8000) && act3->s->lotag == SE_11_SWINGING_DOOR && act2->s->hitag == act3->s->hitag)
+			if (l == (act3->sector()->lotag & 0x8000) && act3->spr.lotag == SE_11_SWINGING_DOOR && act2->spr.hitag == act3->spr.hitag)
 			{
-				if (sector[act3->s->sectnum].lotag & 0x8000) sector[act3->s->sectnum].lotag &= 0x7fff;
-				else sector[act3->s->sectnum].lotag |= 0x8000;
+				if (act3->sector()->lotag & 0x8000) act3->sector()->lotag &= 0x7fff;
+				else act3->sector()->lotag |= 0x8000;
 				act3->temp_data[4] = 1;
 				act3->temp_data[3] = -act3->temp_data[3];
 				if (q == 0)
 				{
-					callsound(sn, act3);
+					callsound(sptr, act3);
 					q = 1;
 				}
 			}
@@ -861,33 +864,33 @@ static void handle_st23(int sn, DDukeActor* actor)
 //
 //---------------------------------------------------------------------------
 
-static void handle_st25(int sn, DDukeActor* actor)
+static void handle_st25(sectortype* sptr, DDukeActor* actor)
 {
 	DukeStatIterator it(STAT_EFFECTOR);
 	DDukeActor* act2;
 	while ((act2 = it.Next()))
 	{
-		if (act2->s->lotag == 15 && act2->s->sectnum == sn)
+		if (act2->spr.lotag == 15 && act2->sector() == sptr)
 		{
 			break;
 		}
 	}
-	
+
 	if (act2 == nullptr)
 		return;
 
 	it.Reset(STAT_EFFECTOR);
 	while (auto act3 = it.Next())
 	{
-		if (act3->s->hitag == act2->s->hitag)
+		if (act3->spr.hitag == act2->spr.hitag)
 		{
-			if (act3->s->lotag == 15)
+			if (act3->spr.lotag == 15)
 			{
-				sector[act3->s->sectnum].lotag ^= 0x8000; // Toggle the open or close
-				act3->s->ang += 1024;
-				if (act3->temp_data[4]) callsound(act3->s->sectnum, act3);
-				callsound(act3->s->sectnum, act3);
-				if (sector[act3->s->sectnum].lotag & 0x8000) act3->temp_data[4] = 1;
+				act3->sector()->lotag ^= 0x8000; // Toggle the open or close
+				act3->spr.ang += 1024;
+				if (act3->temp_data[4]) callsound(act3->sector(), act3);
+				callsound(act3->sector(), act3);
+				if (act3->sector()->lotag & 0x8000) act3->temp_data[4] = 1;
 				else act3->temp_data[4] = 2;
 			}
 		}
@@ -900,19 +903,19 @@ static void handle_st25(int sn, DDukeActor* actor)
 //
 //---------------------------------------------------------------------------
 
-static void handle_st27(int sn, DDukeActor* actor)
+static void handle_st27(sectortype* sptr, DDukeActor* actor)
 {
 	DukeStatIterator it(STAT_EFFECTOR);
 	while (auto act2 = it.Next())
 	{
-		if ((act2->s->lotag & 0xff) == 20 && act2->s->sectnum == sn) //Bridge
+		if ((act2->spr.lotag & 0xff) == 20 && act2->sector() == sptr) //Bridge
 		{
 
-			sector[sn].lotag ^= 0x8000;
-			if (sector[sn].lotag & 0x8000) //OPENING
+			sptr->lotag ^= 0x8000;
+			if (sptr->lotag & 0x8000) //OPENING
 				act2->temp_data[0] = 1;
 			else act2->temp_data[0] = 2;
-			callsound(sn, actor);
+			callsound(sptr, actor);
 			break;
 		}
 	}
@@ -924,16 +927,16 @@ static void handle_st27(int sn, DDukeActor* actor)
 //
 //---------------------------------------------------------------------------
 
-static void handle_st28(int sn, DDukeActor* actor)
+static void handle_st28(sectortype* sptr, DDukeActor* actor)
 {
 	//activate the rest of them
 	int j = -1;
-	DukeSectIterator it(sn);
+	DukeSectIterator it(sptr);
 	while (auto a2 = it.Next())
 	{
-		if (a2->s->statnum == 3 && (a2->s->lotag & 0xff) == 21)
+		if (a2->spr.statnum == 3 && (a2->spr.lotag & 0xff) == 21)
 		{
-			j = a2->s->hitag;
+			j = a2->spr.hitag;
 			break; //Found it
 		}
 	}
@@ -942,11 +945,11 @@ static void handle_st28(int sn, DDukeActor* actor)
 	DukeStatIterator it1(STAT_EFFECTOR);
 	while (auto act3 = it.Next())
 	{
-		if ((act3->s->lotag & 0xff) == 21 && !act3->temp_data[0] &&
-			(act3->s->hitag) == j)
+		if ((act3->spr.lotag & 0xff) == 21 && !act3->temp_data[0] &&
+			(act3->spr.hitag) == j)
 			act3->temp_data[0] = 1;
 	}
-	callsound(sn, actor);
+	callsound(sptr, actor);
 }
 
 //---------------------------------------------------------------------------
@@ -955,13 +958,10 @@ static void handle_st28(int sn, DDukeActor* actor)
 //
 //---------------------------------------------------------------------------
 
-void operatesectors(int sn, DDukeActor *actor)
+void operatesectors(sectortype* sptr, DDukeActor *actor)
 {
-	int j=0, startwall, endwall;
+	int j=0;
 	int i;
-	sectortype* sptr;
-
-	sptr = &sector[sn];
 
 	switch (sptr->lotag & (0x3fff))
 	{
@@ -972,99 +972,97 @@ void operatesectors(int sn, DDukeActor *actor)
 
 	case 7:
 		if (!isRR()) break;
-		startwall = sptr->wallptr;
-		endwall = startwall + sptr->wallnum;
-		for (j = startwall; j < endwall; j++)
+		for (auto& wal : wallsofsector(sptr))
 		{
-			setanimation(sn, anim_vertexx, j, wall[j].x + 1024, 4);
-			setanimation(sn, anim_vertexx, wall[j].nextwall, wall[wall[j].nextwall].x + 1024, 4);
+			setanimation(sptr, anim_vertexx, &wal, wal.pos.X + 1024, 4);
+			if (wal.twoSided()) setanimation(sptr, anim_vertexx, wal.nextWall(), wal.nextWall()->pos.X + 1024, 4);
 		}
 		break;
 
 	case ST_30_ROTATE_RISE_BRIDGE:
 	{
-		auto act = ScriptIndexToActor(sector[sn].hitag);
+		auto act = barrier_cast<DDukeActor*>(sptr->hitagactor);
 		if (!act) break;
-		if (act->tempang == 0 || act->tempang == 256) callsound(sn, actor);
-		if (act->s->extra == 1) act->s->extra = 3;
-		else act->s->extra = 1;
+		if (act->tempang == 0 || act->tempang == 256) callsound(sptr, actor);
+		if (act->spr.extra == 1) act->spr.extra = 3;
+		else act->spr.extra = 1;
 		break;
 	}
 
 	case ST_31_TWO_WAY_TRAIN:
 	{
-		auto act = ScriptIndexToActor(sector[sn].hitag);
+		auto act = barrier_cast<DDukeActor*>(sptr->hitagactor);
 		if (!act) break;
 		if (act->temp_data[4] == 0)
 			act->temp_data[4] = 1;
 
-		callsound(sn, actor);
+		callsound(sptr, actor);
 		break;
 	}
 	case ST_26_SPLITTING_ST_DOOR: //The split doors
-		i = getanimationgoal(anim_ceilingz, sn);
+		i = getanimationgoal(anim_ceilingz, sptr);
 		if (i == -1) //if the door has stopped
 		{
 			haltsoundhack = 1;
 			sptr->lotag &= 0xff00;
 			sptr->lotag |= ST_22_SPLITTING_DOOR;
-			operatesectors(sn, actor);
+			operatesectors(sptr, actor);
 			sptr->lotag &= 0xff00;
 			sptr->lotag |= ST_9_SLIDING_ST_DOOR;
-			operatesectors(sn, actor);
+			operatesectors(sptr, actor);
 			sptr->lotag &= 0xff00;
 			sptr->lotag |= ST_26_SPLITTING_ST_DOOR;
 		}
 		return;
 
 	case ST_9_SLIDING_ST_DOOR:
-		handle_st09(sn, actor);
+		handle_st09(sptr, actor);
 		return;
 
 	case ST_15_WARP_ELEVATOR://Warping elevators
-		handle_st15(sn, actor);
+		handle_st15(sptr, actor);
 		return;
 
 	case ST_16_PLATFORM_DOWN:
 	case ST_17_PLATFORM_UP:
-		handle_st16(sn, actor);
+		handle_st16(sptr, actor);
 		return;
 
 	case ST_18_ELEVATOR_DOWN:
 	case ST_19_ELEVATOR_UP:
-		handle_st18(sn, actor);
+		handle_st18(sptr, actor);
 		return;
 
 	case ST_29_TEETH_DOOR:
-		handle_st29(sn, actor);
+		handle_st29(sptr, actor);
 		return;
 	case ST_20_CEILING_DOOR:
-		handle_st20(sn, actor);
+		handle_st20(sptr, actor);
 		return;
 
 	case ST_21_FLOOR_DOOR:
-		handle_st21(sn, actor);
+		handle_st21(sptr, actor);
 		return;
 
 	case ST_22_SPLITTING_DOOR:
-		handle_st22(sn, actor);
+		handle_st22(sptr, actor);
 		return;
 
 	case ST_23_SWINGING_DOOR: //Swingdoor
-		handle_st23(sn, actor);
+		handle_st23(sptr, actor);
 		return;
 
 	case ST_25_SLIDING_DOOR: //Subway type sliding doors
 	{
-		handle_st25(sn, actor);
+		handle_st25(sptr, actor);
 		return;
 	}
 	case ST_27_STRETCH_BRIDGE:  //Extended bridge
-		handle_st27(sn, actor);
+		handle_st27(sptr, actor);
 		return;
 
 	case ST_28_DROP_FLOOR:
-		handle_st28(sn, actor);
+		handle_st28(sptr, actor);
 		return;
 	}
 }
@@ -1079,21 +1077,23 @@ void operatesectors(int sn, DDukeActor *actor)
 void operateactivators(int low, int plnum)
 {
 	int i, j, k;
-	short * p;
+	Cycler * p;
 	walltype* wal;
 
 	for (i = numcyclers - 1; i >= 0; i--)
 	{
-		p = &cyclers[i][0];
+		p = &cyclers[i];
 
-		if (p[4] == low)
+
+		if (p->hitag == low)
 		{
-			p[5] = !p[5];
+			auto sect = p->sector;
+			p->state = !p->state;
 
-			sector[p[0]].floorshade = sector[p[0]].ceilingshade = p[3];
-			wal = &wall[sector[p[0]].wallptr];
-			for (j = sector[p[0]].wallnum; j > 0; j--, wal++)
-				wal->shade = p[3];
+			sect->floorshade = sect->ceilingshade = (int8_t)p->shade2;
+			wal = sect->firstWall();
+			for (j = sect->wallnum; j > 0; j--, wal++)
+				wal->shade = (int8_t)p->shade2;
 		}
 	}
 
@@ -1101,62 +1101,63 @@ void operateactivators(int low, int plnum)
 	DukeStatIterator it(STAT_ACTIVATOR);
 	while (auto act = it.Next())
 	{
-		if (act->s->lotag == low)
+		if (act->spr.lotag == low)
 		{
-			if (act->s->picnum == ACTIVATORLOCKED)
+			if (act->spr.picnum == ACTIVATORLOCKED)
 			{
-				sector[act->s->sectnum].lotag ^= 16384;
+				act->sector()->lotag ^= 16384;
 
 				if (plnum >= 0)
 				{
-					if (sector[act->s->sectnum].lotag & 16384)
+					if (act->sector()->lotag & 16384)
 						FTA(4, &ps[plnum]);
 					else FTA(8, &ps[plnum]);
 				}
 			}
 			else
 			{
-				switch (act->s->hitag)
+				switch (act->spr.hitag)
 				{
 				case 0:
 					break;
 				case 1:
-					if (sector[act->s->sectnum].floorz != sector[act->s->sectnum].ceilingz)
+					if (act->sector()->floorz != act->sector()->ceilingz)
 					{
 						continue;
 					}
 					break;
 				case 2:
-					if (sector[act->s->sectnum].floorz == sector[act->s->sectnum].ceilingz)
+					if (act->sector()->floorz == act->sector()->ceilingz)
 					{
 						continue;
 					}
 					break;
 				}
 
-				if (sector[act->s->sectnum].lotag < 3)
+				if (act->sector()->lotag < 3)
 				{
-					DukeSectIterator it(act->s->sectnum);
-					while (auto a2 = it.Next())
+					DukeSectIterator itr(act->sector());
+					while (auto a2 = itr.Next())
 					{
-						if (a2->s->statnum == 3) switch (a2->s->lotag)
+						if (a2->spr.statnum == 3) switch (a2->spr.lotag)
 						{
 						case SE_18_INCREMENTAL_SECTOR_RISE_FALL:
 							if (isRRRA()) break;
+							[[fallthrough]];
 						case SE_36_PROJ_SHOOTER:
 						case SE_31_FLOOR_RISE_FALL:
 						case SE_32_CEILING_RISE_FALL:
 							a2->temp_data[0] = 1 - a2->temp_data[0];
-							callsound(act->s->sectnum, a2);
+							callsound(act->sector(), a2);
 							break;
 						}
 					}
 				}
 
-				if (k == -1 && (sector[act->s->sectnum].lotag & 0xff) == 22)
-					k = callsound(act->s->sectnum, act);
+				if (k == -1 && (act->sector()->lotag & 0xff) == SE_22_TEETH_DOOR)
+					k = callsound(act->sector(), act);
 
-				operatesectors(act->s->sectnum, act);
+				operatesectors(act->sector(), act);
 			}
 		}
 	}
@@ -1175,8 +1176,8 @@ void operatemasterswitches(int low)
 	DukeStatIterator it(STAT_STANDABLE);
 	while (auto act2 = it.Next())
 	{
-		if (act2->s->picnum == MASTERSWITCH && act2->s->lotag == low && act2->s->yvel == 0)
-			act2->s->yvel = 1;
+		if (act2->spr.picnum == MASTERSWITCH && act2->spr.lotag == low && act2->spr.yvel == 0)
+			act2->spr.yvel = 1;
 	}
 }
 
@@ -1188,26 +1189,24 @@ void operatemasterswitches(int low)
 
 void operateforcefields_common(DDukeActor *effector, int low, const std::initializer_list<int> &tiles)
 {
-	int i, p;
-
-	for (p = numanimwalls; p >= 0; p--)
+	for (int p = numanimwalls-1; p >= 0; p--)
 	{
-		i = animwall[p].wallnum;
+		auto wal = animwall[p].wall;
 
-		if (low == wall[i].lotag || low == -1)
-			if (isIn(wall[i].overpicnum, tiles))
+		if (low == wal->lotag || low == -1)
+			if (isIn(wal->overpicnum, tiles))
 			{
 				animwall[p].tag = 0;
 
-				if (wall[i].cstat)
+				if (wal->cstat)
 				{
-					wall[i].cstat = 0;
+					wal->cstat = 0;
 
-					if (effector && effector->s->picnum == SECTOREFFECTOR && effector->s->lotag == 30)
-						wall[i].lotag = 0;
+					if (effector && effector->spr.picnum == SECTOREFFECTOR && effector->spr.lotag == 30)
+						wal->lotag = 0;
 				}
 				else
-					wall[i].cstat = 85;
+					wal->cstat = (CSTAT_WALL_BLOCK | CSTAT_WALL_ALIGN_BOTTOM | CSTAT_WALL_MASKED | CSTAT_WALL_BLOCK_HITSCAN);
 			}
 	}
 }
@@ -1218,12 +1217,12 @@ void operateforcefields_common(DDukeActor *effector, int low, const std::initial
 //
 //---------------------------------------------------------------------------
 
-void breakwall(short newpn, DDukeActor* spr, short dawallnum)
+void breakwall(int newpn, DDukeActor* spr, walltype* wal)
 {
-	wall[dawallnum].picnum = newpn;
+	wal->picnum = newpn;
 	S_PlayActorSound(VENT_BUST, spr);
 	S_PlayActorSound(GLASS_HEAVYBREAK, spr);
-	lotsofglass(spr, dawallnum, 10);
+	lotsofglass(spr, wal, 10);
 }
 
 //---------------------------------------------------------------------------
@@ -1237,15 +1236,15 @@ void allignwarpelevators(void)
 	DukeStatIterator it(STAT_EFFECTOR);
 	while (auto act = it.Next())
 	{
-		if (act->s->lotag == SE_17_WARP_ELEVATOR && act->s->shade > 16)
+		if (act->spr.lotag == SE_17_WARP_ELEVATOR && act->spr.shade > 16)
 		{
 			DukeStatIterator it1(STAT_EFFECTOR);
 			while (auto act2 = it1.Next())
 			{
-				if ((act2->s->lotag) == SE_17_WARP_ELEVATOR && act != act2 && act->s->hitag == act2->s->hitag)
+				if ((act2->spr.lotag) == SE_17_WARP_ELEVATOR && act != act2 && act->spr.hitag == act2->spr.hitag)
 				{
-					sector[act2->s->sectnum].floorz = sector[act->s->sectnum].floorz;
-					sector[act2->s->sectnum].ceilingz = sector[act->s->sectnum].ceilingz;
+					act2->sector()->setfloorz(act->sector()->floorz);
+					act2->sector()->setceilingz(act->sector()->ceilingz);
 				}
 			}
 		}
@@ -1267,22 +1266,22 @@ void moveclouds(double smoothratio)
 		cloudclock = myclock + 6;
 
 		// cloudx/y were an array, but all entries were always having the same value so a single pair is enough.
-		cloudx += ps[screenpeek].angle.ang.fcos() * 0.5f;
-		cloudy += ps[screenpeek].angle.ang.fsin() * 0.5f;
+		cloudx += (float)ps[screenpeek].angle.ang.fcos() * 0.5f;
+		cloudy += (float)ps[screenpeek].angle.ang.fsin() * 0.5f;
 		for (int i = 0; i < numclouds; i++)
 		{
-			if (!testnewrenderer)
+			if (!vid_renderer)
 			{
-				sector[clouds[i]].setceilingxpan(cloudx);
-				sector[clouds[i]].setceilingypan(cloudy);
+				clouds[i]->setceilingxpan(cloudx);
+				clouds[i]->setceilingypan(cloudy);
 			}
 			else
 			{ 
 				// no clamping here!
-				sector[clouds[i]].ceilingxpan_ = cloudx;
-				sector[clouds[i]].ceilingypan_ = cloudy;
+				clouds[i]->ceilingxpan_ = cloudx;
+				clouds[i]->ceilingypan_ = cloudy;
 			}
-			sector[clouds[i]].exflags |= SECTOREX_CLOUDSCROLL;
+			clouds[i]->exflags |= SECTOREX_CLOUDSCROLL;
 		}
 	}
 }

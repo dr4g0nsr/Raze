@@ -39,71 +39,66 @@ void ballreturn(DDukeActor *ball)
 	DukeStatIterator it(STAT_BOWLING);
 	while (auto act = it.Next())
 	{
-		if (act->s->picnum == RRTILE281 && ball->s->sectnum == act->s->sectnum)
+		if (act->spr.picnum == RRTILE281 && ball->sector() == act->sector())
 		{
 			DukeStatIterator it2(STAT_BOWLING);
 			while (auto act2 = it2.Next())
 			{
-				if (act2->s->picnum == BOWLINGBALLSPOT && act->s->hitag == act2->s->hitag)
+				if (act2->spr.picnum == BOWLINGBALLSPOT && act->spr.hitag == act2->spr.hitag)
 					spawn(act2, BOWLINGBALLSPRITE);
-				if (act2->s->picnum == BOWLINGPINSPOT && act->s->hitag == act2->s->hitag && act2->s->lotag == 0)
+				if (act2->spr.picnum == BOWLINGPINSPOT && act->spr.hitag == act2->spr.hitag && act2->spr.lotag == 0)
 				{
-					act2->s->lotag = 100;
-					act2->s->extra++;
-					pinsectorresetdown(act2->s->sectnum);
+					act2->spr.lotag = 100;
+					act2->spr.extra++;
+					pinsectorresetdown(act2->sector());
 				}
 			}
 		}
 	}
 }
 
-short pinsectorresetdown(short sect)
+void pinsectorresetdown(sectortype* sec)
 {
-	int j = getanimationgoal(anim_ceilingz, sect);
+	int j = getanimationgoal(anim_ceilingz, sec);
 
 	if (j == -1)
 	{
-		j = sector[sect].floorz;
-		setanimation(sect, anim_ceilingz, sect, j, 64);
+		j = sec->floorz;
+		setanimation(sec, anim_ceilingz, sec, j, 64);
+	}
+}
+
+int pinsectorresetup(sectortype* sec)
+{
+	int j = getanimationgoal(anim_ceilingz, sec);
+
+	if (j == -1)
+	{
+		j = safenextsectorneighborzptr(sec, sec->ceilingz, -1, -1)->ceilingz;
+		setanimation(sec, anim_ceilingz, sec, j, 64);
 		return 1;
 	}
 	return 0;
 }
 
-short pinsectorresetup(short sect)
+int checkpins(sectortype* sect)
 {
-	int j = getanimationgoal(anim_ceilingz, sect);
-
-	if (j == -1)
-	{
-		j = sector[nextsectorneighborz(sect, sector[sect].ceilingz, -1, -1)].ceilingz;
-		setanimation(sect, anim_ceilingz, sect, j, 64);
-		return 1;
-	}
-	return 0;
-}
-
-short checkpins(short sect)
-{
-	short i, pin;
 	int  x, y;
-	short pins[10];
-	short tag;
-
-	pin = 0;
-	for (i = 0; i < 10; i++) pins[i] = 0;
+	bool pins[10] = {};
+	int tag = 0;
+	int pin = 0;
 
 	DukeSectIterator it(sect);
 	while (auto a2 = it.Next())
 	{
-		if (a2->s->picnum == BOWLINGPIN)
+		if (a2->spr.picnum == BOWLINGPIN)
 		{
 			pin++;
-			pins[a2->s->lotag] = 1;
+			pins[a2->spr.lotag] = true;
 		}
-		if (a2->s->picnum == BOWLINGPINSPOT)
+		if (a2->spr.picnum == BOWLINGPINSPOT)
 		{
-			tag = a2->s->hitag;
+			tag = a2->spr.hitag;
 		}
 	}
 
@@ -112,12 +107,13 @@ short checkpins(short sect)
 		tag += LANEPICS + 1;
 		TileFiles.tileMakeWritable(tag);
 		tileCopySection(LANEPICS + 1, 0, 0, 128, 64, tag, 0, 0);
-		for (i = 0; i < 10; i++)
+		for (int i = 0; i < 10; i++)
 		{
-			if (pins[i] == 1)
+			if (pins[i])
 			{
 				switch (i)
 				{
+				default:
 				case 0:
 					x = 64;
 					y = 48;
@@ -167,35 +163,38 @@ short checkpins(short sect)
 	return pin;
 }
 
-void resetpins(short sect)
+void resetpins(sectortype* sect)
 {
-	int i, tag;
+	int i, tag = 0;
 	int x, y;
 	DukeSectIterator it(sect);
 	while (auto a2 = it.Next())
 	{
-		if (a2->s->picnum == BOWLINGPIN)
+		if (a2->spr.picnum == BOWLINGPIN)
 			deletesprite(a2);
 	}
 	it.Reset(sect);
 	while (auto a2 = it.Next())
 	{
-		if (a2->s->picnum == 283)
+		if (a2->spr.picnum == 283)
 		{
 			auto spawned = spawn(a2, BOWLINGPIN);
-			spawned->s->lotag = a2->s->lotag;
-			if (spawned->s->lotag == 3 || spawned->s->lotag == 5)
+			if (spawned)
 			{
-				spawned->s->clipdist = (1 + (krand() % 1)) * 16 + 32;
+				spawned->spr.lotag = a2->spr.lotag;
+				if (spawned->spr.lotag == 3 || spawned->spr.lotag == 5)
+				{
+					spawned->spr.clipdist = (1 + (krand() % 1)) * 16 + 32;
+				}
+				else
+				{
+					spawned->spr.clipdist = (1 + (krand() % 1)) * 16 + 32;
+				}
+				spawned->spr.ang -= ((krand() & 32) - (krand() & 64)) & 2047;
 			}
-			else
-			{
-				spawned->s->clipdist = (1 + (krand() % 1)) * 16 + 32;
-			}
-			spawned->s->ang -= ((krand() & 32) - (krand() & 64)) & 2047;
 		}
-		if (a2->s->picnum == 280)
-			tag = a2->s->hitag;
+		if (a2->spr.picnum == 280)
+			tag = a2->spr.hitag;
 	}
 	if (tag)
 	{
@@ -206,6 +205,7 @@ void resetpins(short sect)
 		{
 			switch (i)
 			{
+			default:
 			case 0:
 				x = 64;
 				y = 48;
@@ -254,20 +254,20 @@ void resetpins(short sect)
 
 void resetlanepics(void)
 {
+	if (!isRR()) return;
 	int x, y;
-	short i;
-	short tag, pic;
-	for (tag = 0; tag < 4; tag++)
+	for (int tag = 0; tag < 4; tag++)
 	{
-		pic = tag + 1;
+		int pic = tag + 1;
 		if (pic == 0) continue;
 		pic += LANEPICS + 1;
 		TileFiles.tileMakeWritable(pic);
 		tileCopySection(LANEPICS + 1, 0, 0, 128, 64, pic, 0, 0);
-		for (i = 0; i < 10; i++)
+		for (int i = 0; i < 10; i++)
 		{
 			switch (i)
 			{
+			default:
 			case 0:
 				x = 64;
 				y = 48;

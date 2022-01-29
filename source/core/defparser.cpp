@@ -34,16 +34,17 @@
 */
 
 #include "build.h"
-#include "compat.h"
 
 #include "mdsprite.h"  // md3model_t
 #include "buildtiles.h"
 #include "bitmap.h"
 #include "m_argv.h"
+#include "gamestruct.h"
 #include "gamecontrol.h"
 #include "palettecontainer.h"
 #include "mapinfo.h"
 #include "hw_voxels.h"
+#include "psky.h"
 
 int tileSetHightileReplacement(int picnum, int palnum, const char* filename, float alphacut, float xscale, float yscale, float specpower, float specfactor, bool indexed = false);
 int tileSetSkybox(int picnum, int palnum, FString* facenames, bool indexed = false);
@@ -180,7 +181,7 @@ static void parseTextureSpecialBlock(FScanner& sc, int tile, int pal)
 	FScriptPosition pos = sc;
 
 	FString fn;
-	double xscale = 1.0, yscale = 1.0, specpower = 1.0, specfactor = 1.0;
+	float xscale = 1.0, yscale = 1.0, specpower = 1.0, specfactor = 1.0;
 
 	if (sc.StartBraces(&blockend)) return; 
 	while (!sc.FoundEndBrace(blockend))
@@ -317,7 +318,7 @@ void parseCopyTile(FScanner& sc, FScriptPosition& pos)
 	FScanner::SavedPos blockend;
 	int tile = -1, source = -1;
 	int havetile = 0, xoffset = -1024, yoffset = -1024;
-	int flags = 0, tsiz = 0, temppal = -1, tempsource = -1;
+	int flags = 0, temppal = -1, tempsource = -1;
 
 	if (!sc.GetNumber(tile, true)) return;
 
@@ -349,7 +350,7 @@ void parseCopyTile(FScanner& sc, FScriptPosition& pos)
 
 				if ((unsigned)temppal >= MAXREALPAL)
 				{
-					pos.Message(MSG_ERROR, "copytile: palette number %d out of range (max=%d)\n", MAXREALPAL - 1);
+					pos.Message(MSG_ERROR, "copytile: palette number %d out of range (max=%d)\n", temppal, MAXREALPAL - 1);
 					break;
 				}
 			}
@@ -675,7 +676,7 @@ void parseVoxel(FScanner& sc, FScriptPosition& pos)
 	}
 
 	int lastvoxid = nextvoxid++;
-	
+
 	if (sc.StartBraces(&blockend)) return;
 	while (!sc.FoundEndBrace(blockend))
 	{
@@ -723,7 +724,7 @@ void parseDefineTint(FScanner& sc, FScriptPosition& pos)
 	if (!sc.GetNumber(f)) return;
 	lookups.setPaletteTint(pal, r, g, b, 0, 0, 0, f);
 }
- 
+
 //===========================================================================
 //
 //
@@ -814,7 +815,7 @@ void parseMusic(FScanner& sc, FScriptPosition& pos)
 		if (sc.Compare("id")) sc.GetString(id);
 		else if (sc.Compare("file")) sc.GetString(file);
 	}
-	SetMusicForMap(id, file, true);
+	SetMusicReplacement(id, file);
 }
 
 //===========================================================================
@@ -827,6 +828,7 @@ void parseMapinfo(FScanner& sc, FScriptPosition& pos)
 {
 	usermaphack_t mhk;
 	FScanner::SavedPos blockend;
+	TArray<FString> md4s;
 
 	if (sc.StartBraces(&blockend)) return;
 	while (!sc.FoundEndBrace(blockend))
@@ -838,14 +840,18 @@ void parseMapinfo(FScanner& sc, FScriptPosition& pos)
 		else if (sc.Compare("mapmd4"))
 		{
 			sc.GetString();
-			for (int i = 0; i < 16; i++)
-			{
-				char smallbuf[3] = { sc.String[2 * i], sc.String[2 * i + 1], 0 };
-				mhk.md4[i] = strtol(smallbuf, nullptr, 16);
-			}
+			md4s.Push(sc.String);
 		}
 	}
-	AddUserMapHack(mhk);
+	for (auto& md4 : md4s)
+	{
+		for (int i = 0; i < 16; i++)
+		{
+			char smallbuf[3] = { md4[2 * i], md4[2 * i + 1], 0 };
+			mhk.md4[i] = (uint8_t)strtol(smallbuf, nullptr, 16);
+		}
+		AddUserMapHack(mhk);
+	}
 }
 
 //===========================================================================
@@ -868,35 +874,61 @@ void parseEcho(FScanner& sc, FScriptPosition& pos)
 
 void parseMultiPsky(FScanner& sc, FScriptPosition& pos)
 {
-	usermaphack_t mhk;
-	FScanner::SavedPos blockend;
-	psky_t sky{};
+	// The maximum tile offset ever used in any tiled parallaxed multi-sky.
+	enum { PSKYOFF_MAX = 16 };
 
-	sky.yscale = 65536;
-	if (!sc.GetNumber(sky.tilenum, true)) return;
+	FScanner::SavedPos blockend;
+	SkyDefinition sky{};
+
+	bool crc;
+	sky.scale = 1.f;
+	sky.baselineofs = INT_MIN;
+	if (sc.CheckString("crc"))
+	{
+		if (!sc.GetNumber(sky.crc32, true)) return;
+		crc = true;
+	}
+	else
+	{
+		if (!sc.GetNumber(sky.tilenum, true)) return;
+		crc = false;
+	}
 
 	if (sc.StartBraces(&blockend)) return;
 	while (!sc.FoundEndBrace(blockend))
 	{
 		sc.MustGetString();
-		if (sc.Compare("horizfrac")) sc.GetNumber(sky.horizfrac, true);
-		else if (sc.Compare("yoffset")) sc.GetNumber(sky.yoffs, true);
+		if (sc.Compare("horizfrac")) sc.GetNumber(true); // not used anymore
+		else if (sc.Compare("yoffset")) sc.GetNumber(sky.pmoffset, true);
+		else if (sc.Compare("baseline")) sc.GetNumber(sky.baselineofs, true);
 		else if (sc.Compare("lognumtiles")) sc.GetNumber(sky.lognumtiles, true);
-		else if (sc.Compare("yscale")) sc.GetNumber(sky.yscale, true);
+		else if (sc.Compare("yscale")) { int intscale; sc.GetNumber(intscale, true); sky.scale = intscale * (1. / 65536.); }
 		else if (sc.Compare({ "tile", "panel" }))
 		{
-			int panel, offset;
-			sc.GetNumber(panel, true);
-			sc.GetNumber(offset, true);
-			if ((unsigned)panel < MAXPSKYTILES && (unsigned)offset <= PSKYOFF_MAX) sky.tileofs[panel] = offset;
+			if (!sc.CheckString("}"))
+			{
+				int panel = 0, offset = 0;
+				sc.GetNumber(panel, true);
+				sc.GetNumber(offset, true);
+				if ((unsigned)panel < MAXPSKYTILES && (unsigned)offset <= PSKYOFF_MAX) sky.offsets[panel] = offset;
+			}
+			else
+			{
+				int panel = 0, offset;
+				while (!sc.CheckString("}"))
+				{
+					sc.GetNumber(offset, true);
+					if ((unsigned)panel < MAXPSKYTILES && (unsigned)offset <= PSKYOFF_MAX) sky.offsets[panel] = offset;
+					panel++;
+				}
+			}
 		}
 	}
-
-	if (sky.tilenum != DEFAULTPSKY && (unsigned)sky.tilenum >= MAXUSERTILES) return;
+	if (sky.baselineofs == INT_MIN) sky.baselineofs = sky.pmoffset;
+	if (!crc && sky.tilenum != DEFAULTPSKY && (unsigned)sky.tilenum >= MAXUSERTILES) return;
 	if ((1 << sky.lognumtiles) > MAXPSKYTILES) return;
-	sky.yoffs2 = sky.yoffs;
-	auto psky = tileSetupSky(sky.tilenum);
-	*psky = sky;
+	if (crc) addSkyCRC(sky, sky.crc32);
+	else addSky(sky, sky.tilenum);
 }
 
 //===========================================================================
@@ -1188,8 +1220,8 @@ static bool parseBasePaletteRaw(FScanner& sc, FScriptPosition& pos, int id)
 			{
 				if (shiftleft != 0)
 				{
-					for (bssize_t k = 0; k < 768; k++)
-						palbuf[k] <<= shiftleft;
+					for (auto& pe : palbuf)
+						pe <<= shiftleft;
 				}
 
 				paletteSetColorTable(id, palbuf.Data(), false, false);
@@ -1436,7 +1468,7 @@ void parsePalookup(FScanner& sc, FScriptPosition& pos)
 		else if (sc.Compare("nofloorpal")) lookups.tables[id].noFloorPal = 1;
 		else if (sc.Compare("copy"))
 		{
-			int source;
+			int source = 0;
 			sc.GetNumber(source, true);
 
 			if ((unsigned)source >= MAXPALOOKUPS || source == id)
@@ -1664,7 +1696,7 @@ void parseDefineModelFrame(FScanner& sc, FScriptPosition& pos)
 		int err = (md_defineframe(mdglobal.lastmodelid, framename, i, max(0, mdglobal.modelskin), 0.0f, 0));
 		if (err < 0) ok = false; 
 		if (err == -2) pos.Message(MSG_ERROR, "Invalid tile number %d", i);
-		else if (err == -3) pos.Message(MSG_ERROR, "Invalid frame name", framename.GetChars());
+		else if (err == -3) pos.Message(MSG_ERROR, "Invalid frame name '%s'", framename.GetChars());
 	}
 	mdglobal.seenframe = 1;
 }
@@ -1779,7 +1811,7 @@ static bool parseModelFrameBlock(FScanner& sc, FixedBitArray<1024>& usedframes)
 	bool ok = true;
 	int pal = -1;
 	int starttile = -1, endtile = -1;
-	double smoothduration = 0.1f;
+	float smoothduration = 0.1f;
 
 	if (sc.StartBraces(&blockend)) return false;
 	while (!sc.FoundEndBrace(blockend))
@@ -1862,7 +1894,7 @@ static bool parseModelSkinBlock(FScanner& sc, int pal)
 
 	FString filename;
 	int surface = 0;
-	double param = 1.0, specpower = 1.0, specfactor = 1.0;
+	float param = 1.0, specpower = 1.0, specfactor = 1.0;
 	int flags = 0;
 
 	if (sc.StartBraces(&blockend)) return false;
@@ -1894,7 +1926,7 @@ static bool parseModelSkinBlock(FScanner& sc, int pal)
 		return false;
 	}
 
-	if (pal == DETAILPAL) param = 1. / param;
+	if (pal == DETAILPAL) param = 1.f / param;
 	int res = md_defineskin(mdglobal.lastmodelid, filename, pal, max(0, mdglobal.modelskin), surface, param, specpower, specfactor, flags);
 	if (res < 0)
 	{
@@ -1935,7 +1967,7 @@ static bool parseModelHudBlock(FScanner& sc)
 
 	for (int i = starttile; i <= endtile; i++)
 	{
-		vec3f_t addf = { (float)add.X, (float)add.Y, (float)add.Z };
+		FVector3 addf = { (float)add.X, (float)add.Y, (float)add.Z };
 		int res = md_definehud(mdglobal.lastmodelid, i, addf, angadd, flags, fov);
 		if (res < 0)
 		{
@@ -1952,7 +1984,7 @@ void parseModel(FScanner& sc, FScriptPosition& pos)
 
 	FString modelfn;
 	double scale = 1.0, mzadd = 0.0, myoffset = 0.0;
-	int32_t shadeoffs = 0, pal = 0, flags = 0;
+	int32_t shadeoffs = 0, flags = 0;
 	FixedBitArray<1024> usedframes;
 
 	usedframes.Zero();
@@ -2006,6 +2038,226 @@ void parseModel(FScanner& sc, FScriptPosition& pos)
 		mdglobal.modelskin = mdglobal.lastmodelskin = 0;
 		mdglobal.seenframe = 0;
 	}
+}
+
+
+//===========================================================================
+//
+// 
+//
+//===========================================================================
+
+static bool parseDefineQAVInterpolateIgnoreBlock(FScanner& sc, const int res_id, TMap<int, TArray<int>>& ignoredata, const int numframes)
+{
+	FScanner::SavedPos blockend;
+	FScriptPosition pos = sc;
+
+	FString scframes, sctiles;
+	TArray<int> framearray, tilearray;
+
+	if (sc.StartBraces(&blockend))
+	{
+		pos.Message(MSG_ERROR, "defineqav (%d): interpolate: ignore: malformed syntax, unable to continue", res_id);
+		return false;
+	}
+	while (!sc.FoundEndBrace(blockend))
+	{
+		sc.GetString();
+		if (sc.Compare("frames")) sc.GetString(scframes);
+		else if (sc.Compare("tiles")) sc.GetString(sctiles);
+	}
+
+	// Confirm we received something for 'frames' and 'tiles'.
+	if (scframes.IsEmpty() || sctiles.IsEmpty())
+	{
+		pos.Message(MSG_ERROR, "defineqav (%d): interpolate: ignore: unable to get any values for 'frames' or 'tiles', unable to continue", res_id);
+		return false;
+	}
+
+	auto arraybuilder = [&](const FString& input, TArray<int>& output, const int maxvalue) -> bool
+	{
+		if (input.CompareNoCase("all") == 0)
+		{
+			// All indices from 0 through to maxvalue are to be added to output array.
+			output.Push(0);
+			output.Push(maxvalue);
+		}
+		else if (input.IndexOf("-") != -1)
+		{
+			// Input is a range of values, split on the hypthen and add each value to the output array.
+			auto temparray = input.Split("-");
+			if (temparray.Size() == 2)
+			{
+				// Test if keywords 'first' and 'last' have been used.'
+				output.Push(temparray[0].CompareNoCase("first") == 0 ? 0 : atoi(temparray[0]));
+				output.Push(temparray[1].CompareNoCase("last") == 0 ? maxvalue : atoi(temparray[1]));
+			}
+		}
+		else
+		{
+			// We just have a number. Convert the string into an int and push it twice to the output array.
+			auto tempvalue = atoi(input);
+			for (auto i = 0; i < 2; i++) output.Push(tempvalue);
+		}
+		if (output.Size() != 2 || output[0] > output[1] || output[0] < 0 || output[1] > maxvalue)
+		{
+			pos.Message(MSG_ERROR, "defineqav (%d): interpolate: ignore: value of '%s' is malformed, unable to continue", res_id, input.GetChars());
+			return false;
+		}
+		return true;
+	};
+
+	if (!arraybuilder(scframes, framearray, numframes - 1)) return false;
+	if (!arraybuilder(sctiles, tilearray, 7)) return false;
+
+	// Process arrays and add ignored frames as required.
+	for (auto i = framearray[0]; i <= framearray[1]; i++)
+	{
+		auto& frametiles = ignoredata[i];
+		for (auto j = tilearray[0]; j <= tilearray[1]; j++)
+		{
+			if (!frametiles.Contains(j)) frametiles.Push(j);
+		}
+	}
+	return true;
+}
+
+static bool parseDefineQAVInterpolateBlock(FScanner& sc, const int res_id, const int numframes)
+{
+	FScanner::SavedPos blockend;
+	FScriptPosition pos = sc;
+
+	FString interptype;
+	bool loopable = false;
+	TMap<int, TArray<int>> ignoredata;
+
+	if (sc.StartBraces(&blockend))
+	{
+		pos.Message(MSG_ERROR, "defineqav (%d): interpolate: malformed syntax, unable to continue", res_id);
+		return false;
+	}
+	while (!sc.FoundEndBrace(blockend))
+	{
+		sc.GetString();
+		if (sc.Compare("type"))
+		{
+			if (interptype.IsNotEmpty())
+			{
+				pos.Message(MSG_ERROR, "defineqav (%d): interpolate: more than one interpolation type defined, unable to continue", res_id);
+				return false;
+			}
+			sc.GetString(interptype);
+			if (!gi->IsQAVInterpTypeValid(interptype))
+			{
+				pos.Message(MSG_ERROR, "defineqav (%d): interpolate: interpolation type not found", res_id);
+				return false;
+			}
+		}
+		else if (sc.Compare("loopable")) loopable = true;
+		else if (sc.Compare("ignore")) if (!parseDefineQAVInterpolateIgnoreBlock(sc, res_id, ignoredata, numframes)) return false;
+	}
+
+	// Add interpolation properties to game for processing while drawing.
+	gi->AddQAVInterpProps(res_id, interptype, loopable, std::move(ignoredata));
+	return true;
+}
+
+static void parseDefineQAV(FScanner& sc, FScriptPosition& pos)
+{
+	FScanner::SavedPos blockend;
+	FString fn;
+	int res_id = -1;
+	int numframes = -1;
+	bool interpolate = false;
+
+	if (!sc.GetNumber(res_id, true))
+	{
+		pos.Message(MSG_ERROR, "defineqav: invalid or non-defined resource ID");
+		return;
+	}
+
+	if (sc.StartBraces(&blockend))
+	{
+		pos.Message(MSG_ERROR, "defineqav (%d): malformed syntax, unable to continue", res_id);
+		return;
+	}
+	while (!sc.FoundEndBrace(blockend))
+	{
+		sc.MustGetString();
+		if (sc.Compare("file"))
+		{
+			if (fn.IsNotEmpty())
+			{
+				pos.Message(MSG_ERROR, "defineqav (%d): more than one file defined, unable to continue", res_id);
+				return;
+			}
+			sc.GetString(fn);
+
+			// Test file's validity.
+			FixPathSeperator(fn);
+			auto lump = fileSystem.FindFile(fn);
+			if (lump < 0)
+			{
+				pos.Message(MSG_ERROR, "defineqav (%d): file '%s' could not be found", res_id, fn.GetChars());
+				return;
+			}
+
+			// Read file to get number of frames from QAV, skipping first 8 bytes.
+			auto fr = fileSystem.OpenFileReader(lump);
+			fr.ReadUInt64();
+			numframes = fr.ReadInt32();
+		}
+		else if (sc.Compare("interpolate"))
+		{
+			if (interpolate)
+			{
+				pos.Message(MSG_ERROR, "defineqav (%d): more than one interpolate block defined, unable to continue", res_id);
+				return;
+			}
+			interpolate = true;
+			if (!parseDefineQAVInterpolateBlock(sc, res_id, numframes)) return;
+		}
+	}
+
+	// If we're not interpolating, remove any reference to interpolation data for this res_id.
+	if (!interpolate) gi->RemoveQAVInterpProps(res_id);
+
+	// Add new file to filesystem.
+	fileSystem.CreatePathlessCopy(fn, res_id, 0);
+}
+
+static void parseSpawnClasses(FScanner& sc, FScriptPosition& pos)
+{
+	FString fn;
+	int res_id = -1;
+	int numframes = -1;
+	bool interpolate = false;
+
+	sc.SetCMode(true);
+	if (!sc.CheckString("{"))
+	{
+		pos.Message(MSG_ERROR, "spawnclasses:'{' expected, unable to continue");
+		sc.SetCMode(false);
+		return;
+	}
+	while (!sc.CheckString("}"))
+	{
+		int num = -1;
+		int base = -1;
+		FName cname;
+		sc.GetNumber(num, true);
+		sc.MustGetStringName("=");
+		sc.MustGetString();
+		cname = sc.String;
+		if (sc.CheckString(","))
+		{
+			sc.GetNumber(base, true);
+		}
+
+		// todo: check for proper base class
+		spawnMap.Insert(num, { cname, nullptr, base });
+	}
+	sc.SetCMode(false);
 }
 
 //===========================================================================
@@ -2098,6 +2350,9 @@ static const dispatch basetokens[] =
 	{ "shadefactor",     parseSkip<1>      },
 	{ "newgamechoices",  parseEmptyBlock   },
 	{ "rffdefineid",     parseRffDefineId      },
+	{ "defineqav",       parseDefineQAV        },
+
+	{ "spawnclasses",		parseSpawnClasses },
 	{ nullptr,           nullptr               },
 };
 

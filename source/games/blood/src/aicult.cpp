@@ -23,16 +23,15 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #include "ns.h"	// Must come before everything else!
 
-#include "compat.h"
 #include "build.h"
 
 #include "blood.h"
 
 BEGIN_BLD_NS
 
-static void cultThinkSearch(DBloodActor *);
-static void cultThinkGoto(DBloodActor *);
-static void cultThinkChase(DBloodActor *);
+static void cultThinkSearch(DBloodActor*);
+static void cultThinkGoto(DBloodActor*);
+static void cultThinkChase(DBloodActor*);
 
 AISTATE cultistIdle = { kAiStateIdle, 0, -1, 0, NULL, NULL, aiThinkTarget, NULL };
 AISTATE cultistProneIdle = { kAiStateIdle, 17, -1, 0, NULL, NULL, aiThinkTarget, NULL };
@@ -75,574 +74,545 @@ AISTATE cultistSwimRecoil = { kAiStateRecoil, 5, -1, 0, NULL, NULL, NULL, &culti
 
 void TommySeqCallback(int, DBloodActor* actor)
 {
-    XSPRITE* pXSprite = &actor->x();
-    spritetype* pSprite = &actor->s();
-    int dx = CosScale16(pSprite->ang);
-    int dy = SinScale16(pSprite->ang);
-    int dz = actor->dudeSlope;
-    dx += Random3((5-gGameOptions.nDifficulty)*1000);
-    dy += Random3((5-gGameOptions.nDifficulty)*1000);
-    dz += Random3((5-gGameOptions.nDifficulty)*500);
-    actFireVector(pSprite, 0, 0, dx, dy, dz, VECTOR_TYPE_2);
-    sfxPlay3DSound(pSprite, 4001, -1, 0);
+	int dx = bcos(actor->spr.ang);
+	int dy = bsin(actor->spr.ang);
+	int dz = actor->dudeSlope;
+	dx += Random3((5 - gGameOptions.nDifficulty) * 1000);
+	dy += Random3((5 - gGameOptions.nDifficulty) * 1000);
+	dz += Random3((5 - gGameOptions.nDifficulty) * 500);
+	actFireVector(actor, 0, 0, dx, dy, dz, kVectorBullet);
+	sfxPlay3DSound(actor, 4001, -1, 0);
 }
 
 void TeslaSeqCallback(int, DBloodActor* actor)
 {
-    XSPRITE* pXSprite = &actor->x();
-    spritetype* pSprite = &actor->s();
-    if (Chance(dword_138BB0[gGameOptions.nDifficulty]))
-    {
-        int dx = CosScale16(pSprite->ang);
-        int dy = SinScale16(pSprite->ang);
-        int dz = actor->dudeSlope;
-        dx += Random3((5-gGameOptions.nDifficulty)*1000);
-        dy += Random3((5-gGameOptions.nDifficulty)*1000);
-        dz += Random3((5-gGameOptions.nDifficulty)*500);
-        actFireMissile(pSprite, 0, 0, dx, dy, dz, kMissileTeslaRegular);
-        sfxPlay3DSound(pSprite, 470, -1, 0);
-    }
+	if (Chance(dword_138BB0[gGameOptions.nDifficulty]))
+	{
+		int dx = bcos(actor->spr.ang);
+		int dy = bsin(actor->spr.ang);
+		int dz = actor->dudeSlope;
+		dx += Random3((5 - gGameOptions.nDifficulty) * 1000);
+		dy += Random3((5 - gGameOptions.nDifficulty) * 1000);
+		dz += Random3((5 - gGameOptions.nDifficulty) * 500);
+		actFireMissile(actor, 0, 0, dx, dy, dz, kMissileTeslaRegular);
+		sfxPlay3DSound(actor, 470, -1, 0);
+	}
 }
 
 void ShotSeqCallback(int, DBloodActor* actor)
 {
-    XSPRITE* pXSprite = &actor->x();
-    spritetype* pSprite = &actor->s();
-    int dx = CosScale16(pSprite->ang);
-    int dy = SinScale16(pSprite->ang);
-    int dz = actor->dudeSlope;
-    dx += Random2((5-gGameOptions.nDifficulty)*1000-500);
-    dy += Random2((5-gGameOptions.nDifficulty)*1000-500);
-    dz += Random2((5-gGameOptions.nDifficulty)*500);
-    for (int i = 0; i < 8; i++)
-    {
-        int r1 = Random3(500);
-        int r2 = Random3(1000);
-        int r3 = Random3(1000);
-        actFireVector(pSprite, 0, 0, dx+r3, dy+r2, dz+r1, VECTOR_TYPE_1);
-    }
-    if (Chance(0x8000))
-        sfxPlay3DSound(pSprite, 1001, -1, 0);
-    else
-        sfxPlay3DSound(pSprite, 1002, -1, 0);
+	int dx = bcos(actor->spr.ang);
+	int dy = bsin(actor->spr.ang);
+	int dz = actor->dudeSlope;
+	dx += Random2((5 - gGameOptions.nDifficulty) * 1000 - 500);
+	dy += Random2((5 - gGameOptions.nDifficulty) * 1000 - 500);
+	dz += Random2((5 - gGameOptions.nDifficulty) * 500);
+	for (int i = 0; i < 8; i++)
+	{
+		int r1 = Random3(500);
+		int r2 = Random3(1000);
+		int r3 = Random3(1000);
+		actFireVector(actor, 0, 0, dx + r3, dy + r2, dz + r1, kVectorShell);
+	}
+	if (Chance(0x8000))
+		sfxPlay3DSound(actor, 1001, -1, 0);
+	else
+		sfxPlay3DSound(actor, 1002, -1, 0);
 }
 
 void cultThrowSeqCallback(int, DBloodActor* actor)
 {
-    XSPRITE* pXSprite = &actor->x();
-    spritetype* pSprite = &actor->s();
-    int nMissile = kThingArmedTNTStick;
-    if (gGameOptions.nDifficulty > 2)
-        nMissile = kThingArmedTNTBundle;
-    char v4 = Chance(0x6000);
-    sfxPlay3DSound(pSprite, 455, -1, 0);
-    assert(pXSprite->target >= 0 && pXSprite->target < kMaxSprites);
-    spritetype *pTarget = &sprite[pXSprite->target];
-    assert(pSprite->type >= kDudeBase && pSprite->type < kDudeMax);
-    int dx = pTarget->x - pSprite->x;
-    int dy = pTarget->y - pSprite->y;
-    int dz = pTarget->z - pSprite->z;
-    int nDist = approxDist(dx, dy);
-    int nDist2 = nDist / 540;
-    if (nDist > 0x1e00)
-        v4 = 0;
-    spritetype *pMissile = actFireThing_(pSprite, 0, 0, dz/128-14500, nMissile, (nDist2<<23)/120);
-    if (v4)
-        xsprite[pMissile->extra].Impact = 1;
-    else
-        evPost(pMissile->index, 3, 120*(1+Random(2)), kCmdOn);
+	int nMissile = kThingArmedTNTStick;
+	if (gGameOptions.nDifficulty > 2)
+		nMissile = kThingArmedTNTBundle;
+	uint8_t v4 = Chance(0x6000);
+	sfxPlay3DSound(actor, 455, -1, 0);
+	if (!actor->ValidateTarget(__FUNCTION__)) return;
+	auto target = actor->GetTarget();
+	assert(actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax);
+	int dx = target->spr.pos.X - actor->spr.pos.X;
+	int dy = target->spr.pos.Y - actor->spr.pos.Y;
+	int dz = target->spr.pos.Z - actor->spr.pos.Z;
+	int nDist = approxDist(dx, dy);
+	int nDist2 = nDist / 540;
+	if (nDist > 0x1e00)
+		v4 = 0;
+	auto* pMissile = actFireThing(actor, 0, 0, dz / 128 - 14500, nMissile, (nDist2 << 23) / 120);
+	if (v4)
+		pMissile->xspr.Impact = 1;
+	else
+		evPostActor(pMissile, 120 * (1 + Random(2)), kCmdOn);
 }
 
 void sub_68170(int, DBloodActor* actor)
 {
-    XSPRITE* pXSprite = &actor->x();
-    spritetype* pSprite = &actor->s();
-    int nMissile = kThingArmedTNTStick;
-    if (gGameOptions.nDifficulty > 2)
-        nMissile = kThingArmedTNTBundle;
-    sfxPlay3DSound(pSprite, 455, -1, 0);
-    spritetype* pMissile = actFireThing_(pSprite, 0, 0, actor->dudeSlope - 9460, nMissile, 0x133333);
-    evPost(pMissile->index, 3, 120*(2+Random(2)), kCmdOn);
+	int nMissile = kThingArmedTNTStick;
+	if (gGameOptions.nDifficulty > 2)
+		nMissile = kThingArmedTNTBundle;
+	sfxPlay3DSound(actor, 455, -1, 0);
+	auto pMissile = actFireThing(actor, 0, 0, actor->dudeSlope - 9460, nMissile, 0x133333);
+	evPostActor(pMissile, 120 * (2 + Random(2)), kCmdOn);
 }
 
 void sub_68230(int, DBloodActor* actor)
 {
-    XSPRITE* pXSprite = &actor->x();
-    spritetype* pSprite = &actor->s();
-    int nMissile = kThingArmedTNTStick;
-    if (gGameOptions.nDifficulty > 2)
-        nMissile = kThingArmedTNTBundle;
-    sfxPlay3DSound(pSprite, 455, -1, 0);
-    assert(pXSprite->target >= 0 && pXSprite->target < kMaxSprites);
-    spritetype *pTarget = &sprite[pXSprite->target];
-    assert(pSprite->type >= kDudeBase && pSprite->type < kDudeMax);
-    int dx = pTarget->x - pSprite->x;
-    int dy = pTarget->y - pSprite->y;
-    int dz = pTarget->z - pSprite->z;
-    int nDist = approxDist(dx, dy);
-    int nDist2 = nDist / 540;
-    spritetype *pMissile = actFireThing_(pSprite, 0, 0, dz/128-14500, nMissile, (nDist2<<17)/120);
-    xsprite[pMissile->extra].Impact = 1;
+	int nMissile = kThingArmedTNTStick;
+	if (gGameOptions.nDifficulty > 2)
+		nMissile = kThingArmedTNTBundle;
+	sfxPlay3DSound(actor, 455, -1, 0);
+	if (!actor->ValidateTarget(__FUNCTION__)) return;
+	auto target = actor->GetTarget();
+	assert(actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax);
+	int dx = target->spr.pos.X - actor->spr.pos.X;
+	int dy = target->spr.pos.Y - actor->spr.pos.Y;
+	int dz = target->spr.pos.Z - actor->spr.pos.Z;
+	int nDist = approxDist(dx, dy);
+	int nDist2 = nDist / 540;
+	auto pMissile = actFireThing(actor, 0, 0, dz / 128 - 14500, nMissile, (nDist2 << 17) / 120);
+	pMissile->xspr.Impact = 1;
 }
 
-static char TargetNearExplosion(spritetype *pSprite)
+static bool TargetNearExplosion(sectortype* sector)
 {
-    int nSprite;
-    SectIterator it(pSprite->sectnum);
-    while ((nSprite = it.NextIndex()) >= 0)
-    {
-        if (sprite[nSprite].type == kThingArmedTNTStick || sprite[nSprite].statnum == kStatExplosion)
-            return 1;
-    }
-    return 0;
+	BloodSectIterator it(sector);
+	while (auto actor = it.Next())
+	{
+		if (actor->spr.type == kThingArmedTNTStick || actor->spr.statnum == kStatExplosion)
+			return true;
+	}
+	return false;
 }
 
 static void cultThinkSearch(DBloodActor* actor)
 {
-    auto pXSprite = &actor->x();
-    auto pSprite = &actor->s();
-    aiChooseDirection(pSprite, pXSprite, pXSprite->goalAng);
-    sub_5F15C(pSprite, pXSprite);
+	aiChooseDirection(actor, actor->xspr.goalAng);
+	aiLookForTarget(actor);
 }
 
 static void cultThinkGoto(DBloodActor* actor)
 {
-    auto pXSprite = &actor->x();
-    auto pSprite = &actor->s();
-    assert(pSprite->type >= kDudeBase && pSprite->type < kDudeMax);
-    DUDEINFO *pDudeInfo = getDudeInfo(pSprite->type);
-    int dx = pXSprite->targetX-pSprite->x;
-    int dy = pXSprite->targetY-pSprite->y;
-    int nAngle = getangle(dx, dy);
-    int nDist = approxDist(dx, dy);
-    aiChooseDirection(pSprite, pXSprite, nAngle);
-    if (nDist < 5120 && abs(pSprite->ang - nAngle) < pDudeInfo->periphery)
-    {
-        switch (pXSprite->medium)
-        {
-        case kMediumNormal:
-            aiNewState(actor, &cultistSearch);
-            break;
-        case kMediumWater:
-        case kMediumGoo:
-            aiNewState(actor, &cultistSwimSearch);
-            break;
-        }
-    }
-    aiThinkTarget(actor);
+	assert(actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax);
+	DUDEINFO* pDudeInfo = getDudeInfo(actor->spr.type);
+	int dx = actor->xspr.TargetPos.X - actor->spr.pos.X;
+	int dy = actor->xspr.TargetPos.Y - actor->spr.pos.Y;
+	int nAngle = getangle(dx, dy);
+	int nDist = approxDist(dx, dy);
+	aiChooseDirection(actor, nAngle);
+	if (nDist < 5120 && abs(actor->spr.ang - nAngle) < pDudeInfo->periphery)
+	{
+		switch (actor->xspr.medium)
+		{
+		case kMediumNormal:
+			aiNewState(actor, &cultistSearch);
+			break;
+		case kMediumWater:
+		case kMediumGoo:
+			aiNewState(actor, &cultistSwimSearch);
+			break;
+		}
+	}
+	aiThinkTarget(actor);
 }
 
 static void cultThinkChase(DBloodActor* actor)
 {
-    auto pXSprite = &actor->x();
-    auto pSprite = &actor->s();
-    if (pXSprite->target == -1)
-    {
-        switch (pXSprite->medium)
-        {
-        case kMediumNormal:
-            aiNewState(actor, &cultistGoto);
-            break;
-        case kMediumWater:
-        case kMediumGoo:
-            aiNewState(actor, &cultistSwimGoto);
-            break;
-        }
-        return;
-    }
-    assert(pSprite->type >= kDudeBase && pSprite->type < kDudeMax);
-    DUDEINFO *pDudeInfo = getDudeInfo(pSprite->type);
-    assert(pXSprite->target >= 0 && pXSprite->target < kMaxSprites);
-    spritetype *pTarget = &sprite[pXSprite->target];
-    XSPRITE *pXTarget = &xsprite[pTarget->extra];
-    int dx = pTarget->x-pSprite->x;
-    int dy = pTarget->y-pSprite->y;
-    aiChooseDirection(pSprite, pXSprite, getangle(dx, dy));
-    if (pXTarget->health == 0)
-    {
-        switch (pXSprite->medium)
-        {
-        case kMediumNormal:
-            aiNewState(actor, &cultistSearch);
-            if (pSprite->type == kDudeCultistTommy)
-                aiPlay3DSound(pSprite, 4021+Random(4), AI_SFX_PRIORITY_1, -1);
-            else
-                aiPlay3DSound(pSprite, 1021+Random(4), AI_SFX_PRIORITY_1, -1);
-            break;
-        case kMediumWater:
-        case kMediumGoo:
-            aiNewState(actor, &cultistSwimSearch);
-            break;
-        }
-        return;
-    }
-    if (IsPlayerSprite(pTarget) && powerupCheck(&gPlayer[pTarget->type-kDudePlayer1], kPwUpShadowCloak) > 0)
-    {
-        switch (pXSprite->medium)
-        {
-        case kMediumNormal:
-            aiNewState(actor, &cultistSearch);
-            break;
-        case kMediumWater:
-        case kMediumGoo:
-            aiNewState(actor, &cultistSwimSearch);
-            break;
-        }
-        return;
-    }
-    int nDist = approxDist(dx, dy);
-    if (nDist <= pDudeInfo->seeDist)
-    {
-        int nDeltaAngle = ((getangle(dx,dy)+1024-pSprite->ang)&2047)-1024;
-        int height = (pDudeInfo->eyeHeight*pSprite->yrepeat)<<2;
-        if (cansee(pTarget->x, pTarget->y, pTarget->z, pTarget->sectnum, pSprite->x, pSprite->y, pSprite->z - height, pSprite->sectnum))
-        {
-            if (nDist < pDudeInfo->seeDist && abs(nDeltaAngle) <= pDudeInfo->periphery)
-            {
-                aiSetTarget(pXSprite, pXSprite->target);
-                actor->dudeSlope = DivScale(pTarget->z-pSprite->z, nDist, 10);
-                switch (pSprite->type) {
-                case kDudeCultistTommy:
-#if 0 // apparently this can never be entered.
-                    if (nDist < 0x1e00 && nDist > 0xe00 && abs(nDeltaAngle) < 85 && !TargetNearExplosion(pTarget)
-                        && (pTarget->flags&2) && gGameOptions.nDifficulty > 2 && IsPlayerSprite(pTarget) && gPlayer[pTarget->type-kDudePlayer1].isRunning
-                        && Chance(0x8000))
-                    {
-                        int hit = HitScan(pSprite, pSprite->z, dx, dy, 0, CLIPMASK1, 0);
-                        switch (hit)
-                        {
-                        case -1:
-                            if (pXSprite->medium != kMediumWater && pXSprite->medium != kMediumGoo)
-                                aiNewState(actor, &cultistTThrow);
-                            break;
-                        case 0:
-                        case 4:
-                            break;
-                        case 3:
-                            if (pSprite->type != sprite[gHitInfo.hitsprite].type && sprite[gHitInfo.hitsprite].type != kDudeCultistShotgun && pXSprite->medium != kMediumWater && pXSprite->medium != kMediumGoo)
-                                aiNewState(actor, &cultistTThrow);
-                            break;
-                        default:
-                            aiNewState(actor, &cultistTThrow);
-                            break;
-                        }
-                    }
-                    else 
-#endif
-                        if (nDist < 0x4600 && abs(nDeltaAngle) < 28)
-                    {
-                        int hit = HitScan(pSprite, pSprite->z, dx, dy, 0, CLIPMASK1, 0);
-                        switch (hit)
-                        {
-                        case -1:
-                            if (!dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                aiNewState(actor, &cultistTFire);
-                            else if (dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                aiNewState(actor, &cultistTProneFire);
-                            else if (dudeIsPlayingSeq(pSprite, 13) && (pXSprite->medium == kMediumWater || pXSprite->medium == kMediumGoo))
-                                aiNewState(actor, &cultistTSwimFire);
-                            break;
-                        case 3:
-                            if (pSprite->type != sprite[gHitInfo.hitsprite].type && sprite[gHitInfo.hitsprite].type != kDudeCultistShotgun)
-                            {
-                                if (!dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                    aiNewState(actor, &cultistTFire);
-                                else if (dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                    aiNewState(actor, &cultistTProneFire);
-                                else if (pXSprite->medium == kMediumWater || pXSprite->medium == kMediumGoo)
-                                    aiNewState(actor, &cultistTSwimFire);
-                            }
-                            else
-                            {
-                                if (!dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                    aiNewState(actor, &cultistDodge);
-                                else if (dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                    aiNewState(actor, &cultistProneDodge);
-                                else if (pXSprite->medium == kMediumWater || pXSprite->medium == kMediumGoo)
-                                    aiNewState(actor, &cultistSwimDodge);
-                            }
-                            break;
-                        default:
-                            if (!dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                aiNewState(actor, &cultistTFire);
-                            else if (dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                aiNewState(actor, &cultistTProneFire);
-                            else if (pXSprite->medium == kMediumWater || pXSprite->medium == kMediumGoo)
-                                aiNewState(actor, &cultistTSwimFire);
-                            break;
-                        }
-                    }
-                    break;
-                case kDudeCultistShotgun:
-                    if (nDist < 0x2c00 && nDist > 0x1400 && !TargetNearExplosion(pTarget)
-                        && (pTarget->flags&2) && gGameOptions.nDifficulty >= 2 && IsPlayerSprite(pTarget) /*&& !gPlayer[pTarget->type-kDudePlayer1].isRunning*/
-                        && Chance(0x8000))
-                    {
-                        int hit = HitScan(pSprite, pSprite->z, dx, dy, 0, CLIPMASK1, 0);
-                        switch (hit)
-                        {
-                        case -1:
-                            if (pXSprite->medium != kMediumWater && pXSprite->medium != kMediumGoo)
-                                aiNewState(actor, &cultistSThrow);
-                            break;
-                        case 0:
-                        case 4:
-                            break;
-                        case 3:
-                            if (pSprite->type != sprite[gHitInfo.hitsprite].type && sprite[gHitInfo.hitsprite].type != kDudeCultistShotgun && pXSprite->medium != kMediumWater && pXSprite->medium != kMediumGoo)
-                                aiNewState(actor, &cultistSThrow);
-                            break;
-                        default:
-                            aiNewState(actor, &cultistSThrow);
-                            break;
-                        }
-                    }
-                    else if (nDist < 0x3200 && abs(nDeltaAngle) < 28)
-                    {
-                        int hit = HitScan(pSprite, pSprite->z, dx, dy, 0, CLIPMASK1, 0);
-                        switch (hit)
-                        {
-                        case -1:
-                            if (!dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                aiNewState(actor, &cultistSFire);
-                            else if (dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                aiNewState(actor, &cultistSProneFire);
-                            else if (pXSprite->medium == kMediumWater || pXSprite->medium == kMediumGoo)
-                                aiNewState(actor, &cultistSSwimFire);
-                            break;
-                        case 3:
-                            if (pSprite->type != sprite[gHitInfo.hitsprite].type && sprite[gHitInfo.hitsprite].type != kDudeCultistTommy)
-                            {
-                                if (!dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                    aiNewState(actor, &cultistSFire);
-                                else if (dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                    aiNewState(actor, &cultistSProneFire);
-                                else if (pXSprite->medium == kMediumWater || pXSprite->medium == kMediumGoo)
-                                    aiNewState(actor, &cultistSSwimFire);
-                            }
-                            else
-                            {
-                                if (!dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                    aiNewState(actor, &cultistDodge);
-                                else if (dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                    aiNewState(actor, &cultistProneDodge);
-                                else if (pXSprite->medium == kMediumWater || pXSprite->medium == kMediumGoo)
-                                    aiNewState(actor, &cultistSwimDodge);
-                            }
-                            break;
-                        default:
-                            if (!dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                aiNewState(actor, &cultistSFire);
-                            else if (dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                aiNewState(actor, &cultistSProneFire);
-                            else if (pXSprite->medium == kMediumWater || pXSprite->medium == kMediumGoo)
-                                aiNewState(actor, &cultistSSwimFire);
-                            break;
-                        }
-                    }
-                    break;
-                case kDudeCultistTesla:
-#if 0
-                    if (nDist < 0x1e00 && nDist > 0xe00 && !TargetNearExplosion(pTarget)
-                        && (pTarget->flags&2) && gGameOptions.nDifficulty > 2 && IsPlayerSprite(pTarget) && gPlayer[pTarget->type-kDudePlayer1].isRunning
-                        && Chance(0x8000))
-                    {
-                        int hit = HitScan(pSprite, pSprite->z, dx, dy, 0, CLIPMASK1, 0);
-                        switch (hit)
-                        {
-                        case -1:
-                            if (pXSprite->medium != kMediumWater && pXSprite->medium != kMediumGoo)
-                                aiNewState(actor, &cultistTsThrow);
-                            break;
-                        case 0:
-                        case 4:
-                            break;
-                        case 3:
-                            if (pSprite->type != sprite[gHitInfo.hitsprite].type && sprite[gHitInfo.hitsprite].type != kDudeCultistShotgun && pXSprite->medium != kMediumWater && pXSprite->medium != kMediumGoo)
-                                aiNewState(actor, &cultistTsThrow);
-                            break;
-                        default:
-                            aiNewState(actor, &cultistTsThrow);
-                            break;
-                        }
-                    }
-                    else
-#endif
-                        if (nDist < 0x3200 && abs(nDeltaAngle) < 28)
-                    {
-                        int hit = HitScan(pSprite, pSprite->z, dx, dy, 0, CLIPMASK1, 0);
-                        switch (hit)
-                        {
-                        case -1:
-                            if (!dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                aiNewState(actor, &cultistTsFire);
-                            else if (dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                aiNewState(actor, &cultistTsProneFire);
-                            else if (pXSprite->medium == kMediumWater || pXSprite->medium == kMediumGoo)
-                                aiNewState(actor, &cultistTsSwimFire);
-                            break;
-                        case 3:
-                            if (pSprite->type != sprite[gHitInfo.hitsprite].type && sprite[gHitInfo.hitsprite].type != kDudeCultistTommy)
-                            {
-                                if (!dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                    aiNewState(actor, &cultistTsFire);
-                                else if (dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                    aiNewState(actor, &cultistTsProneFire);
-                                else if (pXSprite->medium == kMediumWater || pXSprite->medium == kMediumGoo)
-                                    aiNewState(actor, &cultistTsSwimFire);
-                            }
-                            else
-                            {
-                                if (!dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                    aiNewState(actor, &cultistDodge);
-                                else if (dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                    aiNewState(actor, &cultistProneDodge);
-                                else if (pXSprite->medium == kMediumWater || pXSprite->medium == kMediumGoo)
-                                    aiNewState(actor, &cultistSwimDodge);
-                            }
-                            break;
-                        default:
-                            if (!dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                aiNewState(actor, &cultistTsFire);
-                            else if (dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                aiNewState(actor, &cultistTsProneFire);
-                            else if (pXSprite->medium == kMediumWater || pXSprite->medium == kMediumGoo)
-                                aiNewState(actor, &cultistTsSwimFire);
-                            break;
-                        }
-                    }
-                    break;
-                case kDudeCultistTNT:
-                    if (nDist < 0x2c00 && nDist > 0x1400 && abs(nDeltaAngle) < 85
-                        && (pTarget->flags&2) && IsPlayerSprite(pTarget))
-                    {
-                        int hit = HitScan(pSprite, pSprite->z, dx, dy, 0, CLIPMASK1, 0);
-                        switch (hit)
-                        {
-                        case -1:
-                            if (pXSprite->medium != kMediumWater && pXSprite->medium != kMediumGoo)
-                                aiNewState(actor, &cultistDThrow);
-                            break;
-                        case 4:
-                            break;
-                        case 3:
-                            if (pSprite->type != sprite[gHitInfo.hitsprite].type && sprite[gHitInfo.hitsprite].type != kDudeCultistShotgun && pXSprite->medium != kMediumWater && pXSprite->medium != kMediumGoo)
-                                aiNewState(actor, &cultistDThrow);
-                            break;
-                        default:
-                            aiNewState(actor, &cultistDThrow);
-                            break;
-                        }
-                    }
-                    else if (nDist < 0x1400 && abs(nDeltaAngle) < 85
-                        && (pTarget->flags&2) && IsPlayerSprite(pTarget))
-                    {
-                        int hit = HitScan(pSprite, pSprite->z, dx, dy, 0, CLIPMASK1, 0);
-                        switch (hit)
-                        {
-                        case -1:
-                            if (pXSprite->medium != 1 && pXSprite->medium != kMediumGoo)
-                                aiNewState(actor, &cultist139A78);
-                            break;
-                        case 4:
-                            break;
-                        case 3:
-                            if (pSprite->type != sprite[gHitInfo.hitsprite].type && sprite[gHitInfo.hitsprite].type != kDudeCultistShotgun && pXSprite->medium != kMediumWater && pXSprite->medium != kMediumGoo)
-                                aiNewState(actor, &cultist139A78);
-                            break;
-                        default:
-                            aiNewState(actor, &cultist139A78);
-                            break;
-                        }
-                    }
-                    break;
-                case kDudeCultistBeast:
-#if 0
-                    if (nDist < 0x1e00 && nDist > 0xe00 && !TargetNearExplosion(pTarget)
-                        && (pTarget->flags&2) && gGameOptions.nDifficulty > 2 && IsPlayerSprite(pTarget) && gPlayer[pTarget->type-kDudePlayer1].isRunning
-                        && Chance(0x8000))
-                    {
-                        int hit = HitScan(pSprite, pSprite->z, dx, dy, 0, CLIPMASK1, 0);
-                        switch (hit)
-                        {
-                        case -1:
-                            if (pXSprite->medium != kMediumWater && pXSprite->medium != kMediumGoo)
-                                aiNewState(actor, &cultistSThrow);
-                            break;
-                        case 0:
-                        case 4:
-                            break;
-                        case 3:
-                            if (pSprite->type != sprite[gHitInfo.hitsprite].type && sprite[gHitInfo.hitsprite].type != kDudeCultistShotgun && pXSprite->medium != kMediumWater && pXSprite->medium != kMediumGoo)
-                                aiNewState(actor, &cultistSThrow);
-                            break;
-                        default:
-                            aiNewState(actor, &cultistSThrow);
-                            break;
-                        }
-                    }
-                    else 
-#endif
-                        if (nDist < 0x3200 && abs(nDeltaAngle) < 28)
-                    {
-                        int hit = HitScan(pSprite, pSprite->z, dx, dy, 0, CLIPMASK1, 0);
-                        switch (hit)
-                        {
-                        case -1:
-                            if (!dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                aiNewState(actor, &cultistSFire);
-                            else if (dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                aiNewState(actor, &cultistSProneFire);
-                            else if (pXSprite->medium == kMediumWater || pXSprite->medium == kMediumGoo)
-                                aiNewState(actor, &cultistSSwimFire);
-                            break;
-                        case 3:
-                            if (pSprite->type != sprite[gHitInfo.hitsprite].type && sprite[gHitInfo.hitsprite].type != kDudeCultistTommy)
-                            {
-                                if (!dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                    aiNewState(actor, &cultistSFire);
-                                else if (dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                    aiNewState(actor, &cultistSProneFire);
-                                else if (pXSprite->medium == kMediumWater || pXSprite->medium == kMediumGoo)
-                                    aiNewState(actor, &cultistSSwimFire);
-                            }
-                            else
-                            {
-                                if (!dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                    aiNewState(actor, &cultistDodge);
-                                else if (dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                    aiNewState(actor, &cultistProneDodge);
-                                else if (pXSprite->medium == kMediumWater || pXSprite->medium == kMediumGoo)
-                                    aiNewState(actor, &cultistSwimDodge);
-                            }
-                            break;
-                        default:
-                            if (!dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                aiNewState(actor, &cultistSFire);
-                            else if (dudeIsPlayingSeq(pSprite, 14) && pXSprite->medium == kMediumNormal)
-                                aiNewState(actor, &cultistSProneFire);
-                            else if (pXSprite->medium == kMediumWater || pXSprite->medium == kMediumGoo)
-                                aiNewState(actor, &cultistSSwimFire);
-                            break;
-                        }
-                    }
-                    break;
-                }
-                return;
-            }
-        }
-    }
-    switch (pXSprite->medium)
-    {
-    case kMediumNormal:
-        aiNewState(actor, &cultistGoto);
-        break;
-    case kMediumWater:
-    case kMediumGoo:
-        aiNewState(actor, &cultistSwimGoto);
-        break;
-    }
-    pXSprite->target = -1;
+	if (actor->GetTarget() == nullptr)
+	{
+		switch (actor->xspr.medium)
+		{
+		case kMediumNormal:
+			aiNewState(actor, &cultistGoto);
+			break;
+		case kMediumWater:
+		case kMediumGoo:
+			aiNewState(actor, &cultistSwimGoto);
+			break;
+		}
+		return;
+	}
+	assert(actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax);
+	DUDEINFO* pDudeInfo = getDudeInfo(actor->spr.type);
+	auto target = actor->GetTarget();
+
+	int dx = target->spr.pos.X - actor->spr.pos.X;
+	int dy = target->spr.pos.Y - actor->spr.pos.Y;
+	aiChooseDirection(actor, getangle(dx, dy));
+	if (target->xspr.health == 0)
+	{
+		switch (actor->xspr.medium)
+		{
+		case kMediumNormal:
+			aiNewState(actor, &cultistSearch);
+			if (actor->spr.type == kDudeCultistTommy)
+				aiPlay3DSound(actor, 4021 + Random(4), AI_SFX_PRIORITY_1, -1);
+			else
+				aiPlay3DSound(actor, 1021 + Random(4), AI_SFX_PRIORITY_1, -1);
+			break;
+		case kMediumWater:
+		case kMediumGoo:
+			aiNewState(actor, &cultistSwimSearch);
+			break;
+		}
+		return;
+	}
+	if (target->IsPlayerActor() && powerupCheck(&gPlayer[target->spr.type - kDudePlayer1], kPwUpShadowCloak) > 0)
+	{
+		switch (actor->xspr.medium)
+		{
+		case kMediumNormal:
+			aiNewState(actor, &cultistSearch);
+			break;
+		case kMediumWater:
+		case kMediumGoo:
+			aiNewState(actor, &cultistSwimSearch);
+			break;
+		}
+		return;
+	}
+	int nDist = approxDist(dx, dy);
+	if (nDist > 0 && nDist <= pDudeInfo->seeDist)
+	{
+		int nDeltaAngle = ((getangle(dx, dy) + 1024 - actor->spr.ang) & 2047) - 1024;
+		int height = (pDudeInfo->eyeHeight * actor->spr.yrepeat) << 2;
+		if (cansee(target->spr.pos.X, target->spr.pos.Y, target->spr.pos.Z, target->sector(), actor->spr.pos.X, actor->spr.pos.Y, actor->spr.pos.Z - height, actor->sector()))
+		{
+			if (nDist < pDudeInfo->seeDist && abs(nDeltaAngle) <= pDudeInfo->periphery)
+			{
+				aiSetTarget(actor, actor->GetTarget());
+				actor->dudeSlope = nDist == 0 ? 0 : DivScale(target->spr.pos.Z - actor->spr.pos.Z, nDist, 10);
+				switch (actor->spr.type) {
+				case kDudeCultistTommy:
+					if (nDist < 0x1e00 && nDist > 0xe00 && abs(nDeltaAngle) < 85 && !TargetNearExplosion(target->sector())
+						&& (target->spr.flags & 2) && gGameOptions.nDifficulty > 2 && target->IsPlayerActor() && gPlayer[target->spr.type - kDudePlayer1].isRunning
+						&& Chance(0x8000))
+					{
+						int hit = HitScan(actor, actor->spr.pos.Z, dx, dy, 0, CLIPMASK1, 0);
+						switch (hit)
+						{
+						case -1:
+							if (actor->xspr.medium != kMediumWater && actor->xspr.medium != kMediumGoo)
+								aiNewState(actor, &cultistTThrow);
+							break;
+						case 0:
+						case 4:
+							break;
+						case 3:
+							if (actor->spr.type != gHitInfo.actor()->spr.type && gHitInfo.actor()->spr.type != kDudeCultistShotgun && actor->xspr.medium != kMediumWater && actor->xspr.medium != kMediumGoo)
+								aiNewState(actor, &cultistTThrow);
+							break;
+						default:
+							aiNewState(actor, &cultistTThrow);
+							break;
+						}
+					}
+					else if (nDist < 0x4600 && abs(nDeltaAngle) < 28)
+					{
+						int hit = HitScan(actor, actor->spr.pos.Z, dx, dy, 0, CLIPMASK1, 0);
+						switch (hit)
+						{
+						case -1:
+							if (!dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+								aiNewState(actor, &cultistTFire);
+							else if (dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+								aiNewState(actor, &cultistTProneFire);
+							else if (dudeIsPlayingSeq(actor, 13) && (actor->xspr.medium == kMediumWater || actor->xspr.medium == kMediumGoo))
+								aiNewState(actor, &cultistTSwimFire);
+							break;
+						case 3:
+							if (actor->spr.type != gHitInfo.actor()->spr.type && gHitInfo.actor()->spr.type != kDudeCultistShotgun)
+							{
+								if (!dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+									aiNewState(actor, &cultistTFire);
+								else if (dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+									aiNewState(actor, &cultistTProneFire);
+								else if (actor->xspr.medium == kMediumWater || actor->xspr.medium == kMediumGoo)
+									aiNewState(actor, &cultistTSwimFire);
+							}
+							else
+							{
+								if (!dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+									aiNewState(actor, &cultistDodge);
+								else if (dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+									aiNewState(actor, &cultistProneDodge);
+								else if (actor->xspr.medium == kMediumWater || actor->xspr.medium == kMediumGoo)
+									aiNewState(actor, &cultistSwimDodge);
+							}
+							break;
+						default:
+							if (!dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+								aiNewState(actor, &cultistTFire);
+							else if (dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+								aiNewState(actor, &cultistTProneFire);
+							else if (actor->xspr.medium == kMediumWater || actor->xspr.medium == kMediumGoo)
+								aiNewState(actor, &cultistTSwimFire);
+							break;
+						}
+					}
+					break;
+				case kDudeCultistShotgun:
+					if (nDist < 0x2c00 && nDist > 0x1400 && !TargetNearExplosion(target->sector())
+						&& (target->spr.flags & 2) && gGameOptions.nDifficulty >= 2 && target->IsPlayerActor() && !gPlayer[target->spr.type - kDudePlayer1].isRunning
+						&& Chance(0x8000))
+					{
+						int hit = HitScan(actor, actor->spr.pos.Z, dx, dy, 0, CLIPMASK1, 0);
+						switch (hit)
+						{
+						case -1:
+							if (actor->xspr.medium != kMediumWater && actor->xspr.medium != kMediumGoo)
+								aiNewState(actor, &cultistSThrow);
+							break;
+						case 0:
+						case 4:
+							break;
+						case 3:
+							if (actor->spr.type != gHitInfo.actor()->spr.type && gHitInfo.actor()->spr.type != kDudeCultistShotgun && actor->xspr.medium != kMediumWater && actor->xspr.medium != kMediumGoo)
+								aiNewState(actor, &cultistSThrow);
+							break;
+						default:
+							aiNewState(actor, &cultistSThrow);
+							break;
+						}
+					}
+					else if (nDist < 0x3200 && abs(nDeltaAngle) < 28)
+					{
+						int hit = HitScan(actor, actor->spr.pos.Z, dx, dy, 0, CLIPMASK1, 0);
+						switch (hit)
+						{
+						case -1:
+							if (!dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+								aiNewState(actor, &cultistSFire);
+							else if (dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+								aiNewState(actor, &cultistSProneFire);
+							else if (actor->xspr.medium == kMediumWater || actor->xspr.medium == kMediumGoo)
+								aiNewState(actor, &cultistSSwimFire);
+							break;
+						case 3:
+							if (actor->spr.type != gHitInfo.actor()->spr.type && gHitInfo.actor()->spr.type != kDudeCultistTommy)
+							{
+								if (!dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+									aiNewState(actor, &cultistSFire);
+								else if (dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+									aiNewState(actor, &cultistSProneFire);
+								else if (actor->xspr.medium == kMediumWater || actor->xspr.medium == kMediumGoo)
+									aiNewState(actor, &cultistSSwimFire);
+							}
+							else
+							{
+								if (!dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+									aiNewState(actor, &cultistDodge);
+								else if (dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+									aiNewState(actor, &cultistProneDodge);
+								else if (actor->xspr.medium == kMediumWater || actor->xspr.medium == kMediumGoo)
+									aiNewState(actor, &cultistSwimDodge);
+							}
+							break;
+						default:
+							if (!dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+								aiNewState(actor, &cultistSFire);
+							else if (dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+								aiNewState(actor, &cultistSProneFire);
+							else if (actor->xspr.medium == kMediumWater || actor->xspr.medium == kMediumGoo)
+								aiNewState(actor, &cultistSSwimFire);
+							break;
+						}
+					}
+					break;
+				case kDudeCultistTesla:
+					if (nDist < 0x1e00 && nDist > 0xe00 && !TargetNearExplosion(target->sector())
+						&& (target->spr.flags & 2) && gGameOptions.nDifficulty > 2 && target->IsPlayerActor() && gPlayer[target->spr.type - kDudePlayer1].isRunning
+						&& Chance(0x8000))
+					{
+						int hit = HitScan(actor, actor->spr.pos.Z, dx, dy, 0, CLIPMASK1, 0);
+						switch (hit)
+						{
+						case -1:
+							if (actor->xspr.medium != kMediumWater && actor->xspr.medium != kMediumGoo)
+								aiNewState(actor, &cultistTsThrow);
+							break;
+						case 0:
+						case 4:
+							break;
+						case 3:
+							if (actor->spr.type != gHitInfo.actor()->spr.type && gHitInfo.actor()->spr.type != kDudeCultistShotgun && actor->xspr.medium != kMediumWater && actor->xspr.medium != kMediumGoo)
+								aiNewState(actor, &cultistTsThrow);
+							break;
+						default:
+							aiNewState(actor, &cultistTsThrow);
+							break;
+						}
+					}
+					else if (nDist < 0x3200 && abs(nDeltaAngle) < 28)
+					{
+						int hit = HitScan(actor, actor->spr.pos.Z, dx, dy, 0, CLIPMASK1, 0);
+						switch (hit)
+						{
+						case -1:
+							if (!dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+								aiNewState(actor, &cultistTsFire);
+							else if (dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+								aiNewState(actor, &cultistTsProneFire);
+							else if (actor->xspr.medium == kMediumWater || actor->xspr.medium == kMediumGoo)
+								aiNewState(actor, &cultistTsSwimFire);
+							break;
+						case 3:
+							if (actor->spr.type != gHitInfo.actor()->spr.type && gHitInfo.actor()->spr.type != kDudeCultistTommy)
+							{
+								if (!dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+									aiNewState(actor, &cultistTsFire);
+								else if (dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+									aiNewState(actor, &cultistTsProneFire);
+								else if (actor->xspr.medium == kMediumWater || actor->xspr.medium == kMediumGoo)
+									aiNewState(actor, &cultistTsSwimFire);
+							}
+							else
+							{
+								if (!dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+									aiNewState(actor, &cultistDodge);
+								else if (dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+									aiNewState(actor, &cultistProneDodge);
+								else if (actor->xspr.medium == kMediumWater || actor->xspr.medium == kMediumGoo)
+									aiNewState(actor, &cultistSwimDodge);
+							}
+							break;
+						default:
+							if (!dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+								aiNewState(actor, &cultistTsFire);
+							else if (dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+								aiNewState(actor, &cultistTsProneFire);
+							else if (actor->xspr.medium == kMediumWater || actor->xspr.medium == kMediumGoo)
+								aiNewState(actor, &cultistTsSwimFire);
+							break;
+						}
+					}
+					break;
+				case kDudeCultistTNT:
+					if (nDist < 0x2c00 && nDist > 0x1400 && abs(nDeltaAngle) < 85
+						&& (target->spr.flags & 2) && target->IsPlayerActor())
+					{
+						int hit = HitScan(actor, actor->spr.pos.Z, dx, dy, 0, CLIPMASK1, 0);
+						switch (hit)
+						{
+						case -1:
+							if (actor->xspr.medium != kMediumWater && actor->xspr.medium != kMediumGoo)
+								aiNewState(actor, &cultistDThrow);
+							break;
+						case 4:
+							break;
+						case 3:
+							if (actor->spr.type != gHitInfo.actor()->spr.type && gHitInfo.actor()->spr.type != kDudeCultistShotgun && actor->xspr.medium != kMediumWater && actor->xspr.medium != kMediumGoo)
+								aiNewState(actor, &cultistDThrow);
+							break;
+						default:
+							aiNewState(actor, &cultistDThrow);
+							break;
+						}
+					}
+					else if (nDist < 0x1400 && abs(nDeltaAngle) < 85
+						&& (target->spr.flags & 2) && target->IsPlayerActor())
+					{
+						int hit = HitScan(actor, actor->spr.pos.Z, dx, dy, 0, CLIPMASK1, 0);
+						switch (hit)
+						{
+						case -1:
+							if (actor->xspr.medium != 1 && actor->xspr.medium != kMediumGoo)
+								aiNewState(actor, &cultist139A78);
+							break;
+						case 4:
+							break;
+						case 3:
+							if (actor->spr.type != gHitInfo.actor()->spr.type && gHitInfo.actor()->spr.type != kDudeCultistShotgun && actor->xspr.medium != kMediumWater && actor->xspr.medium != kMediumGoo)
+								aiNewState(actor, &cultist139A78);
+							break;
+						default:
+							aiNewState(actor, &cultist139A78);
+							break;
+						}
+					}
+					break;
+				case kDudeCultistBeast:
+					if (nDist < 0x1e00 && nDist > 0xe00 && !TargetNearExplosion(target->sector())
+						&& (target->spr.flags & 2) && gGameOptions.nDifficulty > 2 && target->IsPlayerActor() && gPlayer[target->spr.type - kDudePlayer1].isRunning
+						&& Chance(0x8000))
+					{
+						int hit = HitScan(actor, actor->spr.pos.Z, dx, dy, 0, CLIPMASK1, 0);
+						switch (hit)
+						{
+						case -1:
+							if (actor->xspr.medium != kMediumWater && actor->xspr.medium != kMediumGoo)
+								aiNewState(actor, &cultistSThrow);
+							break;
+						case 0:
+						case 4:
+							break;
+						case 3:
+							if (actor->spr.type != gHitInfo.actor()->spr.type && gHitInfo.actor()->spr.type != kDudeCultistShotgun && actor->xspr.medium != kMediumWater && actor->xspr.medium != kMediumGoo)
+								aiNewState(actor, &cultistSThrow);
+							break;
+						default:
+							aiNewState(actor, &cultistSThrow);
+							break;
+						}
+					}
+					else if (nDist < 0x3200 && abs(nDeltaAngle) < 28)
+					{
+						int hit = HitScan(actor, actor->spr.pos.Z, dx, dy, 0, CLIPMASK1, 0);
+						switch (hit)
+						{
+						case -1:
+							if (!dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+								aiNewState(actor, &cultistSFire);
+							else if (dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+								aiNewState(actor, &cultistSProneFire);
+							else if (actor->xspr.medium == kMediumWater || actor->xspr.medium == kMediumGoo)
+								aiNewState(actor, &cultistSSwimFire);
+							break;
+						case 3:
+							if (actor->spr.type != gHitInfo.actor()->spr.type && gHitInfo.actor()->spr.type != kDudeCultistTommy)
+							{
+								if (!dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+									aiNewState(actor, &cultistSFire);
+								else if (dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+									aiNewState(actor, &cultistSProneFire);
+								else if (actor->xspr.medium == kMediumWater || actor->xspr.medium == kMediumGoo)
+									aiNewState(actor, &cultistSSwimFire);
+							}
+							else
+							{
+								if (!dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+									aiNewState(actor, &cultistDodge);
+								else if (dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+									aiNewState(actor, &cultistProneDodge);
+								else if (actor->xspr.medium == kMediumWater || actor->xspr.medium == kMediumGoo)
+									aiNewState(actor, &cultistSwimDodge);
+							}
+							break;
+						default:
+							if (!dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+								aiNewState(actor, &cultistSFire);
+							else if (dudeIsPlayingSeq(actor, 14) && actor->xspr.medium == kMediumNormal)
+								aiNewState(actor, &cultistSProneFire);
+							else if (actor->xspr.medium == kMediumWater || actor->xspr.medium == kMediumGoo)
+								aiNewState(actor, &cultistSSwimFire);
+							break;
+						}
+					}
+					break;
+				}
+				return;
+			}
+		}
+	}
+	switch (actor->xspr.medium)
+	{
+	case kMediumNormal:
+		aiNewState(actor, &cultistGoto);
+		break;
+	case kMediumWater:
+	case kMediumGoo:
+		aiNewState(actor, &cultistSwimGoto);
+		break;
+	}
+	actor->SetTarget(nullptr);
 }
 
 END_BLD_NS

@@ -29,7 +29,9 @@ Prepared for public release: 03/21/2003 - Charlie Wiederhold, 3D Realms
 #include "global.h"
 #include "names_r.h"
 #include "serializer.h"
+#include "savegamehelp.h"
 #include "dukeactor.h"
+#include "interpolate.h"
 
 BEGIN_DUKE_NS
 
@@ -38,7 +40,7 @@ static int jaildoorcnt;
 static int minecartcnt;
 static int lightnincnt;
 
-static short torchsector[64];
+static sectortype* torchsector[64];
 static short torchsectorshade[64];
 static short torchtype[64];
 
@@ -49,18 +51,18 @@ static short jaildoorsecthtag[32];
 static int jaildoordist[32];
 static short jaildoordir[32];
 static short jaildooropen[32];
-static short jaildoorsect[32];
+static sectortype* jaildoorsect[32];
 
 static short minecartdir[16];
 static int minecartspeed[16];
-static short minecartchildsect[16];
+static sectortype* minecartchildsect[16];
 static short minecartsound[16];
 static int minecartdist[16];
 static int minecartdrag[16];
 static short minecartopen[16];
-static short minecartsect[16];
+static sectortype* minecartsect[16];
 
-static short lightninsector[64];
+static sectortype* lightninsector[64];
 static short lightninsectorshade[64];
 
 static uint8_t brightness;
@@ -122,28 +124,28 @@ void lava_serialize(FSerializer& arc)
 		("windertime", windertime);
 }
 
-void addtorch(spritetype* s)
+void addtorch(DDukeActor* actor)
 {
 	if (torchcnt >= 64)
 		I_Error("Too many torch effects");
 
-	torchsector[torchcnt] = s->sectnum;
-	torchsectorshade[torchcnt] = sector[s->sectnum].floorshade;
-	torchtype[torchcnt] = s->lotag;
+	torchsector[torchcnt] = actor->sector();
+	torchsectorshade[torchcnt] = actor->sector()->floorshade;
+	torchtype[torchcnt] = actor->spr.lotag;
 	torchcnt++;
 }
 
-void addlightning(spritetype* s)
+void addlightning(DDukeActor* actor)
 {
 	if (lightnincnt >= 64)
 		I_Error("Too many lightnin effects");
 
-	lightninsector[lightnincnt] = s->sectnum;
-	lightninsectorshade[lightnincnt] = sector[s->sectnum].floorshade;
+	lightninsector[lightnincnt] = actor->sector();
+	lightninsectorshade[lightnincnt] = actor->sector()->floorshade;
 	lightnincnt++;
 }
 
-void addjaildoor(int p1, int p2, int iht, int jlt, int p3, int j)
+void addjaildoor(int p1, int p2, int iht, int jlt, int p3, sectortype* j)
 {
 	if (jaildoorcnt >= 32)
 		I_Error("Too many jaildoor sectors");
@@ -162,21 +164,23 @@ void addjaildoor(int p1, int p2, int iht, int jlt, int p3, int j)
 	jaildooropen[jaildoorcnt] = 0;
 	jaildoordir[jaildoorcnt] = jlt;
 	jaildoorsound[jaildoorcnt] = p3;
+	setsectinterpolate(j);
 	jaildoorcnt++;
 }
 
-void addminecart(int p1, int p2, int i, int iht, int p3, int childsectnum)
+void addminecart(int p1, int p2, sectortype* i, int iht, int p3, sectortype* childsectnum)
 {
 	if (minecartcnt >= 16)
 		I_Error("Too many minecart sectors");
 	minecartdist[minecartcnt] = p1;
 	minecartspeed[minecartcnt] = p2;
 	minecartsect[minecartcnt] = i;
-	minecartdir[minecartcnt] = sector[i].hitag;
+	minecartdir[minecartcnt] = i->hitag;
 	minecartdrag[minecartcnt] = p1;
 	minecartopen[minecartcnt] = 1;
 	minecartsound[minecartcnt] = p3;
 	minecartchildsect[minecartcnt] = childsectnum;
+	setsectinterpolate(i);
 	minecartcnt++;
 }
 
@@ -189,51 +193,48 @@ void addminecart(int p1, int p2, int i, int iht, int p3, int childsectnum)
 void dotorch(void)
 {
 	int ds;
-	short j;
-	short startwall, endwall;
-	char shade;
+	uint8_t shade;
 	ds = krand()&8;
 	for (int i = 0; i < torchcnt; i++)
 	{
+		auto sect = torchsector[i];
 		shade = torchsectorshade[i] - ds;
 		switch (torchtype[i])
 		{
 			case 0:
-				sector[torchsector[i]].floorshade = shade;
-				sector[torchsector[i]].ceilingshade = shade;
+				sect->floorshade = shade;
+				sect->ceilingshade = shade;
 				break;
 			case 1:
-				sector[torchsector[i]].ceilingshade = shade;
+				sect->ceilingshade = shade;
 				break;
 			case 2:
-				sector[torchsector[i]].floorshade = shade;
+				sect->floorshade = shade;
 				break;
 			case 4:
-				sector[torchsector[i]].ceilingshade = shade;
+				sect->ceilingshade = shade;
 				break;
 			case 5:
-				sector[torchsector[i]].floorshade = shade;
+				sect->floorshade = shade;
 				break;
 		}
-		startwall = sector[torchsector[i]].wallptr;
-		endwall = startwall + sector[torchsector[i]].wallnum;
-		for (j = startwall; j < endwall; j++)
+		for (auto& wal : wallsofsector(sect))
 		{
-			if (wall[j].lotag != 1)
+			if (wal.lotag != 1)
 			{
 				switch (torchtype[i])
 				{
 					case 0:
-						wall[j].shade = shade;
+						wal.shade = shade;
 						break;
 					case 1:
-						wall[j].shade = shade;
+						wal.shade = shade;
 						break;
 					case 2:
-						wall[j].shade = shade;
+						wal.shade = shade;
 						break;
 					case 3:
-						wall[j].shade = shade;
+						wal.shade = shade;
 						break;
 				}
 			}
@@ -249,12 +250,10 @@ void dotorch(void)
 
 void dojaildoor(void)
 {
-	int j;
-	int startwall, endwall;
-	int x, y;
-	int speed;
 	for (int i = 0; i < jaildoorcnt; i++)
 	{
+		int speed;
+		auto sectp = jaildoorsect[i];
 		if (numplayers > 2)
 			speed = jaildoorspeed[i];
 		else
@@ -286,12 +285,10 @@ void dojaildoor(void)
 			}
 			else
 			{
-				startwall = sector[jaildoorsect[i]].wallptr;
-				endwall = startwall + sector[jaildoorsect[i]].wallnum;
-				for (j = startwall; j < endwall; j++)
+				for (auto& wal : wallsofsector(sectp))
 				{
-					x = wall[j].x;
-					y = wall[j].y;
+					int x = wal.pos.X;
+					int y = wal.pos.Y;
 					switch (jaildoordir[i])
 					{
 						case 10:
@@ -307,7 +304,7 @@ void dojaildoor(void)
 							x += speed;
 							break;
 					}
-					dragpoint(j,x,y);
+					dragpoint(&wal, x, y);
 				}
 			}
 		}
@@ -336,30 +333,33 @@ void dojaildoor(void)
 			}
 			else
 			{
-				startwall = sector[jaildoorsect[i]].wallptr;
-				endwall = startwall + sector[jaildoorsect[i]].wallnum;
-				for (j = startwall; j < endwall; j++)
+				for (auto& wal : wallsofsector(sectp))
 				{
+					int x, y;
 					switch (jaildoordir[i])
 					{
+						default: // make case of bad parameters well defined.
+							x = wal.pos.X;
+							y = wal.pos.Y;
+							break;
 						case 10:
-							x = wall[j].x;
-							y = wall[j].y + speed;
+							x = wal.pos.X;
+							y = wal.pos.Y + speed;
 							break;
 						case 20:
-							x = wall[j].x - speed;
-							y = wall[j].y;
+							x = wal.pos.X - speed;
+							y = wal.pos.Y;
 							break;
 						case 30:
-							x = wall[j].x;
-							y = wall[j].y - speed;
+							x = wal.pos.X;
+							y = wal.pos.Y - speed;
 							break;
 						case 40:
-							x = wall[j].x + speed;
-							y = wall[j].y;
+							x = wal.pos.X + speed;
+							y = wal.pos.Y;
 							break;
 					}
-					dragpoint(j,x,y);
+					dragpoint(&wal, x, y);
 				}
 			}
 		}
@@ -374,11 +374,7 @@ void dojaildoor(void)
 
 void moveminecart(void)
 {
-	short i;
-	short j;
-	short csect;
-	short startwall;
-	short endwall;
+	int i;
 	int speed;
 	int y;
 	int x;
@@ -390,6 +386,7 @@ void moveminecart(void)
 	int min_x;
 	for (i = 0; i < minecartcnt; i++)
 	{
+		auto sectp = minecartsect[i];
 		speed = minecartspeed[i];
 		if (speed < 2)
 			speed = 2;
@@ -419,30 +416,32 @@ void moveminecart(void)
 			}
 			else
 			{
-				startwall = sector[minecartsect[i]].wallptr;
-				endwall = startwall + sector[minecartsect[i]].wallnum;
-				for (j = startwall; j < endwall; j++)
+				for (auto& wal : wallsofsector(sectp))
 				{
 					switch (minecartdir[i])
 					{
+						default: // make case of bad parameters well defined.
+							x = wal.pos.X;
+							y = wal.pos.Y;
+							break;
 						case 10:
-							x = wall[j].x;
-							y = wall[j].y + speed;
+							x = wal.pos.X;
+							y = wal.pos.Y + speed;
 							break;
 						case 20:
-							x = wall[j].x - speed;
-							y = wall[j].y;
+							x = wal.pos.X - speed;
+							y = wal.pos.Y;
 							break;
 						case 30:
-							x = wall[j].x;
-							y = wall[j].y - speed;
+							x = wal.pos.X;
+							y = wal.pos.Y - speed;
 							break;
 						case 40:
-							x = wall[j].x + speed;
-							y = wall[j].y;
+							x = wal.pos.X + speed;
+							y = wal.pos.Y;
 							break;
 					}
-					dragpoint(j,x,y);
+					dragpoint(&wal, x, y);
 				}
 			}
 		}
@@ -471,42 +470,42 @@ void moveminecart(void)
 			}
 			else
 			{
-				startwall = sector[minecartsect[i]].wallptr;
-				endwall = startwall + sector[minecartsect[i]].wallnum;
-				for (j = startwall; j < endwall; j++)
+				for (auto& wal : wallsofsector(sectp))
 				{
 					switch (minecartdir[i])
 					{
+						default: // make case of bad parameters well defined.
+							x = wal.pos.X;
+							y = wal.pos.Y;
+							break;
 						case 10:
-							x = wall[j].x;
-							y = wall[j].y + speed;
+							x = wal.pos.X;
+							y = wal.pos.Y + speed;
 							break;
 						case 20:
-							x = wall[j].x - speed;
-							y = wall[j].y;
+							x = wal.pos.X - speed;
+							y = wal.pos.Y;
 							break;
 						case 30:
-							x = wall[j].x;
-							y = wall[j].y - speed;
+							x = wal.pos.X;
+							y = wal.pos.Y - speed;
 							break;
 						case 40:
-							x = wall[j].x + speed;
-							y = wall[j].y;
+							x = wal.pos.X + speed;
+							y = wal.pos.Y;
 							break;
 					}
-					dragpoint(j,x,y);
+					dragpoint(&wal, x, y);
 				}
 			}
 		}
-		csect = minecartchildsect[i];
-		startwall = sector[csect].wallptr;
-		endwall = startwall + sector[csect].wallnum;
+		auto csect = minecartchildsect[i];
 		max_x = max_y = -0x20000;
 		min_x = min_y = 0x20000;
-		for (j = startwall; j < endwall; j++)
+		for (auto& wal : wallsofsector(csect))
 		{
-			x = wall[j].x;
-			y = wall[j].y;
+			x = wal.pos.X;
+			y = wal.pos.Y;
 			if (x > max_x)
 				max_x = x;
 			if (y > max_y)
@@ -521,9 +520,8 @@ void moveminecart(void)
 		DukeSectIterator it(csect);
 		while (auto a2 = it.Next())
 		{
-			auto sj = a2->s;
-			if (badguy(sj))
-				setsprite(a2, cx, cy, sj->z);
+			if (badguy(a2))
+				SetActor(a2, { cx, cy, a2->spr.pos.Z });
 		}
 	}
 }
@@ -556,17 +554,16 @@ void thunder(void)
 {
 	struct player_struct* p;
 	int r1, r2;
-	short startwall, endwall, i, j;
-	unsigned char shade;
+	int i = 0;
+	uint8_t shade;
 
 	p = &ps[screenpeek];
 
 	if (!thunderflash)
 	{
-		if ((gotpic[RRTILE2577 >> 3] & (1 << (RRTILE2577 & 7))) > 0)
+		if (testgotpic(RRTILE2577, true))
 		{
-			gotpic[RRTILE2577 >> 3] &= ~(1 << (RRTILE2577 & 7));
-			g_visibility = 256; // this is an engine variable
+			g_relvisibility = 0;
 			if (krand() > 65000)
 			{
 				thunderflash = 1;
@@ -576,7 +573,6 @@ void thunder(void)
 		}
 		else
 		{
-			g_visibility = p->visibility;
 			brightness = ud.brightness >> 2;
 		}
 	}
@@ -588,14 +584,12 @@ void thunder(void)
 			thunderflash = 0;
 			brightness = ud.brightness >> 2;
 			thunder_brightness = brightness;
-			g_visibility = p->visibility;
 		}
 	}
 	if (!winderflash)
 	{
-		if ((gotpic[RRTILE2562 >> 3] & (1 << (RRTILE2562 & 7))) > 0)
+		if (testgotpic(RRTILE2562, true))
 		{
-			gotpic[RRTILE2562 >> 3] &= ~(1 << (RRTILE2562 & 7));
 			if (krand() > 65000)
 			{
 				winderflash = 1;
@@ -612,12 +606,11 @@ void thunder(void)
 			winderflash = 0;
 			for (i = 0; i < lightnincnt; i++)
 			{
-				startwall = sector[lightninsector[i]].wallptr;
-				endwall = startwall + sector[lightninsector[i]].wallnum;
-				sector[lightninsector[i]].floorshade = lightninsectorshade[i];
-				sector[lightninsector[i]].ceilingshade = lightninsectorshade[i];
-				for (j = startwall; j < endwall; j++)
-					wall[j].shade = lightninsectorshade[i];
+				auto sectp = lightninsector[i];
+				sectp->floorshade = (int8_t)lightninsectorshade[i];
+				sectp->ceilingshade = (int8_t)lightninsectorshade[i];
+				for (auto& wal : wallsofsector(sectp))
+					wal.shade = (int8_t)lightninsectorshade[i];
 			}
 		}
 	}
@@ -625,24 +618,6 @@ void thunder(void)
 	{
 		r1 = krand() & 4;
 		brightness += r1;
-		switch (r1)
-		{
-		case 0:
-			g_visibility = 2048;
-			break;
-		case 1:
-			g_visibility = 1024;
-			break;
-		case 2:
-			g_visibility = 512;
-			break;
-		case 3:
-			g_visibility = 256;
-			break;
-		default:
-			g_visibility = 4096;
-			break;
-		}
 		if (brightness > 8)
 			brightness = 0;
 		thunder_brightness = brightness;
@@ -653,12 +628,11 @@ void thunder(void)
 		shade = torchsectorshade[i] + r2;
 		for (i = 0; i < lightnincnt; i++)
 		{
-			startwall = sector[lightninsector[i]].wallptr;
-			endwall = startwall + sector[lightninsector[i]].wallnum;
-			sector[lightninsector[i]].floorshade = lightninsectorshade[i] - shade;
-			sector[lightninsector[i]].ceilingshade = lightninsectorshade[i] - shade;
-			for (j = startwall; j < endwall; j++)
-				wall[j].shade = lightninsectorshade[i] - shade;
+			auto sectp = lightninsector[i];
+			sectp->floorshade = lightninsectorshade[i] - shade;
+			sectp->ceilingshade = lightninsectorshade[i] - shade;
+			for (auto& wal : wallsofsector(sectp))
+				wal.shade = lightninsectorshade[i] - shade;
 		}
 	}
 }

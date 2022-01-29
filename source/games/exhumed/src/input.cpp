@@ -25,73 +25,25 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 BEGIN_PS_NS
 
-short nInputStack = 0;
-
-short bStackNode[kMaxPlayers];
-
-short nTypeStack[kMaxPlayers];
 PlayerInput sPlayerInput[kMaxPlayers];
 
-int *pStackPtr;
-
-// (nInputStack * 32) - 11;
-
-void PushInput(PlayerInput *pInput, int edx)
+size_t MarkInput()
 {
-    if (!bStackNode[edx])
+    for (auto& p : sPlayerInput)
     {
-//		memcpy(sInputStack[nInputStack], pInput,
+        GC::Mark(p.pTarget);
     }
+    return kMaxPlayers;
 }
 
-int PopInput()
-{
-    if (!nInputStack)
-        return -1;
-
-    nInputStack--;
-
-    // TEMP
-    return 0;
-}
-
-void InitInput()
-{
-    memset(nTypeStack, 0, sizeof(nTypeStack));
-    nInputStack = 0;
-    memset(bStackNode, 0, sizeof(bStackNode));
-
-//	pStackPtr = &sInputStack;
-}
-
-void ClearSpaceBar(short nPlayer)
+void ClearSpaceBar(int nPlayer)
 {
     sPlayerInput[nPlayer].actions &= SB_OPEN;
     buttonMap.ClearButton(gamefunc_Open);
 }
 
 
-void BackupInput()
-{
-
-}
-
-void SendInput()
-{
-
-}
-
-
-void CheckKeys2()
-{
-    if (PlayerList[nLocalPlayer].nHealth <= 0)
-    {
-        SetAirFrame();
-    }
-}
-
-
-void GameInterface::GetInput(InputPacket* packet, ControlInfo* const hidInput)
+void GameInterface::GetInput(ControlInfo* const hidInput, double const scaleAdjust, InputPacket* packet)
 {
     if (paused || M_Active())
     {
@@ -107,17 +59,16 @@ void GameInterface::GetInput(InputPacket* packet, ControlInfo* const hidInput)
     }
 
     Player* pPlayer = &PlayerList[nLocalPlayer];
-    double const scaleAdjust = InputScale();
     InputPacket input {};
 
-    if (PlayerList[nLocalPlayer].nHealth == 0)
+    if (PlayerList[nLocalPlayer].nHealth != 0)
     {
-        lPlayerYVel = 0;
-        lPlayerXVel = 0;
+        processMovement(&input, &localInput, hidInput, scaleAdjust);
     }
     else
     {
-        processMovement(&input, &localInput, hidInput, scaleAdjust);
+        lPlayerYVel = 0;
+        lPlayerXVel = 0;
     }
 
     if (!SyncInput())

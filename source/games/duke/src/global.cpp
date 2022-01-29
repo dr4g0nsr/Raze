@@ -56,7 +56,6 @@ player_struct ps[MAXPLAYERS];
 //------------------------------------------------------------------------- 
 
 int lastvisinc;								// weapon flash
-DDukeActor* camsprite;						// active camera
 int earthquaketime;
 int global_random;							// readonly - one single global per-frame random value. Ugh...
 
@@ -69,7 +68,6 @@ int hulkspawn;								// Spawn a hulk?
 int lastlevel;								// Set at the end of RRRA's E2L7.
 short fakebubba_spawn, mamaspawn_count, banjosound; // RRRA special effects
 short BellTime;
-DDukeActor* BellSprite /* word_119BE0*/;
 int WindTime, WindDir;
 uint8_t enemysizecheat /*raat607*/, ufospawnsminion, pistonsound, chickenphase /* raat605*/, RRRA_ExitedLevel, fogactive;
 
@@ -87,33 +85,30 @@ int show_shareware;							// display only.
 int rtsplaying;								// RTS playback state
 int tempwallptr;							// msx/y index.
 int msx[MAXANIMPOINTS], msy[MAXANIMPOINTS];
+TArray<CraneDef> cranes;
+
 bool sound445done;							// used in checksectors_r. This was local state inside a function, but this must be maintained globally and serialized
 
-// serialized
-uint8_t sectorextra[MAXSECTORS];			// something about keys, all access through the haskey function.
-weaponhit hittype[MAXSPRITES + 1];			// +1 to have a blank entry for serialization, all access in game code through the iterators.
 int spriteqamount = 64;						// internal sprite queue
 int spriteqloc;
-DDukeActor* spriteq[1024];
-uint8_t shadedsector[MAXSECTORS];			// display hackiness
 animwalltype animwall[MAXANIMWALLS];		// animated walls
 int numanimwalls;
 int animatecnt;								// sector plane movement
-int16_t animatesect[MAXANIMATES];
+sectortype* animatesect[MAXANIMATES];
 int8_t animatetype[MAXANIMATES];
-int16_t animatetarget[MAXANIMATES];
+int animatetarget[MAXANIMATES];
 int animategoal[MAXANIMATES];
 int animatevel[MAXANIMATES];
 int numclouds;								// cloudy skies
-int16_t clouds[256];
+sectortype* clouds[256];
 float cloudx;
 float cloudy;
 int cloudclock;
 int numcyclers;								// sector lighting effects
-int16_t cyclers[MAXCYCLERS][6];
+Cycler cyclers[MAXCYCLERS];
 int mirrorcnt;
-int16_t mirrorsector[64];					// mirrors
-int16_t mirrorwall[64];
+sectortype* mirrorsector[64];					// mirrors
+walltype* mirrorwall[64];
 int numplayersprites;						// player management for some SEs.
 player_orig po[MAXPLAYERS];
 unsigned ambientfx;							// used by soundtag and soundtagonce script commands. If exported, export the commands, not the data!
@@ -124,9 +119,9 @@ uint32_t everyothertime;					// Global animation ticker helper.
 // Redneck Rampage
 int thunder_brightness;
 int wupass;									// used to play the level entry sound only once.
-int geosectorwarp[MAXGEOSECTORS];			// geometry render hack (overlay a secondary scene)
-int geosectorwarp2[MAXGEOSECTORS];
-int geosector[MAXGEOSECTORS];
+sectortype* geosectorwarp[MAXGEOSECTORS];			// geometry render hack (overlay a secondary scene)
+sectortype* geosectorwarp2[MAXGEOSECTORS];
+sectortype* geosector[MAXGEOSECTORS];
 int geox[MAXGEOSECTORS];
 int geoy[MAXGEOSECTORS];
 int geox2[MAXGEOSECTORS];

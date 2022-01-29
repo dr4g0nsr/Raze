@@ -52,7 +52,7 @@
 #define PATH_MAX 260
 #endif
 
-static const char* validexts[] = { "*.grp", "*.zip", "*.pk3", "*.pk4", "*.7z", "*.pk7", "*.dat", "*.rff" };
+static const char* validexts[] = { "*.grp", "*.zip", "*.pk3", "*.pk4", "*.7z", "*.pk7", "*.dat", "*.rff", "*.ssi" };
 
 //==========================================================================
 //
@@ -117,10 +117,10 @@ static TArray<FString> ParseGameInfo(TArray<FString>& pwads, const char* fn, con
 		else if (!nextKey.CompareNoCase("STARTUPCOLORS"))
 		{
 			sc.MustGetString();
-			GameStartupInfo.FgColor = V_GetColor(NULL, sc);
+			GameStartupInfo.FgColor = V_GetColor(sc);
 			sc.MustGetStringName(",");
 			sc.MustGetString();
-			GameStartupInfo.BkColor = V_GetColor(NULL, sc);
+			GameStartupInfo.BkColor = V_GetColor(sc);
 		}
 		else if (!nextKey.CompareNoCase("CON"))
 		{
@@ -182,9 +182,9 @@ static TArray<FString> CheckGameInfo(TArray<FString>& pwads)
 		if (resfile != NULL)
 		{
 			uint32_t cnt = resfile->LumpCount();
-			for (int i = cnt - 1; i >= 0; i--)
+			for (int c = cnt - 1; c >= 0; c--)
 			{
-				FResourceLump* lmp = resfile->GetLump(i);
+				FResourceLump* lmp = resfile->GetLump(c);
 
 				if (FName(lmp->getName(), true) == gameinfo)
 				{
@@ -263,7 +263,7 @@ static void DeleteStuff(FileSystem &fileSystem, const TArray<FString>& deletelum
 			str.Truncate(ndx);
 		}
 
-		for (uint32_t i = 0; i < fileSystem.GetNumEntries(); i++)
+		for (int i = 0; i < fileSystem.GetNumEntries(); i++)
 		{
 			int cf = fileSystem.GetFileContainer(i);
 			auto fname = fileSystem.GetFileFullName(i, false);
@@ -288,7 +288,7 @@ const char* iwad_reserved_ex[12] = { ".map", "menudef", "gldefs", "zscript", "ma
 const char** iwad_reserved()
 {
 	return (g_gameType & GAMEFLAG_PSEXHUMED) ? iwad_reserved_ex :
-		(g_gameType & GAMEFLAG_SW) ? iwad_reserved_sw :
+		isSWALL() ? iwad_reserved_sw :
 		(g_gameType & GAMEFLAG_BLOOD) ? iwad_reserved_blood : iwad_reserved_duke;
 }
 
@@ -339,12 +339,13 @@ void InitFileSystem(TArray<GrpEntry>& groups)
 		}
 		i--;
 	}
+	fileSystem.SetIwadNum(1);
 	fileSystem.SetMaxIwadNum(Files.Size() - 1);
 
 	D_AddConfigFiles(Files, "Global.Autoload", "*.grp", GameConfig);
 
-	long len;
-	int lastpos = 0;
+	size_t len;
+	size_t lastpos = 0;
 
 	while (lastpos < LumpFilter.Len() && (len = strcspn(LumpFilter.GetChars() + lastpos, ".")) > 0)
 	{
@@ -352,7 +353,7 @@ void InitFileSystem(TArray<GrpEntry>& groups)
 		D_AddConfigFiles(Files, file, "*.grp", GameConfig);
 		lastpos += len + 1;
 	}
-	
+
 	if (!insertdirectoriesafter && userConfig.AddFilesPre) for (auto& file : *userConfig.AddFilesPre)
 	{
 		D_AddFile(Files, file, true, -1, GameConfig);
@@ -367,16 +368,16 @@ void InitFileSystem(TArray<GrpEntry>& groups)
 		// Finally, if the last entry in the chain is a directory, it's being considered the mod directory, and all GRPs inside need to be loaded, too.
 		if (userConfig.AddFiles->NumArgs() > 0)
 		{
-			auto fn = (*userConfig.AddFiles)[userConfig.AddFiles->NumArgs() - 1];
+			auto fname = (*userConfig.AddFiles)[userConfig.AddFiles->NumArgs() - 1];
 			bool isdir = false;
-			if (DirEntryExists(fn, &isdir) && isdir)
+			if (DirEntryExists(fname, &isdir) && isdir)
 			{
 				// Insert the GRPs before this entry itself.
 				FString lastfn;
 				Files.Pop(lastfn);
 				for (auto ext : validexts)
 				{
-					D_AddDirectory(Files, fn, ext, GameConfig);
+					D_AddDirectory(Files, fname, ext, GameConfig);
 				}
 				Files.Push(lastfn);
 			}
@@ -411,10 +412,10 @@ void InitFileSystem(TArray<GrpEntry>& groups)
 	if (Args->CheckParm("-dumpfs"))
 	{
 		FILE* f = fopen("filesystem.dir", "wb");
-		for (int i = 0; i < fileSystem.GetNumEntries(); i++)
+		for (int num = 0; num < fileSystem.GetNumEntries(); num++)
 		{
-			auto fd = fileSystem.GetFileAt(i);
-			fprintf(f, "%.50s   %60s  %d\n", fd->getName(), fileSystem.GetResourceFileFullName(fileSystem.GetFileContainer(i)), fd->Size());
+			auto fd = fileSystem.GetFileAt(num);
+			fprintf(f, "%.50s   %60s  %d\n", fd->getName(), fileSystem.GetResourceFileFullName(fileSystem.GetFileContainer(num)), fd->Size());
 		}
 		fclose(f);
 	}

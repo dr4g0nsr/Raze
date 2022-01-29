@@ -1,7 +1,6 @@
 #pragma once
 
 #include <stdint.h>
-#include "compat.h"
 #include "printf.h"
 #include "c_dispatch.h" 
 #include "tarray.h"
@@ -12,6 +11,7 @@
 #include "m_joy.h"
 #include "gamecvars.h"
 #include "packet.h"
+#include "vectors.h"
 
 
 struct ControlInfo
@@ -33,7 +33,7 @@ class InputState
 {
 	uint8_t KeyStatus[NUM_KEYS];
 	bool AnyKeyStatus;
-	vec2f_t  g_mousePos;
+	FVector2  g_mousePos;
 
 public:
 
@@ -46,8 +46,8 @@ public:
 
 	void MouseAddToPos(float x, float y)
 	{
-		g_mousePos.x += x;
-		g_mousePos.y += y;
+		g_mousePos.X += x;
+		g_mousePos.Y += y;
 	}
 
 	void GetMouseDelta(ControlInfo* hidInput);
@@ -104,12 +104,16 @@ enum GameFunction_t
 void SetupGameButtons();
 void ApplyGlobalInput(InputPacket& input, ControlInfo* const hidInput, bool const crouchable = true, bool const disableToggle = false);
 extern ESyncBits ActionsToSend;
-double InputScale();
 extern bool gamesetinput;
 
 inline bool SyncInput()
 {
 	return gamesetinput || cl_syncinput;
+}
+
+inline float backendinputscale()
+{
+	return (1.f / 16.f);
 }
 
 //---------------------------------------------------------------------------
@@ -126,14 +130,3 @@ inline void resetForcedSyncInput()
 {
 	gamesetinput = false;
 }
-
-inline bool specialKeyEvent(event_t* ev)
-{
-	if (ev->type == EV_KeyDown || ev->type == EV_KeyUp)
-	{
-		int key = ev->data1;
-		if (key == KEY_VOLUMEDOWN || key == KEY_VOLUMEUP || (key > KEY_LASTJOYBUTTON && key < KEY_PAD_LTHUMB_RIGHT)) return true;
-	}
-	return false;
-}
-

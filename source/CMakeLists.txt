@@ -23,9 +23,10 @@ if( DEM_CMAKE_COMPILER_IS_GNUCXX_COMPATIBLE )
 	endif()
 endif()
 
-# Build does not work with signed chars!
+# Build does not work with signed chars! Also set a stricter warning level, but silence the pointless and annoying parts of level 4 (Intentionally only for C++! The C code we use is too old and would warn too much)
 if (MSVC)
-	set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /J" )
+	set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /J /W4 /wd4100 /wd4127 /wd4131 /wd4201 /wd4210 /wd4244 /wd4245 /wd4324 /wd4389 /wd4505 /wd4706 /wd4458 /wd4459" )
+	set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4189" ) # "unused initialized local variable" - useful warning that creates too much noise in external or macro based code. Can be enabled for cleanup passes on the code.
 else()
 	set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -funsigned-char -Wno-missing-braces -Wno-char-subscripts -Wno-unused-variable" )
 endif()
@@ -312,7 +313,7 @@ if( DEM_CMAKE_COMPILER_IS_GNUCXX_COMPATIBLE )
 		set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC" )
 		set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC" )
 	endif()
-	
+
 	if(${CMAKE_SYSTEM_NAME} MATCHES "NetBSD")
 		set( CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -ljemalloc")
 	endif()
@@ -375,7 +376,8 @@ add_custom_target( revision_check ALL
 
 # required libraries
 
-set( PROJECT_LIBRARIES ${PROJECT_LIBRARIES} "${ZLIB_LIBRARIES}" "${JPEG_LIBRARIES}" "${BZIP2_LIBRARIES}" "${CMAKE_DL_LIBS}" )
+
+set( PROJECT_LIBRARIES ${PROJECT_LIBRARIES} "${ZLIB_LIBRARIES}" "${JPEG_LIBRARIES}" "${BZIP2_LIBRARIES}" "${CMAKE_DL_LIBS}" "${TESS_LIBRARIES}" )
 if (HAVE_VULKAN)
 	set( PROJECT_LIBRARIES ${PROJECT_LIBRARIES} "glslang" "SPIRV" "OGLCompiler")
 endif()
@@ -434,7 +436,7 @@ else()
 endif()
 
 
-include_directories( "${ZLIB_INCLUDE_DIR}" "${ZMUSIC_INCLUDE_DIR}" "${BZIP2_INCLUDE_DIR}" "${LZMA_INCLUDE_DIR}" "${JPEG_INCLUDE_DIR}" "${GDTOA_INCLUDE_DIR}" )
+include_directories( "${ZLIB_INCLUDE_DIR}" "${ZMUSIC_INCLUDE_DIR}" "${BZIP2_INCLUDE_DIR}" "${LZMA_INCLUDE_DIR}" "${JPEG_INCLUDE_DIR}" "${GDTOA_INCLUDE_DIR}" "${TESS_INCLUDE_DIR}" )
 
 if (WIN32)
 	include_directories( "platform/win32" )
@@ -471,7 +473,7 @@ set( PLAT_WIN32_SOURCES
 if (HAVE_VULKAN)
 	set (PLAT_WIN32_SOURCES ${PLAT_WIN32_SOURCES} common/platform/win32/win32vulkanvideo.cpp )
 endif()
-	
+
 # todo: implement an actual crash catcher for ARM
 # for now this is purely experimental
 if (NOT ${TARGET_ARCHITECTURE} MATCHES "arm" )
@@ -607,13 +609,13 @@ file( GLOB HEADER_FILES
 	core/input/*.h
 	core/rendering/*.h
 	core/rendering/scene/*.h
-	core/nodebuilder/*.h
 
 	common/audio/sound/thirdparty/*.h
 	common/audio/sound/*.h
 	common/audio/music/*.h*
 	common/2d/*.h
 	common/console/*.h
+	common/cutscenes/*.h
 	common/utility/*.h
 	common/engine/*.h
 	common/menu/*.h
@@ -686,7 +688,11 @@ set( NOT_COMPILED_SOURCE_FILES
 	zcc-parse.c
 	zcc-parse.h
 	common/platform/win32/zutil.natvis
-	
+	common/rendering/vulkan/thirdparty/vk_mem_alloc/vk_mem_alloc.natvis
+	games/blood/src/_polymost.cpp
+	games/duke/src/_polymost.cpp
+	games/sw/src/_polymost.cpp
+
 	# Blood
 	games/blood/src/actor.cpp
 	games/blood/src/ai.cpp
@@ -740,7 +746,6 @@ set( NOT_COMPILED_SOURCE_FILES
 	games/blood/src/prediction.cpp
 	games/blood/src/preload.cpp
 	games/blood/src/qav.cpp
-	games/blood/src/replace.cpp
 	games/blood/src/sbar.cpp
 	games/blood/src/sectorfx.cpp
 	games/blood/src/seq.cpp
@@ -752,10 +757,8 @@ set( NOT_COMPILED_SOURCE_FILES
 	games/blood/src/view.cpp
 	games/blood/src/warp.cpp
 	games/blood/src/weapon.cpp
-	
+
 	# Duke
-	games/duke/src/2d_d.cpp
-	games/duke/src/2d_r.cpp
 	games/duke/src/actors.cpp
 	games/duke/src/actors_d.cpp
 	games/duke/src/actors_lava.cpp
@@ -791,8 +794,6 @@ set( NOT_COMPILED_SOURCE_FILES
 	games/duke/src/render.cpp
 	games/duke/src/savegame.cpp
 	games/duke/src/sbar.cpp
-	games/duke/src/sbar_d.cpp
-	games/duke/src/sbar_r.cpp
 	games/duke/src/sectors.cpp
 	games/duke/src/sectors_d.cpp
 	games/duke/src/sectors_r.cpp
@@ -800,7 +801,7 @@ set( NOT_COMPILED_SOURCE_FILES
 	games/duke/src/spawn.cpp
 	games/duke/src/spawn_d.cpp
 	games/duke/src/spawn_r.cpp
-	
+
 	# Shadow Warrior
 	games/sw/src/actor.cpp
 	games/sw/src/ai.cpp
@@ -863,7 +864,7 @@ set( NOT_COMPILED_SOURCE_FILES
 	games/sw/src/weapon.cpp
 	games/sw/src/zilla.cpp
 	games/sw/src/zombie.cpp
-	
+
 	# Exhumed
 	games/exhumed/src/2d.cpp
 	games/exhumed/src/anims.cpp
@@ -914,8 +915,8 @@ set( NOT_COMPILED_SOURCE_FILES
 	games/exhumed/src/trigdat.cpp
 	games/exhumed/src/view.cpp
 	games/exhumed/src/wasp.cpp
-	
-	
+
+
 )
 
 set( VM_JIT_SOURCES
@@ -945,7 +946,7 @@ set( FASTMATH_SOURCES
 
 	gitinfo.cpp
 )
-	
+
 #Vulkan stuff must go into a separate list because it needs to be disabled for some platforms
 set (VULKAN_SOURCES
 	common/rendering/vulkan/system/vk_device.cpp
@@ -965,6 +966,26 @@ set (VULKAN_SOURCES
 	common/rendering/vulkan/thirdparty/volk/volk.c
 	common/rendering/vulkan/thirdparty/vk_mem_alloc/vk_mem_alloc.cpp
 )
+
+if (HAVE_GLES2)
+	set (GLES_SOURCES
+		common/rendering/gles/gles_system.cpp
+		common/rendering/gles/gles_renderer.cpp
+		common/rendering/gles/gles_framebuffer.cpp
+		common/rendering/gles/gles_renderstate.cpp
+		common/rendering/gles/gles_renderbuffers.cpp
+		common/rendering/gles/gles_postprocess.cpp
+		common/rendering/gles/gles_postprocessstate.cpp
+		common/rendering/gles/gles_buffers.cpp
+		common/rendering/gles/gles_hwtexture.cpp
+		common/rendering/gles/gles_shader.cpp
+		common/rendering/gles/gles_shaderprogram.cpp
+		common/rendering/gles/gles_samplers.cpp
+		common/rendering/gles/glad/src/glad.c
+	)
+
+	set (FASTMATH_SOURCES ${FASTMATH_SOURCES} ${GLES_SOURCES})
+endif()
 
 if (HAVE_VULKAN)
 	set (FASTMATH_SOURCES ${FASTMATH_SOURCES} ${VULKAN_SOURCES})
@@ -991,8 +1012,11 @@ set (PCH_SOURCES
 	build/src/mdsprite.cpp
 	build/src/polymost.cpp
 
-	core/movie/playmve.cpp
-	core/movie/movieplayer.cpp
+	core/actorinfo.cpp
+	core/zcc_compile_raze.cpp
+	core/thingdef_data.cpp
+	core/thingdef_properties.cpp
+	core/actorlist.cpp
 	core/automap.cpp
 	core/cheats.cpp
 	core/cheathandler.cpp
@@ -1021,9 +1045,11 @@ set (PCH_SOURCES
 	core/secrets.cpp
 	core/savegamehelp.cpp
 	core/precache.cpp
+	core/psky.cpp
 	core/quotes.cpp
 	core/screenshot.cpp
 	core/sectorgeometry.cpp
+	core/razefont.cpp
 	core/raze_music.cpp
 	core/raze_sound.cpp
 	core/palette.cpp
@@ -1032,20 +1058,15 @@ set (PCH_SOURCES
 	core/gi.cpp
 	core/defparser.cpp
 
-	core/nodebuilder/nodebuild.cpp
-	core/nodebuilder/nodebuild_classify_nosse2.cpp
-	core/nodebuilder/nodebuild_events.cpp
-	core/nodebuilder/nodebuild_extract.cpp
-	core/nodebuilder/nodebuild_gl.cpp
-	core/nodebuilder/nodebuild_utility.cpp 
-	
 	core/rendering/hw_entrypoint.cpp
 	core/rendering/hw_models.cpp
 	core/rendering/hw_voxels.cpp
 	core/rendering/hw_palmanager.cpp
 	core/rendering/hw_sections.cpp
+	core/rendering/hw_vertexmap.cpp
 	core/rendering/scene/hw_clipper.cpp
 	core/rendering/scene/hw_walls.cpp
+	core/rendering/scene/hw_walls_vertex.cpp
 	core/rendering/scene/hw_flats.cpp
 	core/rendering/scene/hw_sprites.cpp
 	core/rendering/scene/hw_drawlistadd.cpp
@@ -1055,6 +1076,10 @@ set (PCH_SOURCES
 	core/rendering/scene/hw_portal.cpp
 	core/rendering/scene/hw_skyportal.cpp
 	core/rendering/scene/hw_sky.cpp
+	core/rendering/scene/hw_setcolor.cpp
+	core/rendering/scene/hw_lighting.cpp
+
+	core/r_data/gldefs.cpp
 
 	core/console/c_notifybuffer.cpp
 	core/console/d_event.cpp
@@ -1134,6 +1159,9 @@ set (PCH_SOURCES
 	common/console/c_notifybufferbase.cpp
 	common/console/c_tabcomplete.cpp
 	common/console/c_expr.cpp
+	common/cutscenes/playmve.cpp
+	common/cutscenes/movieplayer.cpp
+	common/cutscenes/screenjob.cpp
 	common/utility/engineerrors.cpp
 	common/utility/i_module.cpp
 	common/utility/m_alloc.cpp
@@ -1197,7 +1225,7 @@ set (PCH_SOURCES
 	common/menu/menudef.cpp
 	common/menu/savegamemanager.cpp
 	common/statusbar/base_sbar.cpp
-	
+
 	common/rendering/v_framebuffer.cpp
 	common/rendering/v_video.cpp
 	common/rendering/r_thread.cpp
@@ -1214,8 +1242,10 @@ set (PCH_SOURCES
 	common/rendering/hwrenderer/data/hw_aabbtree.cpp
 	common/rendering/hwrenderer/data/hw_shadowmap.cpp
 	common/rendering/hwrenderer/data/hw_shaderpatcher.cpp
+	common/rendering/hwrenderer/postprocessing/hw_postprocessshader.cpp
 	common/rendering/hwrenderer/postprocessing/hw_postprocess.cpp
 	common/rendering/hwrenderer/postprocessing/hw_postprocess_cvars.cpp
+	common/rendering/hwrenderer/postprocessing/hw_postprocessshader_ccmds.cpp
 	common/rendering/gl_load/gl_interface.cpp
 	common/rendering/gl/gl_renderer.cpp
 	common/rendering/gl/gl_stereo3d.cpp
@@ -1255,8 +1285,9 @@ set (PCH_SOURCES
 	core/music/s_advsound.cpp
 
 	core/menu/loadsavemenu.cpp
+	core/menu/usermap.cpp
 	core/menu/razemenu.cpp
-	
+
 	#Duke is split because Duke and RR need different constants.
 	games/duke/all.cpp
 	games/duke/all_d.cpp
@@ -1264,7 +1295,7 @@ set (PCH_SOURCES
 	games/exhumed/all.cpp
 	games/blood/all.cpp
 	games/sw/all.cpp
-	
+
 )
 
 if( ${HAVE_VM_JIT} )
@@ -1378,6 +1409,9 @@ include_directories(
 	common/rendering/hwrenderer/data
 	common/rendering/gl_load
 	common/rendering/gl
+	common/rendering/gles
+	common/rendering/gles/glad/include
+	common/rendering/gles/Mali_OpenGL_ES_Emulator/include
 	common/rendering/vulkan/thirdparty
 	common/rendering/polyrenderer/backend
 	common/rendering/polyrenderer/drawers
@@ -1520,6 +1554,7 @@ source_group("Common\\Console" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/
 source_group("Common\\Utility" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/utility/.+")
 source_group("Common\\Engine" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/engine/.+")
 source_group("Common\\2D" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/2d/.+")
+source_group("Common\\Cutscenes" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/cutscenes/.+")
 source_group("Common\\Objects" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/objects/.+")
 source_group("Common\\Menu" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/menu/.+")
 source_group("Common\\Fonts" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/fonts/.+")
@@ -1542,6 +1577,7 @@ source_group("Common\\Rendering\\Hardware Renderer\\Data" REGULAR_EXPRESSION "^$
 source_group("Common\\Rendering\\Hardware Renderer\\Postprocessing" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/rendering/hwrenderer/postprocessing/.+")
 source_group("Common\\Rendering\\OpenGL Loader" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/rendering/gl_load/.+")
 source_group("Common\\Rendering\\OpenGL Backend" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/rendering/gl/.+")
+source_group("Common\\Rendering\\GLES Backend" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/rendering/gles/.+")
 source_group("Common\\Rendering\\Vulkan Renderer\\System" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/rendering/vulkan/system/.+")
 source_group("Common\\Rendering\\Vulkan Renderer\\Renderer" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/rendering/vulkan/renderer/.+")
 source_group("Common\\Rendering\\Vulkan Renderer\\Shaders" REGULAR_EXPRESSION "^${CMAKE_CURRENT_SOURCE_DIR}/common/rendering/vulkan/shaders/.+")

@@ -25,7 +25,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #include <stdlib.h>
 
-#include "compat.h"
 #include "build.h"
 #include "blood.h"
 
@@ -38,9 +37,5 @@ bool gNoClip;
 bool gInfiniteAmmo;
 int32_t gDeliriumBlur = 1;
 bool gFogMode = false;
-
-//////////
-int gWeaponsV10x;
-/////////
 
 END_BLD_NS

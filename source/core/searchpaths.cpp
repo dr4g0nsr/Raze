@@ -46,8 +46,9 @@
 #include "m_argv.h"
 #include "filesystem.h"
 #include "findfile.h"
+#include "engineerrors.h"
 
-static const char* res_exts[] = { ".grp", ".zip", ".pk3", ".pk4", ".7z", ".pk7" };
+static const char* res_exts[] = { ".grp", ".zip", ".pk3", ".pk4", ".7z", ".pk7", ".rff"};
 
 int g_gameType;
 
@@ -96,6 +97,7 @@ static const char * ww2gi[] = { "/WW2GI", nullptr};
 static const char * bloodfs[] = { "", R"(/addons/Cryptic Passage)", nullptr};
 static const char * sw[] = { "/Shadow Warrior", nullptr};
 static const char * redneck[] = { "/Redneck", "/AGAIN", "/HUNTIN", nullptr };
+static const char * dukezoom[] = { "/", "/AddOns", nullptr };
 
 #ifndef _WIN64
 #define WOW64 "\\"
@@ -112,6 +114,8 @@ static const RegistryPathInfo paths[] = {
 	{ L"SOFTWARE" WOW64 "GOG.com\\Games\\1374469660", L"path", bloodfs},
 	{ L"SOFTWARE" WOW64 "GOG.com\\Games\\1740836875", L"path", nullptr},
 	{ L"SOFTWARE" WOW64 "GOG.com\\Games\\2132611980", L"path", nullptr}, // Powerslave
+
+	{ L"SOFTWARE" WOW64 "ZOOM PLATFORM\\Duke Nukem 3D - Atomic Edition", L"InstallPath", dukezoom },
 
 	{ L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Steam App 434050", L"InstallLocation", nullptr },
 	{ L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Steam App 225140", L"InstallLocation", dukeaddons },
@@ -154,7 +158,7 @@ void G_AddExternalSearchPaths(TArray<FString> &searchpaths)
 				FString path;
 				for (int i = 0; entry.subpaths[i]; i++)
 				{
-					path.Format("%s%s", buf, entry.subpaths[i]);
+					path.Format("%s%s", buf.GetChars(), entry.subpaths[i]);
 					AddSearchPath(searchpaths, path);
 				}
 			}
@@ -208,7 +212,7 @@ void CollectSubdirectories(TArray<FString> &searchpath, const char *dirmatch)
 TArray<FString> CollectSearchPaths()
 {
 	TArray<FString> searchpaths;
-	
+
 	if (GameConfig->SetSection("GameSearch.Directories"))
 	{
 		const char *key;
@@ -392,7 +396,7 @@ static TArray<GrpInfo> ParseGrpInfo(const char *fn, FileReader &fr, TMap<FString
 {
 	TArray<GrpInfo> groups;
 	TMap<FString, int> FlagMap;
-	
+
 	FlagMap.Insert("GAMEFLAG_DUKE", GAMEFLAG_DUKE);
 	FlagMap.Insert("GAMEFLAG_NAM", GAMEFLAG_NAM);
 	FlagMap.Insert("GAMEFLAG_NAPALM", GAMEFLAG_NAPALM);
@@ -402,7 +406,6 @@ static TArray<GrpInfo> ParseGrpInfo(const char *fn, FileReader &fr, TMap<FString
 	FlagMap.Insert("GAMEFLAG_DUKEBETA", GAMEFLAG_DUKEBETA); // includes 0x20 since it's a shareware beta
 	FlagMap.Insert("GAMEFLAG_RR", GAMEFLAG_RR);
 	FlagMap.Insert("GAMEFLAG_RRRA", GAMEFLAG_RRRA);
-	FlagMap.Insert("GAMEFLAG_DEER", GAMEFLAG_DEER);
 	FlagMap.Insert("GAMEFLAG_BLOOD", GAMEFLAG_BLOOD);
 	FlagMap.Insert("GAMEFLAG_SW", GAMEFLAG_SW);
 	FlagMap.Insert("GAMEFLAG_POWERSLAVE", GAMEFLAG_POWERSLAVE);
@@ -418,7 +421,7 @@ static TArray<GrpInfo> ParseGrpInfo(const char *fn, FileReader &fr, TMap<FString
 	FScanner sc;
 	auto mem = fr.Read();
 	sc.OpenMem(fn, (const char *)mem.Data(), mem.Size());
-	
+
 	while (sc.GetToken())
 	{
 		sc.TokenMustBe(TK_Identifier);
@@ -589,12 +592,12 @@ static TArray<GrpInfo> ParseGrpInfo(const char *fn, FileReader &fr, TMap<FString
 					}
 					while (sc.CheckToken(','));
 				}
-				else if (sc.Compare("mpepisodes"))
+				else if (sc.Compare("exclepisodes"))
 				{
 					do
 					{
 						sc.MustGetToken(TK_StringConst);
-						grp.mpepisodes.Push(sc.String);
+						grp.exclepisodes.Push(sc.String);
 					}
 					while (sc.CheckToken(','));
 				}
@@ -663,7 +666,7 @@ TArray<GrpInfo> ParseAllGrpInfos(TArray<FileEntry>& filelist)
 //
 //
 //==========================================================================
-					
+
 void GetCRC(FileEntry *entry, TArray<FileEntry> &CRCCache)
 {
 	for (auto &ce : CRCCache)
@@ -684,7 +687,7 @@ void GetCRC(FileEntry *entry, TArray<FileEntry> &CRCCache)
 		do
 		{
 			b = f.Read(buffer.Data(), buffer.Size());
-			if (b > 0) crcval = AddCRC32(crcval, buffer.Data(), b);
+			if (b > 0) crcval = AddCRC32(crcval, buffer.Data(), unsigned(b));
 		}
 		while (b == buffer.Size());
 		entry->CRCValue = crcval;
@@ -794,11 +797,28 @@ TArray<GrpEntry> GrpScan()
 							}
 							if (ok)
 							{
-								// got a match
-								foundGames.Reserve(1);
-								auto& fg = foundGames.Last();
-								fg.FileInfo = *grp;
-								fg.FileName = fe->FileName;
+								auto checkCRC = [&]() ->bool
+								{
+									for (auto& g : allGroups)
+									{
+										if (fe->FileLength == g.size)
+										{
+											GetCRC(fe, cachedCRCs);
+											if (fe->CRCValue == g.CRC)
+												return true;
+										}
+									}
+									return false;
+								};
+
+								if (!checkCRC())	// ignore if the file matches a known entry.
+								{
+									// got a match
+									foundGames.Reserve(1);
+									auto& fg = foundGames.Last();
+									fg.FileInfo = *grp;
+									fg.FileName = fe->FileName;
+								}
 								break;
 							}
 						}
@@ -840,9 +860,6 @@ TArray<GrpEntry> GrpScan()
 	}
 	sortedFileList.Delete(0, findex + 1);
 	sortedGroupList.Delete(0, gindex + 1);
-
-	if (sortedGroupList.Size() == 0 || sortedFileList.Size() == 0)
-		return foundGames;
 
 	for (auto entry : sortedFileList)
 	{
@@ -909,7 +926,7 @@ TArray<GrpEntry> GrpScan()
 	{
 		SaveCRCs(cachedCRCs);
 	}
-	
+
 	return foundGames;
 }
 
@@ -936,13 +953,10 @@ const char* G_DefaultDefFile(void)
 	if (g_gameType & GAMEFLAG_RR)
 		return "rr.def";
 
-	if (g_gameType & GAMEFLAG_DEER)
-		return "rrdeer.def";
-
-	if (g_gameType & GAMEFLAG_WW2GI)
+	if (isWW2GI())
 		return "ww2gi.def";
 
-	if (g_gameType & GAMEFLAG_SW)
+	if (isSWALL())
 		return "sw.def";
 
 	if (g_gameType & GAMEFLAG_PSEXHUMED)

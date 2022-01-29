@@ -50,9 +50,9 @@
 F2DDrawer twodpsp;
 
 
-void hud_drawsprite(double sx, double sy, int z, double a, int picnum, int dashade, int dapalnum, int dastat, double alpha)
+void hud_drawsprite(double sx, double sy, double sz, double a, int picnum, int dashade, int dapalnum, int dastat, double alpha)
 {
-	double dz = z / 65536.;
+	sz *= 1. / 65536.;
 	alpha *= (dastat & RS_TRANS1)? glblend[0].def[!!(dastat & RS_TRANS2)].alpha : 1.;
 	int palid = TRANSLATION(Translation_Remap + curbasepal, dapalnum);
 
@@ -62,13 +62,13 @@ void hud_drawsprite(double sx, double sy, int z, double a, int picnum, int dasha
 	auto tex = tileGetTexture(picnum);
 
 	DrawTexture(&twodpsp, tex, sx, sy,
-		DTA_ScaleX, dz, DTA_ScaleY, dz,
+		DTA_ScaleX, sz, DTA_ScaleY, sz,
 		DTA_Color, shadeToLight(dashade),
 		DTA_TranslationIndex, palid,
-		DTA_ViewportX, windowxy1.x, DTA_ViewportY, windowxy1.y,
-		DTA_ViewportWidth, windowxy2.x - windowxy1.x + 1, DTA_ViewportHeight, windowxy2.y - windowxy1.y + 1,
+		DTA_ViewportX, windowxy1.X, DTA_ViewportY, windowxy1.Y,
+		DTA_ViewportWidth, windowxy2.X - windowxy1.X + 1, DTA_ViewportHeight, windowxy2.Y - windowxy1.Y + 1,
 		DTA_FullscreenScale, (dastat & RS_STRETCH)? FSMode_ScaleToScreen: FSMode_ScaleToHeight, DTA_VirtualWidth, 320, DTA_VirtualHeight, 200,
-		DTA_CenterOffsetRel, !(dastat & (RS_TOPLEFT | RS_CENTER)),
+		DTA_CenterOffsetRel, (dastat & (RS_TOPLEFT | RS_CENTER))? 0:2,
 		DTA_TopLeft, !!(dastat & RS_TOPLEFT),
 		DTA_CenterOffset, !!(dastat & RS_CENTER),
 		DTA_FlipX, !!(dastat & RS_XFLIPHUD),
@@ -97,6 +97,9 @@ static FString statFPS()
 	static double lastFrameTime;
 	static double cumulativeFrameDelay;
 	static double lastFPS;
+	static double avgFPS;
+	static double minFPS = 999;
+	static double maxFPS;
 
 	FString output;
 
@@ -107,13 +110,27 @@ static FString statFPS()
 	frameCount++;
 	if (frameDelay >= 0)
 	{
-		output.AppendFormat("%5.1f fps (%.1f ms)\n", lastFPS, frameDelay);
+		output.AppendFormat("Now FPS: %5.3f\n", lastFPS);
+		//if (frameDelay < 10) output.AppendFormat(" ");
+		//output.AppendFormat(" (%.1f ms)\n", frameDelay);
+		output.AppendFormat("Avg FPS: %5.3f\n", avgFPS);
+		output.AppendFormat("Min FPS: %5.3f\n", minFPS);
+		output.AppendFormat("Max FPS: %5.3f\n", maxFPS);
 
 		if (cumulativeFrameDelay >= 1000.0)
 		{
 			lastFPS = 1000. * frameCount / cumulativeFrameDelay;
 			frameCount = 0;
 			cumulativeFrameDelay = 0.0;
+		}
+		if (lastFPS > maxFPS) {
+			maxFPS = lastFPS;
+		}
+		if (lastFPS < minFPS && lastFPS>30) {
+			minFPS = lastFPS;
+		}
+		if (lastFPS > 10) {
+			avgFPS = (lastFPS + avgFPS) / 2;
 		}
 	}
 	lastFrameTime = frameTime;
@@ -128,7 +145,8 @@ void DrawRateStuff()
 		FString fpsbuff = statFPS();
 
 		int textScale = active_con_scale(twod);
-		int rate_x = screen->GetWidth() / textScale - NewConsoleFont->StringWidth(&fpsbuff[0]);
+		//int rate_x = screen->GetWidth() / textScale - NewConsoleFont->StringWidth(&fpsbuff[0]);
+		int rate_x = 0;
 		twod->AddColorOnlyQuad(rate_x * textScale, 0, screen->GetWidth(), NewConsoleFont->GetHeight() * textScale, MAKEARGB(255, 0, 0, 0));
 		DrawText(twod, NewConsoleFont, CR_WHITE, rate_x, 0, (char*)&fpsbuff[0],
 			DTA_VirtualWidth, screen->GetWidth() / textScale,

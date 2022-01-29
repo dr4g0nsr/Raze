@@ -25,7 +25,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "compat.h"
 #include "build.h"
 
 #include "blood.h"
@@ -39,11 +38,17 @@ int tileStart[256];
 int tileEnd[256];
 int hTileFile[256];
 
-char surfType[kMaxTiles];
+uint8_t surfType[kMaxTiles];
 int8_t tileShade[kMaxTiles];
 short voxelIndex[kMaxTiles];
 
-int tileInit()
+//---------------------------------------------------------------------------
+//
+// 
+//
+//---------------------------------------------------------------------------
+
+void GameInterface::LoadGameTextures()
 {
     auto hFile = fileSystem.OpenFileReader("SURFACE.DAT");
     if (hFile.isOpen())
@@ -54,7 +59,7 @@ int tileInit()
     if (hFile.isOpen())
     {
         hFile.Read(voxelIndex, sizeof(voxelIndex));
-#if B_BIG_ENDIAN == 1
+#if WORDS_BIGENDIAN
         for (int i = 0; i < kMaxTiles; i++)
             voxelIndex[i] = LittleShort(voxelIndex[i]);
 #endif
@@ -69,25 +74,39 @@ int tileInit()
         if (voxelIndex[i] >= 0 && voxelIndex[i] < kMaxVoxels)
             voxreserve.Set(voxelIndex[i]);
     }
-    return 1;
 }
 
-char tileGetSurfType(int hit)
+//---------------------------------------------------------------------------
+//
+// 
+//
+//---------------------------------------------------------------------------
+
+int tileGetSurfType(int hit)
 {
-    int n = hit & 0x3fff;
-    switch (hit&0xc000)
-    {
-    case 0x4000:
-        return surfType[sector[n].floorpicnum];
-    case 0x6000:
-        return surfType[sector[n].ceilingpicnum];
-    case 0x8000:
-        return surfType[wall[n].picnum];
-    case 0xc000:
-        return surfType[sprite[n].picnum];
-    }
-    return 0;
+    return surfType[hit];
 }
+
+int tileGetSurfType(CollisionBase& hit)
+{
+    switch (hit.type)
+    {
+    default:
+        return 0;
+    case kHitSector:
+        return surfType[hit.hitSector->floorpicnum];
+    case kHitWall:
+        return surfType[hit.hitWall->picnum];
+    case kHitSprite:
+        return surfType[hit.hitActor->spr.picnum];
+    }
+}
+
+//---------------------------------------------------------------------------
+//
+// 
+//
+//---------------------------------------------------------------------------
 
 void GameInterface::SetTileProps(int tile, int surf, int vox, int shade)
 {

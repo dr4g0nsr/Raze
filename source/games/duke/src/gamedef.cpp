@@ -60,11 +60,13 @@ enum { VERSIONCHECK = 41 };
 //
 //---------------------------------------------------------------------------
 
-static TArray<FString> mpEpisodes;
+static TArray<FString> exclEpisodes;
 
-void GameInterface::AddMultiplayerEpisode(FString name)
+void GameInterface::AddExcludedEpisode(const FString& episode)
 {
-	mpEpisodes.Push(FStringTable::MakeMacro(name.GetChars()));
+	auto s = FStringTable::MakeMacro(episode.GetChars());
+	s.StripRight();
+	exclEpisodes.Push(s);
 }
 
 
@@ -311,12 +313,12 @@ int ConCompiler::getkeyword(const char* text)
 {
 	ptrdiff_t min = 0;
 	ptrdiff_t max = countof(cmdList) - 1;
-	
+
 	while (min <= max)
 	{
-		int mid = (min + max) >> 1;
+		auto mid = (min + max) >> 1;
 		const int comp = strcmp(text, cmdList[mid].cmd);
-		
+
 		if (comp == 0)
 		{
 			return cmdList[mid].instr;
@@ -505,7 +507,6 @@ static int getlabeloffset(LABELS* pLabel, const char* psz)
 {
 	// find the label psz in the table pLabel.
 	// returns the offset in the array for the label, or -1
-	int l = -1;
 	int i;
 
 	for (i = 0; pLabel[i].lId >= 0; i++)
@@ -569,7 +570,7 @@ static void appendscriptvalue(int value)
 
 static int popscriptvalue()
 {
-	decltype(ScriptCode)::value_type p;
+	decltype(ScriptCode)::value_type p = 0;
 	ScriptCode.Pop(p);
 	return p;
 }
@@ -990,7 +991,7 @@ int ConCompiler::parsecommand()
 					Printf(TEXTCOLOR_RED "  * WARNING.(%s, line %d) Duplicate move '%s' ignored.\n", fn, line_number, parselabel.GetChars());
 					break;
 				}
-			if (i == labels.Size())
+			if (i == (int)labels.Size())
 				appendlabeladdress(LABEL_MOVE);
 			for (j = 0; j < 2; j++)
 			{
@@ -1189,6 +1190,7 @@ int ConCompiler::parsecommand()
 		popscriptvalue();
 		parsing_actor = scriptpos();
 
+		j = 0;
 		if (tw == concmd_useractor)
 		{ 
 			transnum(LABEL_DEFINE);
@@ -1216,7 +1218,7 @@ int ConCompiler::parsecommand()
 				while (keyword() == -1)
 				{
 					transnum(LABEL_DEFINE);
-					
+
 					j |= popscriptvalue();
 				}
 				appendscriptvalue(j);
@@ -1288,12 +1290,6 @@ int ConCompiler::parsecommand()
 		{
 			i = 32768;
 			Printf(TEXTCOLOR_RED "  * WARNING!(%s, line %d) tried to set cstat 32767, using 32768 instead.\n", fn, line_number);
-			warningcount++;
-		}
-		else if ((i & 48) == 48)
-		{
-			Printf(TEXTCOLOR_RED "  * WARNING!(%s, line %d) tried to set cstat %d, using %d instead.\n", fn, line_number, i, i ^ 48);
-			i ^= 48;
 			warningcount++;
 		}
 		appendscriptvalue(i);
@@ -1455,7 +1451,7 @@ int ConCompiler::parsecommand()
 			ReportError(ERROR_NOTAGAMEDEF);
 			return 0;
 		}
-	
+
 		appendscriptvalue(i);	// the ID of the DEF (offset into array...)
 		return 0;
 
@@ -1564,6 +1560,7 @@ int ConCompiler::parsecommand()
 
 	case concmd_ifpinventory:
 		transnum(LABEL_DEFINE);
+		[[fallthrough]];
 	case concmd_ifrnd:
 	case concmd_ifpdistl:
 	case concmd_ifpdistg:
@@ -1589,6 +1586,7 @@ int ConCompiler::parsecommand()
 	case concmd_ifsoundid:
 	case concmd_ifsounddist:
 		transnum(tw == concmd_ifai? LABEL_AI : tw == concmd_ifaction? LABEL_ACTION : tw == concmd_ifmove? LABEL_MOVE : LABEL_DEFINE);
+		[[fallthrough]];
 	case concmd_ifonwater:
 	case concmd_ifinwater:
 	case concmd_ifactornotstayput:
@@ -1631,7 +1629,7 @@ int ConCompiler::parsecommand()
 		parsecommand();
 
 		setscriptvalue(tempscrptr, scriptpos());
-		auto k = keyword();
+		auto kw = keyword();
 		// Cannot be done - the code starts misbehaving with this check, it is especially noticeable on the soldiers in NAM.
 		// Unfortunately this means one less error check, but ultimately CON is too broken to begin with anyway
 #if 0
@@ -1679,13 +1677,15 @@ int ConCompiler::parsecommand()
 		// We need both a volume and a cluster for this new episode.
 		auto vol = MustFindVolume(j);
 		auto clust = MustFindCluster(j + 1);
-		vol->name = clust->name = FStringTable::MakeMacro(parsebuffer.Data(), i);
+		FString s = FStringTable::MakeMacro(parsebuffer.Data(), i);;
+		s.StripRight();
+		vol->name = clust->name = s;
 		if (j > 0) vol->flags |= VF_SHAREWARELOCK;
-		if (mpEpisodes.Size())
+		if (exclEpisodes.Size())
 		{
-			for (auto& mpEpisode : mpEpisodes)
+			for (auto& episode : exclEpisodes)
 			{
-				if (vol->name == mpEpisode)
+				if (vol->name == episode)
 				{
 					vol->flags |= VF_HIDEFROMSP;
 				}
@@ -1694,6 +1694,7 @@ int ConCompiler::parsecommand()
 		return 0;
 	}
 	case concmd_defineskillname:
+	{
 		popscriptvalue();
 		transnum(LABEL_DEFINE);
 		j = popscriptvalue();
@@ -1708,9 +1709,11 @@ int ConCompiler::parsecommand()
 			textptr++, i++;
 		}
 		parsebuffer.Push(0);
-		gSkillNames[j] = FStringTable::MakeMacro(parsebuffer.Data(), i);
+		FString s = FStringTable::MakeMacro(parsebuffer.Data(), i);
+		s.StripRight();
+		gSkillNames[j] = s;
 		return 0;
-
+	}
 	case concmd_definelevelname:
 	{
 		popscriptvalue();
@@ -1767,6 +1770,7 @@ int ConCompiler::parsecommand()
 		}
 		parsebuffer.Push(0);
 		map->name = FStringTable::MakeMacro(parsebuffer.Data());
+		map->name.StripRight();
 		return 0;
 	}
 	case concmd_definequote:
@@ -1778,7 +1782,7 @@ int ConCompiler::parsecommand()
 			Printf(TEXTCOLOR_RED "  * ERROR!(%s, line %d) Quote number exceeds limit of %d.\n", fn, line_number, MAXQUOTES);
 			errorcount++;
 		}
-		
+
 		i = 0;
 		while (*textptr == ' ' || *textptr == '\t') textptr++;
 
@@ -1862,6 +1866,7 @@ int ConCompiler::parsecommand()
 		{
 			return 1;
 		}
+		[[fallthrough]];
 	case concmd_fall:
 	case concmd_tip:
 		//		  case 21:
@@ -1906,7 +1911,7 @@ int ConCompiler::parsecommand()
 		// What a mess. The only way to detect which game version we are running is to count the parsed values here.
 		int params[34]; // 34 is the maximum for RRRA.
 		int pcount = 0;
-		for (int i = 0; i < 34; i++)
+		for (int ii = 0; ii < 34; ii++)
 		{
 			transnum(LABEL_DEFINE);
 			params[pcount++] = popscriptvalue();
@@ -1999,7 +2004,7 @@ int ConCompiler::parsecommand()
 	{
 		int lLabelID;
 		// syntax getsector[<var>].x <VAR>
-		// gets the value of sector[<var>].xxx into <VAR>
+		// gets the value of sector [<var>].xxx into <VAR>
 
 		// now get name of .xxx
 		while ((*textptr != '['))
@@ -2210,7 +2215,7 @@ int ConCompiler::parsecommand()
 	{
 		int lLabelID;
 		// syntax getwall[<var>].x <VAR>
-		// gets the value of wall[<var>].xxx into <VAR>
+		// gets the value of wall [<var>].xxx into <VAR>
 
 		// now get name of .xxx
 		while ((*textptr != '['))
@@ -2311,7 +2316,7 @@ int ConCompiler::parsecommand()
 	{
 		int lLabelID;
 		// syntax getwall[<var>].x <VAR>
-		// gets the value of wall[<var>].xxx into <VAR>
+		// gets the value of wall [<var>].xxx into <VAR>
 
 		// now get name of .xxx
 		while ((*textptr != '['))
@@ -2584,7 +2589,7 @@ int ConCompiler::parsecommand()
 	{
 		int lLabelID;
 		// syntax getsector[<var>].x <VAR>
-		// gets the value of sector[<var>].xxx into <VAR>
+		// gets the value of sector [<var>].xxx into <VAR>
 
 		// now get name of .xxx
 		while ((*textptr != '['))
@@ -2714,10 +2719,10 @@ int ConCompiler::parsecommand()
 	{
 		popscriptvalue();
 		transnum(LABEL_DEFINE);
-		int k = popscriptvalue();
-		if (k > VERSIONCHECK)
+		int val = popscriptvalue();
+		if (val > VERSIONCHECK)
 		{
-			Printf(TEXTCOLOR_RED "  * ERROR: This CON Code requires at least Build %d, but we are only Build %d\n", k, (int)VERSIONCHECK);
+			Printf(TEXTCOLOR_RED "  * ERROR: This CON Code requires at least Build %d, but we are only Build %d\n", val, (int)VERSIONCHECK);
 			errorcount++;
 		}
 		break;
@@ -2819,10 +2824,10 @@ int ConCompiler::parsecommand()
 			setscriptvalue(tempscrptr, scriptpos());	// save 'end' location
 		}
 
-		casescriptptr = NULL;
+		casescriptptr = 0;
 		// decremented in endswitch.  Don't decrement here...
 		//			checking_switch--; // allow nesting (maybe if other things work)
-		tempscrptr = NULL;
+		tempscrptr = 0;
 		break;
 
 
@@ -2887,14 +2892,6 @@ int ConCompiler::parsecommand()
 	case concmd_startlevel:
 		// start at specified level
 		// startlevel <episode> <level>
-#if 0
-		if (!g_bEnhanced)
-		{
-			errorcount++;
-			printf("  * ERROR!(L%ld) Command  '%s' is enhanced only.  Define enhance with the version number your code needs before using this commands.\n", line_number, tempbuf);
-			return 0;
-		}
-#endif
 		// get the ID of the DEF
 		getlabel();	
 		checkforkeyword();
@@ -2924,14 +2921,6 @@ int ConCompiler::parsecommand()
 	case concmd_mapvoxel:
 		// map a tilenum to a voxel.
 		// syntax: mapvoxel <tilenum> <filename (8.3)>
-#if 0
-		if (!g_bEnhanced)
-		{
-			errorcount++;
-			printf("  * ERROR!(L%ld) Command  '%s' is enhanced only.  Define enhance with the version number your code needs before using this commands.\n", line_number, tempbuf);
-			return 0;
-		}
-#endif
 		popscriptvalue(); // don't save in compiled code
 
 		transnum(LABEL_DEFINE);
@@ -2954,16 +2943,8 @@ int ConCompiler::parsecommand()
 	case concmd_myospal:
 	case concmd_myosx:
 	case concmd_myospalx:
-#if 0
-		if (!g_bEnhanced)
-		{
-			errorcount++;
-			printf("  * ERROR!(L%ld) Command  '%s' is enhanced only.  Define enhance with the version number your code needs before using this commands.\n", line_number, tempbuf);
-			return 0;
-		}
-#endif
 		// syntax:
-		// int x, int y, short tilenum, signed char shade, char orientation
+		// int x, int y, int tilenum, int shade, int orientation
 		// myospal adds char pal
 
 		// Parse: x
@@ -3134,7 +3115,7 @@ static const char* ConFile(void)
 
 	// WW2GI anf NAM special con names got introduced by EDuke32.
 	// Do we really need these?
-	if (g_gameType & GAMEFLAG_WW2GI)
+	if (isWW2GI())
 	{
 		if (fileSystem.FindFile("ww2gi.con") >= 0) return "ww2gi.con";
 	}
@@ -3248,8 +3229,7 @@ void loadcons()
 	}
 
 	// These can only be retrieved AFTER loading the scripts.
-	InitGameVarPointers();
-	ResetSystemDefaults();
+	FinalizeGameVars();
 	S_WorldTourMappingsForOldSounds(); // create a sound mapping for World Tour.
 	S_CacheAllSounds();
 	comp.setmusic();

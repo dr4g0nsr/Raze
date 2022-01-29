@@ -22,7 +22,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //-------------------------------------------------------------------------
 #include "ns.h"	// Must come before everything else!
 
-#include "compat.h"
 #include "blood.h"
 #include "m_crc32.h"
 
@@ -60,22 +59,6 @@ int qanimateoffs(int a1, int a2)
         }
     }
     return offset;
-}
-
-void qinitspritelists();
-int32_t qinsertsprite(int16_t nSector, int16_t nStat);
-int32_t qdeletesprite(int16_t nSprite);
-int32_t qchangespritesect(int16_t nSprite, int16_t nSector);
-int32_t qchangespritestat(int16_t nSprite, int16_t nStatus);
-
-void HookReplaceFunctions(void)
-{
-    animateoffs_replace = qanimateoffs;
-    initspritelists_replace = qinitspritelists;
-    insertsprite_replace = qinsertsprite;
-    deletesprite_replace = qdeletesprite;
-    changespritesect_replace = qchangespritesect;
-    changespritestat_replace = qchangespritestat;
 }
 
 END_BLD_NS

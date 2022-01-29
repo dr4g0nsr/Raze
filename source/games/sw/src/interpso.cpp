@@ -26,8 +26,6 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 
 #include "ns.h"
 
-#include "compat.h"
-
 #include "game.h"
 #include "interpso.h"
 #include "serializer.h"
@@ -50,6 +48,7 @@ enum
     soi_sprx = 0x8000000,
     soi_spry = 0x9000000,
     soi_sprz = 0xa000000,
+	soi_sprang = 0xb000000,
 };
 
 static struct so_interp
@@ -62,7 +61,7 @@ static struct so_interp
         int32_t lastipos;
         int32_t lastoldipos;
         int32_t lastangdiff;
-        int32_t spriteofang;
+        TObjPtr<DSWActor*> actorofang;
     } data[SO_MAXINTERPOLATIONS];
 
     int32_t numinterpolations;
@@ -70,41 +69,67 @@ static struct so_interp
     bool hasvator;
 } so_interpdata[MAX_SECTOR_OBJECTS];
 
-static int &getvalue(int element, bool write)
+void MarkSOInterp()
 {
-    static int scratch;
-    int index = element & soi_base;
-    int type = element & ~soi_base;
-    switch (type)
+    int32_t i;
+    SECTOR_OBJECT* sop;
+    so_interp* interp;
+    so_interp::interp_data* data;
+
+    for (sop = SectorObject, interp = so_interpdata;
+        sop < &SectorObject[MAX_SECTOR_OBJECTS]; sop++, interp++)
     {
-    case soi_wallx:
-        if (write) sector[wall[index].sector].dirty = 255;
-        return wall[index].x;
-    case soi_wally:
-        if (write) sector[wall[index].sector].dirty = 255;
-        return wall[index].y;
-    case soi_ceil:
-        return sector[index].ceilingz;
-    case soi_floor:
-        return sector[index].floorz;
-    case soi_sox:
-        return SectorObject[index].xmid;
-    case soi_soy:
-        return SectorObject[index].ymid;
-    case soi_soz:
-        return SectorObject[index].zmid;
-    case soi_sprx:
-        return sprite[index].x;
-    case soi_spry:
-        return sprite[index].y;
-    case soi_sprz:
-        return sprite[index].z;
-    default:
-        return scratch;
+        if (SO_EMPTY(sop))
+            continue;
+        for (i = 0, data = interp->data; i < interp->numinterpolations; i++, data++)
+        {
+            GC::Mark(data->actorofang);
+        }
     }
 }
 
-static void so_setpointinterpolation(so_interp *interp, int element)
+static int &getvalue(so_interp::interp_data& element, bool write)
+{
+    static int scratch;
+    int index = element.curelement & soi_base;
+    int type = element.curelement & ~soi_base;
+    switch (type)
+    {
+    case soi_wallx:
+        if (write) wall[index].moved();
+        return wall[index].pos.X;
+    case soi_wally:
+        if (write) wall[index].moved();
+        return wall[index].pos.Y;
+    case soi_ceil:
+        return *sector[index].ceilingzptr(!write);
+    case soi_floor:
+        return *sector[index].floorzptr(!write);
+    case soi_sox:
+        return SectorObject[index].pmid.X;
+    case soi_soy:
+        return SectorObject[index].pmid.Y;
+    case soi_soz:
+        return SectorObject[index].pmid.Z;
+    case soi_sprx:
+		if (element.actorofang)
+			return element.actorofang->spr.pos.X;
+        break;
+    case soi_spry:
+		if (element.actorofang)
+			return element.actorofang->spr.pos.Y;
+        break;
+    case soi_sprz:
+		if (element.actorofang)
+			return element.actorofang->spr.pos.Z;
+        break;
+    default:
+		break;
+    }
+	return scratch;
+}
+
+static void so_setpointinterpolation(so_interp *interp, int element, DSWActor* actor = nullptr)
 {
     int32_t i;
     if (interp->numinterpolations >= SO_MAXINTERPOLATIONS)
@@ -112,64 +137,55 @@ static void so_setpointinterpolation(so_interp *interp, int element)
 
     for (i = 0; i < interp->numinterpolations; i++)
     {
-        if (interp->data[i].curelement == element)
+        if (interp->data[i].curelement == element && interp->data[i].actorofang == actor)
             return;
     }
 
     so_interp::interp_data *data = &interp->data[interp->numinterpolations++];
 
     data->curelement = element;
+	data->actorofang = actor;
     data->oldipos =
         data->lastipos =
-        data->lastoldipos = getvalue(element, false);
-    data->spriteofang = -1;
+        data->lastoldipos = getvalue(*data, false);
 }
 
-static void so_setspriteanginterpolation(so_interp *interp, int32_t spritenum)
+static void so_setspriteanginterpolation(so_interp *interp, DSWActor* actor)
 {
     int32_t i;
     if (interp->numinterpolations >= SO_MAXINTERPOLATIONS)
         return;
 
     for (i = 0; i < interp->numinterpolations; i++)
-        if (interp->data[i].curelement == -1 && interp->data[i].spriteofang == spritenum)
+        if (interp->data[i].curelement == soi_sprang && interp->data[i].actorofang == actor)
             return;
 
     so_interp::interp_data *data = &interp->data[interp->numinterpolations++];
 
-    data->curelement = -1;
+    data->curelement = soi_sprang;
     data->oldipos =
         data->lastipos =
-        data->lastoldipos = sprite[spritenum].ang;
+        data->lastoldipos = actor->spr.ang;
     data->lastangdiff = 0;
-    data->spriteofang = spritenum;
+    data->actorofang = actor;
 }
 
 // Covers points and angles altogether
-static void so_stopdatainterpolation(so_interp *interp, int element)
+static void so_stopdatainterpolation(so_interp *interp, int element, DSWActor* actor)
 {
-    int32_t i;
-
-    for (i = 0; i < interp->numinterpolations; i++)
-    {
-        if (interp->data[i].curelement == -1)
-        {
-            if (interp->data[i].spriteofang == element) break;
-        }
-        else if (interp->data[i].curelement == element)
-            break;
-
-    }
-
-    if (i == interp->numinterpolations)
-        return;
-
-    interp->data[i] = interp->data[--(interp->numinterpolations)];
+	for (int i = 0; i < interp->numinterpolations; i++)
+	{
+		if (interp->data[i].curelement == element && interp->data[i].actorofang == actor)
+		{
+			interp->data[i] = interp->data[--(interp->numinterpolations)];
+			break;
+		}
+	}
 }
 
-void so_addinterpolation(SECTOR_OBJECTp sop)
+void so_addinterpolation(SECTOR_OBJECT* sop)
 {
-    SECTORp *sectp;
+    sectortype* *sectp;
     int32_t startwall, endwall;
     int32_t i;
 
@@ -179,36 +195,34 @@ void so_addinterpolation(SECTOR_OBJECTp sop)
 
     for (sectp = sop->sectp; *sectp; sectp++)
     {
-        startwall = (*sectp)->wallptr;
-        endwall = startwall + (*sectp)->wallnum - 1;
-
-        for (i = startwall; i <= endwall; i++)
+        for (auto& wal : wallsofsector(*sectp))
         {
-            int32_t nextwall = wall[i].nextwall;
+            so_setpointinterpolation(interp, wallnum(&wal) | soi_wallx);
+            so_setpointinterpolation(interp, wallnum(&wal) | soi_wally);
 
-            so_setpointinterpolation(interp, i|soi_wallx);
-            so_setpointinterpolation(interp, i|soi_wally);
-
-            if (nextwall >= 0)
+            if (wal.twoSided())
             {
-                so_setpointinterpolation(interp, wall[nextwall].point2|soi_wallx);
-                so_setpointinterpolation(interp, wall[nextwall].point2|soi_wally);
+                auto nextWall = wal.nextWall()->point2Wall();
+                so_setpointinterpolation(interp, wallnum(nextWall) | soi_wallx);
+                so_setpointinterpolation(interp, wallnum(nextWall) | soi_wally);
             }
         }
 
-        int i;
-        SectIterator it(*sectp - sector);
-        while ((i = it.NextIndex()) >= 0)
-            if (sprite[i].statnum == STAT_VATOR && SP_TAG1(sprite+i) == SECT_VATOR)
+
+        SWSectIterator it(*sectp);
+        while (auto actor = it.Next())
+            if (actor->spr.statnum == STAT_VATOR && SP_TAG1(actor) == SECT_VATOR)
+            {
+                interp->hasvator = true;
                 break;
-        interp->hasvator |= (i >= 0);
+            }
     }
 
     if (!interp->hasvator)
         for (sectp = sop->sectp; *sectp; sectp++)
         {
-            so_setpointinterpolation(interp, int(*sectp - sector) | soi_floor);
-            so_setpointinterpolation(interp, int(*sectp - sector) | soi_ceil);
+            so_setpointinterpolation(interp, sectnum(*sectp) | soi_floor);
+            so_setpointinterpolation(interp, sectnum(*sectp) | soi_ceil);
         }
 
     // interpolate midpoint, for aiming at a remote controlled SO
@@ -220,31 +234,29 @@ void so_addinterpolation(SECTOR_OBJECTp sop)
     interp->lasttic = synctics;
 }
 
-void so_setspriteinterpolation(SECTOR_OBJECTp sop, spritetype *sp)
+void so_setspriteinterpolation(SECTOR_OBJECT* sop, DSWActor* actor)
 {
     so_interp *interp = &so_interpdata[sop - SectorObject];
-    int snum = int(sp - sprite);
 
-    so_setpointinterpolation(interp, snum | soi_sprx);
-    so_setpointinterpolation(interp, snum | soi_spry);
+    so_setpointinterpolation(interp, soi_sprx, actor);
+    so_setpointinterpolation(interp, soi_spry, actor);
     if (!interp->hasvator)
-        so_setpointinterpolation(interp, snum | soi_sprz);
-    so_setspriteanginterpolation(interp, snum);
+        so_setpointinterpolation(interp, soi_sprz, actor);
+    so_setspriteanginterpolation(interp, actor);
 }
 
-void so_stopspriteinterpolation(SECTOR_OBJECTp sop, spritetype *sp)
+void so_stopspriteinterpolation(SECTOR_OBJECT* sop, DSWActor *actor)
 {
     so_interp *interp = &so_interpdata[sop - SectorObject];
-    int snum = int(sp - sprite);
 
-    so_stopdatainterpolation(interp, snum | soi_sprx);
-    so_stopdatainterpolation(interp, snum | soi_spry);
+    so_stopdatainterpolation(interp, soi_sprx, actor);
+    so_stopdatainterpolation(interp, soi_spry, actor);
     if (!interp->hasvator)
-        so_stopdatainterpolation(interp, snum | soi_sprz);
-    so_stopdatainterpolation(interp, -1);
+        so_stopdatainterpolation(interp, soi_sprz, actor);
+    so_stopdatainterpolation(interp, soi_sprang, actor);
 }
 
-void so_setinterpolationtics(SECTOR_OBJECTp sop, int16_t locktics)
+void so_setinterpolationtics(SECTOR_OBJECT* sop, int16_t locktics)
 {
     so_interp *interp = &so_interpdata[sop - SectorObject];
 
@@ -255,7 +267,7 @@ void so_setinterpolationtics(SECTOR_OBJECTp sop, int16_t locktics)
 void so_updateinterpolations(void) // Stick at beginning of domovethings
 {
     int32_t i;
-    SECTOR_OBJECTp sop;
+    SECTOR_OBJECT* sop;
     so_interp *interp;
     so_interp::interp_data *data;
     bool interpolating = cl_sointerpolation && !CommEnabled; // If changing from menu
@@ -266,21 +278,26 @@ void so_updateinterpolations(void) // Stick at beginning of domovethings
         bool skip = !SyncInput() && (sop->track == SO_TURRET);
         if (SO_EMPTY(sop) || skip)
             continue;
+
+
         if (interp->tic < interp->lasttic)
             interp->tic += synctics;
         for (i = 0, data = interp->data; i < interp->numinterpolations; i++, data++)
         {
-            if (data->spriteofang >= 0)
+            if (data->curelement == soi_sprang)
             {
-                USERp u = User[data->spriteofang].Data();
-                if (u)
-                    u->oangdiff = 0;
-                if (!interpolating)
-                    data->lastangdiff = 0;
-                data->oldipos = sprite[data->spriteofang].ang;
+                auto actorofang = data->actorofang;
+                if (actorofang)
+                {
+                    if (actorofang->hasU())
+                        actorofang->user.oangdiff = 0;
+                    if (!interpolating)
+                        data->lastangdiff = 0;
+                    data->oldipos = actorofang->spr.ang;
+                }
             }
             else
-                data->oldipos = getvalue(data->curelement, false);
+                data->oldipos = getvalue(*data, false);
 
             if (!interpolating)
                 data->lastipos = data->lastoldipos = data->oldipos;
@@ -293,7 +310,7 @@ void so_updateinterpolations(void) // Stick at beginning of domovethings
 void so_dointerpolations(int32_t smoothratio)                      // Stick at beginning of drawscreen
 {
     int32_t i, delta;
-    SECTOR_OBJECTp sop;
+    SECTOR_OBJECT* sop;
     so_interp *interp;
     so_interp::interp_data *data;
 
@@ -306,21 +323,30 @@ void so_dointerpolations(int32_t smoothratio)                      // Stick at b
         if (SO_EMPTY(sop) || skip)
             continue;
 
-        for (i = 0; i < interp->numinterpolations; i++)
-            interp->data[i].bakipos = (interp->data[i].spriteofang >= 0) ?
-                                      sprite[interp->data[i].spriteofang].ang :
-                                      getvalue(interp->data[i].curelement, false);
 
+        for (i = 0; i < interp->numinterpolations; i++)
+        {
+            auto actorofang = interp->data[i].actorofang;
+            if (interp->data[i].curelement >= soi_sprx && actorofang == nullptr)
+                continue; // target went poof.
+
+            interp->data[i].bakipos = (interp->data[i].curelement == soi_sprang) ?
+                                      actorofang->spr.ang :
+                                      getvalue(interp->data[i], false);
+        }
         if (interp->tic == 0) // Only if the SO has just moved
         {
             for (i = 0, data = interp->data; i < interp->numinterpolations; i++, data++)
             {
                 data->lastipos = data->bakipos;
                 data->lastoldipos = data->oldipos;
-                if (data->spriteofang >= 0)
+                if (data->curelement == soi_sprang)
                 {
-                    USERp u = User[data->spriteofang].Data();
-                    data->lastangdiff = u ? u->oangdiff : 0;
+                    auto actorofang = data->actorofang;
+                    if (actorofang)
+                    {
+                        data->lastangdiff = actorofang->hasU() ? actorofang->user.oangdiff : 0;
+                    }
                 }
             }
         }
@@ -358,22 +384,26 @@ void so_dointerpolations(int32_t smoothratio)                      // Stick at b
             // TODO: It could be better. In particular, it could be better
             // to conditionally disable the interpolation from analyzesprites
             // instead, using TSPRITE info if possible.
-            if (data->curelement >= soi_sprx)
+            if (data->curelement >= soi_sprx && data->curelement <= soi_sprz)
             {
-                int32_t sprnum = data->curelement & soi_base;
-                USERp u = User[sprnum].Data();
-                if (u && (sprite[sprnum].statnum != STAT_DEFAULT) &&
-                    ((TEST(u->Flags, SPR_SKIP4) && (sprite[sprnum].statnum <= STAT_SKIP4_INTERP_END)) ||
-                     (TEST(u->Flags, SPR_SKIP2) && (sprite[sprnum].statnum <= STAT_SKIP2_INTERP_END))))
+				DSWActor* actor = data->actorofang;
+                if (!actor) continue;
+                if (actor->hasU() && (actor->spr.statnum != STAT_DEFAULT) &&
+                    ((actor->user.Flags & (SPR_SKIP4) && (actor->spr.statnum <= STAT_SKIP4_INTERP_END)) ||
+                     (actor->user.Flags & (SPR_SKIP2) && (actor->spr.statnum <= STAT_SKIP2_INTERP_END))))
                     continue;
             }
 
-            if (data->spriteofang >= 0)
-                sprite[data->spriteofang].ang = NORM_ANGLE(data->lastoldipos + MulScale(data->lastangdiff, ratio, 16));
+            if (data->curelement == soi_sprang)
+            {
+                DSWActor* actor = data->actorofang;
+                if (!actor) continue;
+                actor->spr.ang = NORM_ANGLE(data->lastoldipos + MulScale(data->lastangdiff, ratio, 16));
+            }
             else
             {
                 delta = data->lastipos - data->lastoldipos;
-                getvalue(data->curelement, true) = data->lastoldipos + MulScale(delta, ratio, 16);
+                getvalue(*data, true) = data->lastoldipos + MulScale(delta, ratio, 16);
             }
         }
     }
@@ -382,7 +412,7 @@ void so_dointerpolations(int32_t smoothratio)                      // Stick at b
 void so_restoreinterpolations(void)                 // Stick at end of drawscreen
 {
     int32_t i;
-    SECTOR_OBJECTp sop;
+    SECTOR_OBJECT* sop;
     so_interp *interp;
     so_interp::interp_data *data;
 
@@ -394,16 +424,19 @@ void so_restoreinterpolations(void)                 // Stick at end of drawscree
             continue;
 
         for (i = 0, data = interp->data; i < interp->numinterpolations; i++, data++)
-            if (data->spriteofang >= 0)
-                sprite[data->spriteofang].ang = data->bakipos;
+            if (data->curelement == soi_sprang)
+            {
+                auto actorofang = interp->data[i].actorofang;
+                if (actorofang) actorofang->spr.ang = data->bakipos;
+            }
             else
-                getvalue(data->curelement, true) = data->bakipos;
+                getvalue(*data, true) = data->bakipos;
     }
 }
 
 void so_serializeinterpolations(FSerializer& arc)
 {
-    SECTOR_OBJECTp sop;
+    SECTOR_OBJECT* sop;
     so_interp* interp;
 
     if (arc.BeginArray("sop_interp"))
@@ -423,7 +456,7 @@ void so_serializeinterpolations(FSerializer& arc)
                         {
                             arc("curelement", data->curelement)
                                 ("oldipos", data->oldipos)
-                                ("spriteofang", data->spriteofang)
+                                ("spriteofang", data->actorofang)
                                 .EndObject();
                             if (arc.isReading())
                             {

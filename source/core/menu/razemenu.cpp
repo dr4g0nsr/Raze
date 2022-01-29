@@ -65,6 +65,7 @@
 #include "savegamehelp.h"
 #include "gi.h"
 #include "raze_music.h"
+#include "razefont.h"
 
 EXTERN_CVAR(Int, cl_gfxlocalization)
 EXTERN_CVAR(Bool, m_quickexit)
@@ -89,22 +90,29 @@ FNewGameStartup NewGameStartupInfo;
 
 static bool DoStartGame(FNewGameStartup& gs)
 {
-	auto vol = FindVolume(gs.Episode);
-	if (!vol) return false;
-
-	if (isShareware() && (vol->flags & VF_SHAREWARELOCK))
+	MapRecord* map;
+	if (gs.Map == nullptr)
 	{
-		M_StartMessage(GStrings("SHAREWARELOCK"), 1, NAME_None);
-		return false;
-	}
+		auto vol = FindVolume(gs.Episode);
+		if (!vol) return false;
 
-	auto map = FindMapByName(vol->startmap);
-	if (!map) return false;
+		if (isShareware() && (vol->flags & VF_SHAREWARELOCK))
+		{
+			M_StartMessage(GStrings("SHAREWARELOCK"), 1, NAME_None);
+			return false;
+		}
+
+		map = FindMapByName(vol->startmap);
+		if (!map) return false;
+	}
+	else
+		map = gs.Map;
+
 	soundEngine->StopAllChannels();
 
 	gi->StartGame(gs);	// play game specific effects (like Duke/RR/SW's voice lines when starting a game.)
 
-	DeferedStartGame(map, gs.Skill);
+	DeferredStartGame(map, gs.Skill);
 	return true;
 }
 
@@ -131,21 +139,18 @@ bool M_SetSpecialMenu(FName& menu, int param)
 		break;
 
 	case NAME_Skillmenu:
-		// sent from the episode menu
-		NewGameStartupInfo.Episode = param;
-		NewGameStartupInfo.Level = 0;
+		// sent from the episode or user map menu
+		if (param != INT_MAX)
+		{
+			NewGameStartupInfo.Map = nullptr;
+			NewGameStartupInfo.Episode = param;
+			NewGameStartupInfo.Level = 0;
+		}
 		NewGameStartupInfo.Skill = gDefaultSkill;
 		return true;
 
 	case NAME_Startgame:
-	case NAME_StartgameNoSkill:
 		NewGameStartupInfo.Skill = param;
-		if (menu == NAME_StartgameNoSkill)
-		{
-			menu = NAME_Startgame;
-			NewGameStartupInfo.Episode = param;
-			NewGameStartupInfo.Skill = 1;
-		}
 		if (DoStartGame(NewGameStartupInfo))
 		{
 			M_ClearMenus();
@@ -156,9 +161,9 @@ bool M_SetSpecialMenu(FName& menu, int param)
 		}
 		return false;
 
-	case NAME_CustomSubMenu1:
-		menu = ENamedName(menu.GetIndex() + param);
-		break;
+	case NAME_MPJoin:
+		exit;
+		return false;
 
 	case NAME_Savegamemenu:
 		if (!gi->CanSave())
@@ -373,7 +378,7 @@ static DMenuItemBase* CreateCustomListMenuItemText(double x, double y, int heigh
 {
 	const char* classname = 
 		isBlood() ? "ListMenuItemBloodTextItem" :
-		(g_gameType & GAMEFLAG_SW) ? "ListMenuItemSWTextItem" :
+		isSWALL() ? "ListMenuItemSWTextItem" :
 		(g_gameType & GAMEFLAG_PSEXHUMED) ? "ListMenuItemExhumedTextItem" : "ListMenuItemDukeTextItem";
 	auto c = PClass::FindClass(classname);
 	auto p = c->CreateNew();
@@ -409,42 +414,38 @@ static void BuildEpisodeMenu()
 		}
 
 		ld->mSelectedItem = gDefaultVolume + ld->mItems.Size(); // account for pre-added items
-		int y = ld->mYpos;
+		double y = ld->mYpos;
 
 		// Volume definitions should be sorted by intended menu order.
 		for (auto &vol : volumes)
 		{
 			if (vol.name.IsNotEmpty() && !(vol.flags & VF_HIDEFROMSP))
 			{
-				int isShareware = ((g_gameType & GAMEFLAG_DUKE) && (g_gameType & GAMEFLAG_SHAREWARE) && (vol.flags & VF_SHAREWARELOCK));
+				bool isShareware = ((g_gameType & GAMEFLAG_DUKE) && (g_gameType & GAMEFLAG_SHAREWARE) && (vol.flags & VF_SHAREWARELOCK));
 				auto it = CreateCustomListMenuItemText(ld->mXpos, y, ld->mLinespacing, vol.name[0],
-					vol.name, ld->mFont, CR_UNTRANSLATED, isShareware, NAME_Skillmenu, vol.index); // font colors are not used, so hijack one for the shareware flag.
+					vol.name, ld->mFont, CR_UNTRANSLATED, int(isShareware), NAME_Skillmenu, vol.index); // font colors are not used, so hijack one for the shareware flag.
 
 				y += ld->mLinespacing;
 				ld->mItems.Push(it);
 				addedVolumes++;
 				if (vol.subtitle.IsNotEmpty())
 				{
-					auto it = CreateCustomListMenuItemText(ld->mXpos, y, ld->mLinespacing * 6 / 10, 1,
+					auto item = CreateCustomListMenuItemText(ld->mXpos, y, ld->mLinespacing * 6 / 10, 1,
 						vol.subtitle, SmallFont, CR_GRAY, false, NAME_None, vol.index);
 					y += ld->mLinespacing * 6 / 10;
-					ld->mItems.Push(it);
+					ld->mItems.Push(item);
 					textadded = true;
 				}
 			}
 		}
-#if 0	// this needs to be backed by a working selection menu, until that gets done it must be disabled.
 		if (!(g_gameType & GAMEFLAG_SHAREWARE))
 		{
-			//auto it = new FListMenuItemNativeStaticText(ld->mXpos, "", NIT_SmallFont);	// empty entry as spacer.
-			//ld->mItems.Push(it);
-
 			y += ld->mLinespacing / 3;
-			auto it = CreateCustomListMenuItemText(ld->mXpos, y, ld->mLinespacing, 'U', "$MNU_USERMAP", ld->mFont, 0, 0, NAME_UsermapMenu);
+			auto it = CreateCustomListMenuItemText(ld->mXpos, y, ld->mLinespacing, 'U', "$MNU_USERMAP", ld->mFont, CR_UNTRANSLATED, 0, NAME_UsermapMenu, 0);
 			ld->mItems.Push(it);
 			addedVolumes++;
 		}
-#endif
+
 		if (addedVolumes == 1)
 		{
 			ld->mAutoselect = ld->mItems.Size() - (textadded ? 2 : 1);
@@ -455,7 +456,8 @@ static void BuildEpisodeMenu()
 	// Build skill menu
 	int addedSkills = 0;
 	desc = MenuDescriptors.CheckKey(NAME_Skillmenu);
-	if (desc != nullptr && (*desc)->IsKindOf(RUNTIME_CLASS(DListMenuDescriptor)))
+	// If the skill names list ios empty, a predefined menu is assumed
+	if (desc != nullptr && gSkillNames[0].IsNotEmpty() && (*desc)->IsKindOf(RUNTIME_CLASS(DListMenuDescriptor)))
 	{
 		DListMenuDescriptor* ld = static_cast<DListMenuDescriptor*>(*desc);
 		DMenuItemBase* popped = nullptr;
@@ -465,7 +467,7 @@ static void BuildEpisodeMenu()
 		}
 		if (isBlood() || isSWALL()) gDefaultSkill = 2;
 		ld->mSelectedItem = gDefaultSkill + ld->mItems.Size(); // account for pre-added items
-		int y = ld->mYpos;
+		double y = ld->mYpos;
 
 		for (int i = 0; i < MAXSKILLS; i++)
 		{
@@ -489,6 +491,48 @@ static void BuildEpisodeMenu()
 		}
 		if (popped) ld->mItems.Push(popped);
 	}
+}
+
+//=============================================================================
+//
+// Creates the episode menu
+//
+//=============================================================================
+extern TArray<VolumeRecord> volumes;
+
+static void BuildMultiplayerJoin()
+{
+	// Build episode menu
+	int addedVolumes = 0;
+	bool textadded = false;
+	DMenuDescriptor** desc = MenuDescriptors.CheckKey(NAME_MultiplayerJoin);
+	if (desc != nullptr && (*desc)->IsKindOf(RUNTIME_CLASS(DListMenuDescriptor)))
+	{
+		DListMenuDescriptor* ld = static_cast<DListMenuDescriptor*>(*desc);
+
+		DMenuItemBase* popped = nullptr;
+		if (ld->mItems.Size() && ld->mItems.Last()->IsKindOf(NAME_ListMenuItemBloodDripDrawer))
+		{
+			ld->mItems.Pop(popped);
+		}
+
+		ld->mSelectedItem = gDefaultVolume + ld->mItems.Size(); // account for pre-added items
+		double y = ld->mYpos;
+
+		bool isShareware = ((g_gameType & GAMEFLAG_DUKE) && (g_gameType & GAMEFLAG_SHAREWARE));
+		auto it = CreateCustomListMenuItemText(ld->mXpos, y, ld->mLinespacing, 0, "Server 1", ld->mFont, CR_UNTRANSLATED, int(isShareware), NAME_MPJoin, addedVolumes);
+
+		y += ld->mLinespacing;
+		ld->mItems.Push(it);
+		addedVolumes++;
+
+		if (addedVolumes == 1)
+		{
+			ld->mAutoselect = ld->mItems.Size() - (textadded ? 2 : 1);
+		}
+		if (popped) ld->mItems.Push(popped);
+	}
+
 }
 
 //=============================================================================
@@ -600,7 +644,7 @@ void SetDefaultMenuColors()
 		gameinfo.mSliderColor = "Red";
 		cls = PClass::FindClass("BloodMenuDelegate");
 	}
-	else if (g_gameType & GAMEFLAG_SW)
+	else if (isSWALL())
 	{
 		OptionSettings.mFontColorHeader = CR_DARKRED;
 		OptionSettings.mFontColorHighlight = CR_WHITE;
@@ -618,7 +662,7 @@ void SetDefaultMenuColors()
 	}
 	else
 	{
-		if (g_gameType & (GAMEFLAG_NAM | GAMEFLAG_NAPALM | GAMEFLAG_WW2GI))
+		if (isNamWW2GI())
 		{
 			OptionSettings.mFontColor = CR_DARKGREEN;
 			OptionSettings.mFontColorHeader = CR_DARKGRAY;
@@ -626,7 +670,7 @@ void SetDefaultMenuColors()
 			OptionSettings.mFontColorSelection = CR_DARKGREEN;
 			gameinfo.mSliderColor = "Green";
 		}
-		else if (g_gameType & GAMEFLAG_RRALL)
+		else if (isRR())
 		{
 			OptionSettings.mFontColor = CR_BROWN;
 			OptionSettings.mFontColorHeader = CR_DARKBROWN;
@@ -643,6 +687,7 @@ void SetDefaultMenuColors()
 void BuildGameMenus()
 {
 	BuildEpisodeMenu();
+	BuildMultiplayerJoin();
 	InitCrosshairsList();
 	UpdateJoystickMenu(nullptr);
 }

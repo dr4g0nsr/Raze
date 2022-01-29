@@ -11,7 +11,7 @@ enum ESoundFlags
 	CHAN_5 = 5,
 	CHAN_6 = 6,
 	CHAN_7 = 7,
-	
+
 	// modifier flags
 	CHAN_LISTENERZ = 8,
 	CHAN_MAYBE_LOCAL = 16,
@@ -76,11 +76,14 @@ enum EGameState
 	GS_INTERMISSION,
 	GS_FINALE,
 	GS_DEMOSCREEN,
+	GS_FULLCONSOLE,		// [RH]	Fullscreen console
+	GS_HIDECONSOLE,		// [RH] The menu just did something that should hide fs console
+	GS_STARTUP,			// [RH] Console is fullscreen, and game is just starting
+	GS_TITLELEVEL,		// [RH] A combination of GS_LEVEL and GS_DEMOSCREEN
+	GS_INTRO,
+	GS_CUTSCENE,
+
 	GS_MENUSCREEN = GS_DEMOSCREEN,
-	GS_FULLCONSOLE,
-	GS_HIDECONSOLE,
-	GS_STARTUP,
-	GS_TITLELEVEL,
 }
 
 const TEXTCOLOR_BRICK			= "\034A";
@@ -180,6 +183,31 @@ struct _ native	// These are the global variables, the struct is only here to av
 	native MenuDelegateBase menuDelegate;
 	native readonly int consoleplayer;
 	native readonly double NotifyFontScale;
+	native readonly int paused;
+}
+
+struct System native
+{
+	native static void PlayMusic(String mus, int order = 0, bool looped = true);
+	native static void StopMusic();
+	native static void StopAllSounds();
+	native static bool SoundEnabled();
+	native static bool MusicEnabled();
+	native static double GetTimeFrac();
+
+	static bool specialKeyEvent(InputEvent ev)
+	{
+		if (ev.type == InputEvent.Type_KeyDown || ev.type == InputEvent.Type_KeyUp)
+		{
+			int key = ev.KeyScan;
+			let binding = Bindings.GetBinding(key);
+			bool volumekeys = key == InputEvent.KEY_VOLUMEDOWN || key == InputEvent.KEY_VOLUMEUP;
+			bool gamepadkeys = key > InputEvent.KEY_LASTJOYBUTTON && key < InputEvent.KEY_PAD_LTHUMB_RIGHT;
+			bool altkeys = key == InputEvent.KEY_LALT || key == InputEvent.KEY_RALT;
+			if (volumekeys || gamepadkeys || altkeys || binding ~== "screenshot") return true;
+		}
+		return false;
+	}
 }
 
 struct MusPlayingInfo native
@@ -188,7 +216,7 @@ struct MusPlayingInfo native
 	native int baseorder;
 	native bool loop;
 	native voidptr handle;
-	
+
 };
 
 struct TexMan
@@ -224,7 +252,7 @@ struct TexMan
 		ForceLookup = 128,
 		NoAlias = 256
 	};
-	
+
 	enum ETexReplaceFlags
 	{
 		NOT_BOTTOM			= 1,
@@ -389,8 +417,9 @@ struct Screen native
 	native static Color PaletteColor(int index);
 	native static int GetWidth();
 	native static int GetHeight();
+	native static Vector2 GetTextScreenSize();
 	native static void Clear(int left, int top, int right, int bottom, Color color, int palcolor = -1);
-	native static void Dim(Color col, double amount, int x, int y, int w, int h);
+	native static void Dim(Color col, double amount, int x, int y, int w, int h, ERenderStyle style = STYLE_Translucent);
 
 	native static vararg void DrawTexture(TextureID tex, bool animate, double x, double y, ...);
 	native static vararg void DrawShape(TextureID tex, bool animate, Shape2D s, ...);
@@ -416,6 +445,7 @@ struct Font native
 	enum EColorRange
 	{
 		CR_UNDEFINED = -1,
+		CR_NATIVEPAL = -1,
 		CR_BRICK,
 		CR_TAN,
 		CR_GRAY,
@@ -445,7 +475,7 @@ struct Font native
 		CR_TEAL,
 		NUM_TEXT_COLORS
 	};
-	
+
 	const TEXTCOLOR_BRICK			= "\034A";
 	const TEXTCOLOR_TAN				= "\034B";
 	const TEXTCOLOR_GRAY			= "\034C";
@@ -479,7 +509,7 @@ struct Font native
 
 	const TEXTCOLOR_CHAT			= "\034*";
 	const TEXTCOLOR_TEAMCHAT		= "\034!";
-	
+
 
 	native int GetCharWidth(int code);
 	native int StringWidth(String code);
@@ -495,6 +525,7 @@ struct Font native
 	native static Font GetFont(Name fontname);
 	native BrokenLines BreakLines(String text, int maxlen);
 	native int GetGlyphHeight(int code);
+	native int GetDefaultKerning();
 }
 
 struct Console native
@@ -560,7 +591,7 @@ class Object native
 	private native static void BuiltinRandomSeed(voidptr rng, int seed);
 	private native static Class<Object> BuiltinNameToClass(Name nm, Class<Object> filter);
 	private native static Object BuiltinClassCast(Object inptr, Class<Object> test);
-	
+
 	native static uint MSTime();
 	native vararg static void ThrowAbortException(String fmt, ...);
 
@@ -665,6 +696,7 @@ struct StringStruct native
 	native int CodePointCount() const;
 	native int, int GetNextCodePoint(int position) const;
 	native void Substitute(String str, String replace);
+	native void StripRight(String junk = "");
 }
 
 struct Translation version("2.4")

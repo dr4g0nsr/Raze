@@ -5,6 +5,8 @@
 #include "quotemgr.h"
 #include "palentry.h"
 #include "vectors.h"
+#include "screenjob.h"
+
 #ifdef GetMessage
 #undef GetMessage	// Windows strikes...
 #endif
@@ -49,10 +51,11 @@ enum EMapGameFlags
 	LEVEL_SW_DEATHEXIT_SERPENT = 1024,
 	LEVEL_SW_DEATHEXIT_SUMO = 2048,
 	LEVEL_SW_DEATHEXIT_ZILLA = 4096,
+	LEVEL_SW_DEATHEXIT_SERPENT_NEXT = 8192,
 
-	LEVEL_WT_BOSSSPAWN = 8192,
+	LEVEL_WT_BOSSSPAWN = 16384,
 
-
+	LEVEL_BOSSONLYCUTSCENE = 32768,
 };
 
 // These get filled in by the map definition parsers of the front ends.
@@ -61,12 +64,6 @@ extern int gDefaultVolume, gDefaultSkill;
 
 
 // Localization capable replacement of the game specific solutions.
-
-inline void MakeStringLocalizable(FString &quote)
-{
-	// Only prepend a quote if the string is localizable.
-	if (quote.Len() > 0 && quote[0] != '$' && GStrings[quote]) quote.Insert(0, "$");
-}
 
 enum
 {
@@ -81,21 +78,6 @@ enum {
 class DObject;
 struct MapRecord;
 
-struct CutsceneDef
-{
-	FString video;
-	FString function;
-	FString soundName;
-	int soundID = -1;	// ResID not SoundID!
-	int framespersec = 0; // only relevant for ANM.
-	bool transitiononly = false; // only play when transitioning between maps, but not when starting on a map or ending a game.
-
-	void Create(DObject* runner);
-	bool Create(DObject* runner, MapRecord* map, bool transition);
-	bool isdefined() { return video.IsNotEmpty() || function.IsNotEmpty(); }
-	int GetSound();
-};
-
 struct GlobalCutscenes
 {
 	CutsceneDef Intro;
@@ -106,6 +88,7 @@ struct GlobalCutscenes
 	CutsceneDef LoadingScreen;
 	FString MPSummaryScreen;
 	FString SummaryScreen;
+	FString StatusBarClass;
 };
 
 struct ClusterDef
@@ -169,10 +152,10 @@ struct MapRecord
 	int ex_ramses_cdtrack = -1; // this is not music, it is the actual dialogue!
 	FString ex_ramses_pup;
 	FString ex_ramses_text;
-	
+
 	const char* LabelName() const
 	{
-		if (flags & MI_USERMAP) return GStrings("TXT_USERMAP");
+		if (flags & MI_USERMAP) return GStrings("MNU_USERMAP");
 		return labelName;
 	}
 	const char *DisplayName() const
@@ -183,7 +166,8 @@ struct MapRecord
 	void SetName(const char *n)
 	{
 		name = n;
-		MakeStringLocalizable(name);
+		name.StripRight();
+		name = FStringTable::MakeMacro(name);
 	}
 	void SetFileName(const char* n)
 	{
@@ -197,7 +181,7 @@ struct MapRecord
 		if (num < 0 || num>= MAX_MESSAGES) return "";
 		return GStrings(messages[num]);
 	}
-	
+
 	void AddMessage(int num, const FString &msg)
 	{
 		messages[num] = msg;
@@ -220,6 +204,8 @@ struct SummaryInfo
 extern GlobalCutscenes globalCutscenes;
 extern MapRecord *currentLevel;	
 
+void SetMusicReplacement(const char *mapname, const char *music);
+void ReplaceMusics(bool namehack = false);
 bool SetMusicForMap(const char* mapname, const char* music, bool namehack = false);
 
 MapRecord *FindMapByName(const char *nm);

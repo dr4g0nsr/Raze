@@ -43,35 +43,33 @@ void operaterespawns_d(int low);
 void operaterespawns_r(int low);
 void operateforcefields_r(DDukeActor* act, int low);
 void operateforcefields_d(DDukeActor* act, int low);
-bool checkhitswitch_d(int snum, int w, DDukeActor *act);
-bool checkhitswitch_r(int snum, int w, DDukeActor* act);
-void activatebysector_d(int sect, DDukeActor* j);
-void activatebysector_r(int sect, DDukeActor* j);
-void checkhitwall_d(DDukeActor* spr, int dawallnum, int x, int y, int z, int atwith);
-void checkhitwall_r(DDukeActor* spr, int dawallnum, int x, int y, int z, int atwith);
-bool checkhitceiling_d(int sn);
-bool checkhitceiling_r(int sn);
+bool checkhitswitch_d(int snum, walltype* w, DDukeActor *act);
+bool checkhitswitch_r(int snum, walltype* w, DDukeActor* act);
+void activatebysector_d(sectortype* sect, DDukeActor* j);
+void activatebysector_r(sectortype* sect, DDukeActor* j);
+void checkhitwall_d(DDukeActor* spr, walltype* dawall, int x, int y, int z, int atwith);
+void checkhitwall_r(DDukeActor* spr, walltype* dawall, int x, int y, int z, int atwith);
+bool checkhitceiling_d(sectortype* sn);
+bool checkhitceiling_r(sectortype* sn);
 void checkhitsprite_d(DDukeActor* i, DDukeActor* sn);
 void checkhitsprite_r(DDukeActor* i, DDukeActor* sn);
 void checksectors_d(int snum);
 void checksectors_r(int snum);
 
-bool ceilingspace_d(int sectnum);
-bool ceilingspace_r(int sectnum);
-bool floorspace_d(int sectnum);
-bool floorspace_r(int sectnum);
+bool ceilingspace_d(sectortype*);
+bool ceilingspace_r(sectortype*);
+bool floorspace_d(sectortype*);
+bool floorspace_r(sectortype*);
 void addweapon_d(struct player_struct* p, int weapon);
 void addweapon_r(struct player_struct* p, int weapon);
 void hitradius_d(DDukeActor* i, int  r, int  hp1, int  hp2, int  hp3, int  hp4);
 void hitradius_r(DDukeActor* i, int  r, int  hp1, int  hp2, int  hp3, int  hp4);
-void lotsofmoney_d(DDukeActor* s, short n);
-void lotsofmail_d(DDukeActor* s, short n);
-void lotsofpaper_d(DDukeActor* s, short n);
-void lotsoffeathers_r(DDukeActor* s, short n);
-void guts_d(DDukeActor* s, short gtype, short n, short p);
-void guts_r(DDukeActor* s, short gtype, short n, short p);
-DDukeActor* ifhitsectors_d(int sectnum);
-DDukeActor* ifhitsectors_r(int sectnum);
+void lotsofmoney_d(DDukeActor* s, int n);
+void lotsofmail_d(DDukeActor* s, int n);
+void lotsofpaper_d(DDukeActor* s, int n);
+void lotsoffeathers_r(DDukeActor* s, int n);
+void guts_d(DDukeActor* s, int gtype, int n, int p);
+void guts_r(DDukeActor* s, int gtype, int n, int p);
 int ifhitbyweapon_r(DDukeActor* sn);
 int ifhitbyweapon_d(DDukeActor* sn);
 void fall_d(DDukeActor* i, int g_p);
@@ -80,8 +78,6 @@ bool spawnweapondebris_d(int picnum, int dnum);
 bool spawnweapondebris_r(int picnum, int dnum);
 void respawnhitag_d(DDukeActor* g_sp);
 void respawnhitag_r(DDukeActor* g_sp);
-void checktimetosleep_d(DDukeActor* actor);
-void checktimetosleep_r(DDukeActor* actor);
 void move_d(DDukeActor* i, int g_p, int g_x);
 void move_r(DDukeActor* i, int g_p, int g_x);
 void incur_damage_d(struct player_struct* p);
@@ -102,12 +98,8 @@ void displaymasks_d(int snum, int p, double smoothratio);
 void displaymasks_r(int snum, int p, double smoothratio);
 void think_d();
 void think_r();
-void animatesprites_d(spritetype* tsprite, int& spritesortcnt, int x, int y, int a, int smoothratio);
-void animatesprites_r(spritetype* tsprite, int& spritesortcnt, int x, int y, int a, int smoothratio);
-
-void InitFonts_d();
-void InitFonts_r();
-
+void animatesprites_d(tspritetype* tsprite, int& spritesortcnt, int x, int y, int a, int smoothratio);
+void animatesprites_r(tspritetype* tsprite, int& spritesortcnt, int x, int y, int a, int smoothratio);
 
 Dispatcher fi;
 
@@ -116,8 +108,6 @@ void SetDispatcher()
 	if (!isRR())
 	{
 		fi = {
-		InitFonts_d,
-
 		think_d,
 		initactorflags_d,
 		isadoorwall_d,
@@ -130,6 +120,7 @@ void SetDispatcher()
 		checkhitceiling_d,
 		checkhitsprite_d,
 		checksectors_d,
+		spawninit_d,
 
 		ceilingspace_d,
 		floorspace_d,
@@ -139,12 +130,10 @@ void SetDispatcher()
 		lotsofmail_d,
 		lotsofpaper_d,
 		guts_d,
-		ifhitsectors_d,
 		ifhitbyweapon_d,
 		fall_d,
 		spawnweapondebris_d,
 		respawnhitag_d,
-		checktimetosleep_d,
 		move_d,
 
 		incur_damage_d,
@@ -161,8 +150,6 @@ void SetDispatcher()
 	else
 	{
 		fi = {
-		InitFonts_r,
-
 		think_r,
 		initactorflags_r,
 		isadoorwall_r,
@@ -175,6 +162,7 @@ void SetDispatcher()
 		checkhitceiling_r,
 		checkhitsprite_r,
 		checksectors_r,
+		spawninit_r,
 
 		ceilingspace_r,
 		floorspace_r,
@@ -184,12 +172,10 @@ void SetDispatcher()
 		lotsoffeathers_r,
 		lotsoffeathers_r,
 		guts_r,
-		ifhitsectors_r,
 		ifhitbyweapon_r,
 		fall_r,
 		spawnweapondebris_r,
 		respawnhitag_r,
-		checktimetosleep_r,
 		move_r,
 
 		incur_damage_r,
@@ -212,14 +198,12 @@ int TILE_TREE2;
 int TILE_TIRE;
 int TILE_CONE;
 int TILE_W_FORCEFIELD;
-int TILE_CAMERA1;
 int TILE_SCRAP6;
 int TILE_APLAYER;
 int TILE_DRONE;
 int TILE_MENUSCREEN;
 int TILE_SCREENBORDER;
 int TILE_VIEWBORDER;
-int TILE_LASERLINE;
 int TILE_APLAYERTOP;
 int TILE_CAMCORNER;
 int TILE_CAMLIGHT;
@@ -228,7 +212,6 @@ int TILE_BOTTOMSTATUSBAR;
 int TILE_THREEDEE;
 int TILE_INGAMEDUKETHREEDEE;
 int TILE_ATOMICHEALTH;
-int TILE_FLOORSLIME;
 int TILE_JIBS6;
 int TILE_FIRE;
 int TILE_WATERBUBBLE;
@@ -253,8 +236,6 @@ int TILE_LA;
 int TILE_LOADSCREEN;
 int TILE_CROSSHAIR;
 int TILE_BIGORBIT1;
-int TILE_HURTRAIL;
-int TILE_FLOORPLASMA;
 int TILE_EGG;
 
 END_DUKE_NS

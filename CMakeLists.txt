@@ -188,8 +188,10 @@ target_architecture(TARGET_ARCHITECTURE)
 
 if( ${TARGET_ARCHITECTURE} MATCHES "x86_64" )
 	set( HAVE_VM_JIT ON )
-	option (HAVE_VULKAN "Enable Vulkan support" ON)
 endif()
+
+option (HAVE_VULKAN "Enable Vulkan support" ON)
+option (HAVE_GLES2 "Enable GLES2 support" ON)
 
 # no, we're not using external asmjit for now, we made too many modifications to our's.
 # if the asmjit author uses our changes then we'll update this.
@@ -206,10 +208,14 @@ if( MSVC )
 	# String pooling
 	# Function-level linking
 	# Disable run-time type information
+	set( ALL_C_FLAGS "/GF /Gy /permissive-" )
+
 	if ( HAVE_VULKAN )
-		set( ALL_C_FLAGS "/GF /Gy /permissive- /DHAVE_VULKAN" )
-	else()
-		set( ALL_C_FLAGS "/GF /Gy /permissive-" )
+		set( ALL_C_FLAGS "${ALL_C_FLAGS} /DHAVE_VULKAN" )
+	endif()
+
+	if ( HAVE_GLES2 )
+		set( ALL_C_FLAGS "${ALL_C_FLAGS} /DHAVE_GLES2" )
 	endif()
 
 	# Use SSE 2 as minimum always as the true color drawers needs it for __vectorcall
@@ -230,12 +236,12 @@ if( MSVC )
 	set( DEB_C_FLAGS "/D _CRTDBG_MAP_ALLOC /MTd" )
 
 	# Disable warnings for unsecure CRT functions from VC8+
-	set( ALL_C_FLAGS "${ALL_C_FLAGS} /wd4996 /DUNICODE /D_UNICODE /D_WIN32_WINNT=0x0600" )
-	
+	set( ALL_C_FLAGS "${ALL_C_FLAGS} /DUNICODE /D_UNICODE /D_WIN32_WINNT=0x0600 /D_CRT_SECURE_NO_DEPRECATE /D_CRT_SECURE_NO_WARNINGS /D_CRT_NONSTDC_NO_WARNINGS" )
+
 	# These must be silenced because the code is full of them. Expect some of undefined behavior hidden in this mess. :(
-	set( ALL_C_FLAGS "${ALL_C_FLAGS} /wd4244 /wd4018 /wd4267" )
-	
-	
+	#set( ALL_C_FLAGS "${ALL_C_FLAGS} /wd4244 /wd4018 /wd4267" )
+
+
 	# Most of these need to be cleaned out. The source is currently infested with far too much conditional compilation which is a constant source of problems.
 	set( ALL_C_FLAGS "${ALL_C_FLAGS} /DUSE_OPENGL=1 /DNOASM=1 /DWIN32" )
 
@@ -252,12 +258,15 @@ if( MSVC )
 	string(REPLACE " /GR" " " CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} )
 else()
 	set( REL_LINKER_FLAGS "" )
+	set( ALL_C_FLAGS "-ffp-contract=off -DUSE_OPENGL=1 -DNOASM=1" )
+
 	if ( HAVE_VULKAN )
-		set( ALL_C_FLAGS "-ffp-contract=off -DHAVE_VULKAN" )
-	else()
-		set( ALL_C_FLAGS "-ffp-contract=off" )
+		set( ALL_C_FLAGS "${ALL_C_FLAGS} -DHAVE_VULKAN" )
 	endif()
-	set( ALL_C_FLAGS "${ALL_C_FLAGS} -DUSE_OPENGL=1 -DNOASM=1" )
+
+	if ( HAVE_GLES2 )
+		set( ALL_C_FLAGS "${ALL_C_FLAGS} -DHAVE_GLES2" )
+	endif()
 
 	if ( UNIX )
 		include(CheckSymbolExists)
@@ -278,7 +287,7 @@ else()
 
 
 	if( APPLE )
-		set(CMAKE_OSX_DEPLOYMENT_TARGET "10.9")
+		set(CMAKE_OSX_DEPLOYMENT_TARGET "10.12")
 		if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" )
 			# If we're compiling with a custom GCC on the Mac (which we know since g++-4.2 doesn't support C++11) statically link libgcc.
 			set( ALL_C_FLAGS "-static-libgcc" )
@@ -365,6 +374,12 @@ else()
 	set( JPEG_LIBRARIES jpeg )
 	set( JPEG_LIBRARY jpeg )
 endif()
+
+add_subdirectory( libraries/libtess )
+set( TESS_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libraries/libtess/Include )
+set( TESS_LIBRARIES tess2 )
+set( TESS_LIBRARY tess2 )
+
 
 if( BZIP2_FOUND AND NOT FORCE_INTERNAL_BZIP2 )
 	message( STATUS "Using system bzip2 library, includes found at ${BZIP2_INCLUDE_DIR}" )

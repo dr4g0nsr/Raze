@@ -58,15 +58,23 @@ private:
 
 	TranslatedTexture hwDefTex[4];
 	TArray<TranslatedTexture> hwTex_Translated;
-	
+
  	TranslatedTexture * GetTexID(int translation, int scaleflags)
 	{
 		// Allow negative indices to pass through unchanged. 
 		// This is needed for allowing the client to allocate slots that aren't matched to a palette, e.g. Build's indexed variants.
 		if (translation >= 0)
 		{
-			auto remap = GPalette.TranslationToTable(translation);
-			translation = remap == nullptr ? 0 : remap->Index;
+			if (!IsLuminosityTranslation(translation))
+			{
+				auto remap = GPalette.TranslationToTable(translation);
+				translation = remap == nullptr ? 0 : remap->Index;
+			}
+			else
+			{
+				// only needs to preserve the color range plus an identifier for marking this a luminosity translation.
+				translation = ((translation >> 16) & 0x3fff) | 0xff0000;
+			}
 		}
 		else translation &= ~0x7fffffff;
 
@@ -100,13 +108,13 @@ public:
 		hwDefTex[1].Delete();
 		hwTex_Translated.Clear();
 	}
-	
+
 	IHardwareTexture * GetHardwareTexture(int translation, int scaleflags)
 	{
 		auto tt = GetTexID(translation, scaleflags);
 		return tt->hwTexture;
 	}
-	
+
 	void AddHardwareTexture(int translation, int scaleflags, IHardwareTexture *tex)
 	{
 		auto tt = GetTexID(translation, scaleflags);
@@ -162,6 +170,6 @@ public:
 		for (auto & t : hwTex_Translated) if (t.hwTexture) callback(t.hwTexture);
 	}
 
-	
+
 };
 

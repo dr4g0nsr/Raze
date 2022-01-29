@@ -159,18 +159,17 @@ extern const GENDUDESND gCustomDudeSnd[];
 // temporary, until normal DUDEEXTRA gets refactored
 struct GENDUDEEXTRA 
 {
-    unsigned short initVals[3];             // xrepeat, yrepeat, clipdist
-    unsigned short availDeaths[kDamageMax]; // list of seqs with deaths for each damage type
-    unsigned int moveSpeed;
-    unsigned int fireDist;          // counts from sprite size
-    unsigned int throwDist;         // counts from sprite size
-    unsigned short curWeapon;       // data1 duplicate to avoid potential problems when changing data dynamically
-    unsigned short weaponType;
-    unsigned short baseDispersion;
-    unsigned short slaveCount;              // how many dudes is summoned
-    //unsigned short incarnationsCount;
-    signed short nLifeLeech;        // spritenum of dropped dude's leech
-    signed short slave[kGenDudeMaxSlaves];  // index of the ones dude is summon
+    uint16_t initVals[3];             // xrepeat, yrepeat, clipdist
+    uint16_t availDeaths[kDamageMax]; // list of seqs with deaths for each damage type
+    uint32_t moveSpeed;
+    uint32_t fireDist;          // counts from sprite size
+    uint32_t throwDist;         // counts from sprite size
+    uint16_t curWeapon;       // data1 duplicate to avoid potential problems when changing data dynamically
+    uint16_t weaponType;
+    uint16_t baseDispersion;
+    uint16_t slaveCount;              // how many dudes is summoned
+    TObjPtr<DBloodActor*> pLifeLeech;        // spritenum of dropped dude's leech
+    TObjPtr<DBloodActor*> slave[kGenDudeMaxSlaves];  // index of the ones dude is summon
     signed short dmgControl[kDamageMax];    // depends of current weapon, drop armor item, sprite yrepeat and surface type
     bool updReq[kGenDudePropertyMax]; // update requests
     union
@@ -193,47 +192,40 @@ struct GENDUDEEXTRA
     };
 };
 
-extern GENDUDEEXTRA gGenDudeExtra[kMaxSprites];
-
-GENDUDEEXTRA* genDudeExtra(spritetype* pGenDude);
-XSPRITE* getNextIncarnation(XSPRITE* pXSprite);
-void killDudeLeech(spritetype* pLeech);
-void removeLeech(spritetype* pLeech, bool delSprite = true);
-void removeDudeStuff(spritetype* pSprite);
-spritetype* leechIsDropped(spritetype* pSprite);
-bool spriteIsUnderwater(spritetype* pSprite, bool oldWay = false);
-bool playGenDudeSound(spritetype* pSprite, int mode);
+DBloodActor* getNextIncarnation(DBloodActor* actor);
+void killDudeLeech(DBloodActor* pLeech);
+void removeLeech(DBloodActor* pLeech, bool delSprite = true);
+void removeDudeStuff(DBloodActor* pSprite);
+DBloodActor* leechIsDropped(DBloodActor* pSprite);
+bool spriteIsUnderwater(DBloodActor* pSprite, bool oldWay = false);
+bool playGenDudeSound(DBloodActor* actor, int mode);
 void aiGenDudeMoveForward(DBloodActor* actor);
-void aiGenDudeChooseDirection(spritetype* pSprite, XSPRITE* pXSprite, int a3, int aXvel = -1, int aYvel = -1);
-void aiGenDudeNewState(spritetype* pSprite, AISTATE* pAIState);
-int getGenDudeMoveSpeed(spritetype* pSprite, int which, bool mul, bool shift);
+void aiGenDudeChooseDirection(DBloodActor* actor, int a3, int aXvel = -1, int aYvel = -1);
+void aiGenDudeNewState(DBloodActor* actor, AISTATE* pAIState);
 int checkAttackState(DBloodActor* actor);
-bool doExplosion(spritetype* pSprite, int nType);
-spritetype* genDudeSpawn(spritetype* pSprite, int nDist);
-void genDudeTransform(spritetype* pSprite);
-void dudeLeechOperate(spritetype* pSprite, XSPRITE* pXSprite, EVENT a3);
-int getDodgeChance(spritetype* pSprite);
-int getRecoilChance(spritetype* pSprite);
-bool dudeIsMelee(XSPRITE* pXSprite);
-void updateTargetOfSlaves(spritetype* pSprite);
-void updateTargetOfLeech(spritetype* pSprite);
-bool canSwim(spritetype* pSprite);
-bool canDuck(spritetype* pSprite);
-bool canWalk(spritetype* pSprite);
-short inDodge(AISTATE* aiState);
+bool doExplosion(DBloodActor* pSprite, int nType);
+DBloodActor* genDudeSpawn(DBloodActor* source, DBloodActor* pSprite, int nDist);
+void genDudeTransform(DBloodActor* pSprite);
+void dudeLeechOperate(DBloodActor* actor, const EVENT& a3);
+int getDodgeChance(DBloodActor* pSprite);
+int getRecoilChance(DBloodActor* pSprite);
+bool dudeIsMelee(DBloodActor* pXSprite);
+void updateTargetOfSlaves(DBloodActor* pSprite);
+void updateTargetOfLeech(DBloodActor* pSprite);
+bool canSwim(DBloodActor* actor);
+bool canDuck(DBloodActor* actor);
+bool canWalk(DBloodActor* actor);
+int inDodge(AISTATE* aiState);
 bool inIdle(AISTATE* aiState);
 bool inAttack(AISTATE* aiState);
-short inRecoil(AISTATE* aiState);
-short inSearch(AISTATE* aiState);
-short inChase(AISTATE* aiState);
-short inDuck(AISTATE* aiState);
-int genDudeSeqStartId(XSPRITE* pXSprite);
-int getRangeAttackDist(spritetype* pSprite, int minDist = 3000, int maxDist = 80000);
-int getDispersionModifier(spritetype* pSprite, int minDisp, int maxDisp);
-void scaleDamage(XSPRITE* pXSprite);
-bool genDudePrepare(spritetype* pSprite, int propId);
-void genDudeUpdate(spritetype* pSprite);
-void genDudePostDeath(spritetype* pSprite, DAMAGE_TYPE damageType, int damage);
-void aiGenDudeInitSprite(spritetype* pSprite, XSPRITE* pXSprite);
+int inRecoil(AISTATE* aiState);
+bool inSearch(AISTATE* aiState);
+int inChase(AISTATE* aiState);
+int inDuck(AISTATE* aiState);
+int genDudeSeqStartId(DBloodActor* pXSprite);
+bool genDudePrepare(DBloodActor* pSprite, int propId);
+void genDudeUpdate(DBloodActor* pSprite);
+void genDudePostDeath(DBloodActor* actor, DAMAGE_TYPE damageType, int damage);
+void aiGenDudeInitSprite(DBloodActor* actor);
 #endif
 END_BLD_NS

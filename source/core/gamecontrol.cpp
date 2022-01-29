@@ -65,7 +65,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "startupinfo.h"
 #include "mapinfo.h"
 #include "menustate.h"
-#include "screenjob.h"
+#include "screenjob_.h"
 #include "statusbar.h"
 #include "uiinput.h"
 #include "d_net.h"
@@ -77,10 +77,14 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "gamefuncs.h"
 #include "hw_voxels.h"
 #include "hw_palmanager.h"
+#include "razefont.h"
+#include "coreactor.h"
 
 CVAR(Bool, autoloadlights, true, CVAR_ARCHIVE|CVAR_GLOBALCONFIG)
 CVAR(Bool, autoloadbrightmaps, true, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 CVAR(Bool, autoloadwidescreen, true, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
+CVAR (Bool, i_soundinbackground, false, CVAR_ARCHIVE|CVAR_GLOBALCONFIG)
+CVAR (Bool, i_pauseinbackground, true, CVAR_ARCHIVE|CVAR_GLOBALCONFIG)
 
 // Note: For the automap label there is a separate option "am_textfont".
 CVARD(Bool, hud_textfont, false, CVAR_ARCHIVE, "Use the regular text font as replacement for the tiny 3x5 font for HUD messages whenever possible")
@@ -121,12 +125,12 @@ gameaction_t gameaction = ga_nothing;
 // gameaction state
 MapRecord* g_nextmap;
 int g_nextskill;
+int g_bossexit;
 
 
 FILE* hashfile;
 
 FStartupInfo GameStartupInfo;
-FMemArena dump;	// this is for memory blocks than cannot be deallocated without some huge effort. Put them in here so that they do not register on shutdown.
 
 InputState inputState;
 int ShowStartupWindow(TArray<GrpEntry> &);
@@ -139,11 +143,14 @@ void LoadScripts();
 void MainLoop();
 void SetConsoleNotifyBuffer();
 bool PreBindTexture(FRenderState* state, FGameTexture*& tex, EUpscaleFlags& flags, int& scaleflags, int& clampmode, int& translation, int& overrideshader);
-void PostLoadSetup();
-void FontCharCreated(FGameTexture* base, FGameTexture* untranslated, FGameTexture* translated);
+void highTileSetup();
+void FontCharCreated(FGameTexture* base, FGameTexture* untranslated);
 void LoadVoxelModels();
+void MarkMap();
+void BuildFogTable();
+void ParseGLDefs();
 
-DBaseStatusBar* StatusBar;
+DStatusBarCore* StatusBar;
 
 
 bool AppActive = true;
@@ -232,19 +239,19 @@ static bool System_DisableTextureFilter()
 
 static IntRect System_GetSceneRect()
 {
-	int viewbottom = windowxy2.y + 1;
-	int viewheight = viewbottom - windowxy1.y;
-	int viewright = windowxy2.x + 1;
-	int viewwidth = viewright - windowxy1.x;
+	int viewbottom = windowxy2.Y + 1;
+	int viewheight = viewbottom - windowxy1.Y;
+	int viewright = windowxy2.X + 1;
+	int viewwidth = viewright - windowxy1.X;
 
 	int renderheight;
-	
+
 	if (viewheight == screen->GetHeight()) renderheight = viewheight;
 	else renderheight = (viewwidth * screen->GetHeight() / screen->GetWidth()) & ~7;
 
 	IntRect mSceneViewport;
-	mSceneViewport.left = windowxy1.x;
-	mSceneViewport.top = screen->GetHeight() - (renderheight + windowxy1.y - ((renderheight - viewheight) / 2));
+	mSceneViewport.left = windowxy1.X;
+	mSceneViewport.top = screen->GetHeight() - (renderheight + windowxy1.Y - ((renderheight - viewheight) / 2));
 	mSceneViewport.width = viewwidth;
 	mSceneViewport.height = renderheight;
 	return mSceneViewport;
@@ -342,7 +349,7 @@ void UserConfig::ProcessOptions()
 	{
 		gamegrp = "BLOOD.RFF";
 		DefaultCon = "CRYPTIC.INI";
-		const char* argv[] = { "cpart07.ar_" , "cpart15.ar_" };
+		const char* argv[] = { "CPART07.AR_", "CPART15.AR_" };
 		AddArt.reset(new FArgs(2, argv));
 	}
 
@@ -479,9 +486,6 @@ void CheckUserMap()
 namespace Duke3d
 {
 	::GameInterface* CreateInterface();
-	DBaseStatusBar* CreateDukeStatusBar();
-	DBaseStatusBar* CreateRedneckStatusBar();
-
 }
 namespace Blood
 {
@@ -514,6 +518,16 @@ void CheckFrontend(int flags)
 	{
 		gi = Duke3d::CreateInterface();
 	}
+}
+
+static void System_ToggleFullConsole()
+{
+	gameaction = ga_fullconsole;
+}
+
+static void System_StartCutscene(bool blockui)
+{
+	gameaction = blockui ? ga_intro : ga_intermission;
 }
 
 void I_StartupJoysticks();
@@ -550,7 +564,9 @@ int GameMain()
 		nullptr,
 		nullptr,
 		PreBindTexture,
-		FontCharCreated
+		FontCharCreated,
+		System_ToggleFullConsole,
+		System_StartCutscene,
 	};
 
 	try
@@ -569,6 +585,7 @@ int GameMain()
 		r = -1;
 	}
 	//DeleteScreenJob();
+	if (gi) gi->FreeLevelData();
 	DeinitMenus();
 	if (StatusBar) StatusBar->Destroy();
 	StatusBar = nullptr;
@@ -618,7 +635,12 @@ void SetDefaultStrings()
 		gSkillNames[3] = "$WELL DONE";
 		gSkillNames[4] = "$EXTRA CRISPY";
 	}
-	
+	// Exhumed has no skills, but we still need a menu with one entry.
+	else if (isExhumed())
+	{
+		gSkillNames[0] = "Default";
+	}
+
 	//Set a few quotes which are used for common handling of a few status messages
 	quoteMgr.InitializeQuote(23, "$MESSAGES: ON");
 	quoteMgr.InitializeQuote(24, "$MESSAGES: OFF");
@@ -687,8 +709,8 @@ static TArray<GrpEntry> SetupGame()
 		{
 			auto grplower = grp.FileName.MakeLower();
 			FixPathSeperator(grplower);
-			int pos = grplower.LastIndexOf(gamegrplower);
-			if (pos >= 0 && pos == grplower.Len() - gamegrplower.Len())
+			auto pos = grplower.LastIndexOf(gamegrplower);
+			if (pos >= 0 && pos == ptrdiff_t(grplower.Len() - gamegrplower.Len()))
 			{
 				groupno = g;
 				break;
@@ -736,10 +758,10 @@ static TArray<GrpEntry> SetupGame()
 				groupno = pick;
 			}
 		}
-        else if (groups.Size() == 1)
-        {
-            groupno = 0;
-        }
+		else if (groups.Size() == 1)
+		{
+			groupno = 0;
+		}
 	}
 
 	if (groupno == -1) return TArray<GrpEntry>();
@@ -807,32 +829,15 @@ void InitLanguages()
 
 void CreateStatusBar()
 {
-	int flags = g_gameType;
-	PClass* stbarclass = nullptr;
-
-	GC::AddMarkerFunc([]() { GC::Mark(StatusBar); });
-	if (flags & GAMEFLAG_BLOOD)
-	{
-		stbarclass = PClass::FindClass("BloodStatusBar");
-	}
-	else if (flags & GAMEFLAG_SW)
-	{
-		stbarclass = PClass::FindClass("SWStatusBar");
-	}
-	else if (flags & GAMEFLAG_PSEXHUMED)
-	{
-		stbarclass = PClass::FindClass("ExhumedStatusBar");
-	}
-	else
-	{
-		StatusBar = isRR() ? Duke3d::CreateRedneckStatusBar() : Duke3d::CreateDukeStatusBar();
-		return;
-	}
+	auto stbarclass = PClass::FindClass(globalCutscenes.StatusBarClass);
 	if (!stbarclass)
 	{
 		I_FatalError("No status bar defined");
 	}
-	StatusBar = static_cast<DBaseStatusBar*>(stbarclass->CreateNew());
+	StatusBar = static_cast<DStatusBarCore*>(stbarclass->CreateNew());
+	StatusBar->SetSize(0, 320, 200);
+	InitStatusBar();
+	GC::AddMarkerFunc([]() { GC::Mark(StatusBar); });
 }
 
 
@@ -891,6 +896,37 @@ void GetGames()
 //
 //==========================================================================
 
+static void InitTextures()
+{
+	TexMan.usefullnames = true;
+	TexMan.Init([]() {}, [](BuildInfo&) {});
+	StartScreen->Progress();
+	mdinit();
+
+	TileFiles.Init();
+	TileFiles.LoadArtSet("tiles%03d.art"); // it's the same for all games.
+	voxInit();
+	gi->LoadGameTextures(); // loads game-side data that must be present before processing the .def files.
+	LoadDefinitions();
+	InitFont();				// InitFonts may only be called once all texture data has been initialized.
+
+	lookups.postLoadTables();
+	highTileSetup();
+	lookups.postLoadLookups();
+	SetupFontSubstitution();
+	V_LoadTranslations();   // loading the translations must be delayed until the palettes have been fully set up.
+	UpdateUpscaleMask();
+	TileFiles.SetBackup();
+}
+
+//==========================================================================
+//
+//
+//
+//==========================================================================
+
+static uint8_t palindexmap[256];
+
 int RunGame()
 {
 	GameStartupInfo.FgColor = 0xffffff;
@@ -928,11 +964,11 @@ int RunGame()
 				colorset = true;
 			}
 		}
-		if (grp.FileInfo.mpepisodes.Size())
+		if (grp.FileInfo.exclepisodes.Size())
 		{
-			for (auto& mpepisode : grp.FileInfo.mpepisodes)
+			for (auto& episode : grp.FileInfo.exclepisodes)
 			{
-				gi->AddMultiplayerEpisode(mpepisode);
+				gi->AddExcludedEpisode(episode);
 			}
 		}
 	}
@@ -947,7 +983,7 @@ int RunGame()
 		mus_redbook.SetGenericRepDefault(false, CVAR_Bool);	// Blood should default to CD Audio off - all other games must default to on.
 		am_showlabel.SetGenericRepDefault(true, CVAR_Bool);
 	}
-	if (g_gameType & GAMEFLAG_SW)
+	if (isSWALL())
 	{
 		cl_weaponswitch.SetGenericRepDefault(1, CVAR_Int);
 		if (cl_weaponswitch > 1) cl_weaponswitch = 1;
@@ -988,7 +1024,7 @@ int RunGame()
 	TileFiles.AddArt(addArt);
 
 	inputState.ClearAllInput();
-	
+
 	if (!GameConfig->IsInitialized())
 	{
 		CONFIG_ReadCombatMacros();
@@ -1000,12 +1036,15 @@ int RunGame()
 	}
 	GameTicRate = 30;
 	CheckUserMap();
-	GPalette.Init(MAXPALOOKUPS + 2);    // one slot for each translation, plus a separate one for the base palettes and the internal one
+
+	palindexmap[0] = 255;
+	for (int i = 1; i <= 255; i++) palindexmap[i] = i;
+	GPalette.Init(MAXPALOOKUPS + 2, palindexmap);    // one slot for each translation, plus a separate one for the base palettes and the internal one
+	gi->loadPalette();
+	BuildFogTable();
 	StartScreen->Progress();
-	TexMan.Init([]() {}, [](BuildInfo &) {});
-	V_InitFonts();
-	StartScreen->Progress();
-	TileFiles.Init();
+	InitTextures();
+
 	StartScreen->Progress();
 	I_InitSound();
 	StartScreen->Progress();
@@ -1017,6 +1056,7 @@ int RunGame()
 	StartScreen->Progress();
 	SetDefaultStrings();
 	Job_Init();
+	Local_Job_Init();
 	if (Args->CheckParm("-sounddebug"))
 		C_DoCommand("stat sounddebug");
 
@@ -1024,14 +1064,13 @@ int RunGame()
 	gameinfo.mBackButton = "engine/graphics/m_back.png";
 	StartScreen->Progress();
 
-	GPalette.Init(MAXPALOOKUPS + 1);    // one slot for each translation, plus a separate one for the base palettes.
-	gi->loadPalette();
-	voxInit();
-	TileFiles.LoadArtSet("tiles%03d.art"); // it's the same for all games.
 	engineInit();
+	GC::AddMarkerFunc(MarkMap);
 	gi->app_init();
 	StartScreen->Progress();
 	G_ParseMapInfo();
+	ParseGLDefs();
+	ReplaceMusics(true);
 	CreateStatusBar();
 	SetDefaultMenuColors();
 	M_Init();
@@ -1040,10 +1079,6 @@ int RunGame()
 	if (!(paletteloaded & PALETTE_MAIN))
 		I_FatalError("No palette found.");
 
-	V_LoadTranslations();   // loading the translations must be delayed until the palettes have been fully set up.
-	lookups.postLoadTables();
-	PostLoadSetup();
-	lookups.postLoadLookups();
 	FMaterial::SetLayerCallback(setpalettelayer);
 	if (GameStartupInfo.Name.IsNotEmpty()) I_SetWindowTitle(GameStartupInfo.Name);
 	DeleteStartupScreen();
@@ -1221,15 +1256,24 @@ void S_ResumeSound (bool notsfx)
 
 void S_SetSoundPaused(int state)
 {
-	if (state)
+	if (!netgame && (i_pauseinbackground)
+#if 0 //ifdef _DEBUG
+		&& !demoplayback
+#endif
+		)
+	{
+		pauseext = !state;
+	}
+
+	if ((state || i_soundinbackground) && !pauseext)
 	{
 		if (paused == 0)
 		{
 			S_ResumeSound(true);
-		}
-		if (GSnd != nullptr)
-		{
-			GSnd->SetInactive(SoundRenderer::INACTIVE_Active);
+			if (GSnd != nullptr)
+			{
+				GSnd->SetInactive(SoundRenderer::INACTIVE_Active);
+			}
 		}
 	}
 	else
@@ -1239,21 +1283,14 @@ void S_SetSoundPaused(int state)
 			S_PauseSound(false, true);
 			if (GSnd != nullptr)
 			{
-				GSnd->SetInactive(SoundRenderer::INACTIVE_Complete);
+				GSnd->SetInactive(gamestate == GS_LEVEL || gamestate == GS_TITLELEVEL ?
+					SoundRenderer::INACTIVE_Complete :
+					SoundRenderer::INACTIVE_Mute);
 			}
 		}
 	}
-#if 0
-	if (!netgame
-#if 0 //def _DEBUG
-		&& !demoplayback
-#endif
-		)
-	{
-		pauseext = !state;
-	}
-#endif
 }
+
 
 FString G_GetDemoPath()
 {
@@ -1318,7 +1355,7 @@ CCMD(taunt)
 	{
 		int taunt = atoi(argv[1]);
 		int mode = atoi(argv[2]);
-		
+
 		// In a ZDoom-style protocol this should be sent:
 		// Net_WriteByte(DEM_TAUNT);
 		// Net_WriteByte(taunt);
@@ -1355,9 +1392,11 @@ void GameInterface::loadPalette()
 void GameInterface::FreeLevelData()
 {
 	// Make sure that there is no more level to toy around with.
-	initspritelists();
-	numsectors = numwalls = 0;
+	InitSpriteLists();
+	sector.Reset();
+	wall.Reset();
 	currentLevel = nullptr;
+	GC::FullGC();
 }
 
 //---------------------------------------------------------------------------
@@ -1374,7 +1413,6 @@ CVAR(Int, crosshair, 0, CVAR_ARCHIVE)
 
 void DrawCrosshair(int deftile, int health, double xdelta, double ydelta, double scale, PalEntry color)
 {
-	int type = -1;
 	if (automapMode == am_off && cl_crosshair)
 	{
 		if (deftile < MAXTILES && crosshair == 0)
@@ -1385,7 +1423,7 @@ void DrawCrosshair(int deftile, int health, double xdelta, double ydelta, double
 				double crosshair_scale = crosshairscale * scale;
 				DrawTexture(twod, tile, 160 + xdelta, 100 + ydelta, DTA_Color, color,
 					DTA_FullscreenScale, FSMode_Fit320x200, DTA_ScaleX, crosshair_scale, DTA_ScaleY, crosshair_scale, DTA_CenterOffsetRel, true,
-					DTA_ViewportX, windowxy1.x, DTA_ViewportY, windowxy1.y, DTA_ViewportWidth, windowxy2.x - windowxy1.x + 1, DTA_ViewportHeight, windowxy2.y - windowxy1.y + 1, TAG_DONE);
+					DTA_ViewportX, windowxy1.X, DTA_ViewportY, windowxy1.Y, DTA_ViewportWidth, windowxy2.X - windowxy1.X + 1, DTA_ViewportHeight, windowxy2.Y - windowxy1.Y + 1, TAG_DONE);
 
 				return;
 			}
@@ -1393,8 +1431,8 @@ void DrawCrosshair(int deftile, int health, double xdelta, double ydelta, double
 		// 0 means 'game provided crosshair' - use type 2 as fallback.
 		ST_LoadCrosshair(crosshair == 0 ? 2 : *crosshair, false);
 
-		double xpos = (windowxy1.x + windowxy2.x) / 2 + xdelta * (windowxy2.y - windowxy1.y) / 240.;
-		double ypos = (windowxy1.y + windowxy2.y) / 2;
+		double xpos = (windowxy1.X + windowxy2.X) / 2 + xdelta * (windowxy2.Y - windowxy1.Y) / 240.;
+		double ypos = (windowxy1.Y + windowxy2.Y) / 2;
 		ST_DrawCrosshair(health, xpos, ypos, 1);
 	}
 }
@@ -1473,7 +1511,6 @@ static const gamefilter games[] = {
 	{ "WW2GI", GAMEFLAG_WW2GI},
 	{ "Redneck", GAMEFLAG_RR},
 	{ "RedneckRides", GAMEFLAG_RRRA},
-	{ "Deer", GAMEFLAG_DEER},
 	{ "Blood", GAMEFLAG_BLOOD},
 	{ "ShadowWarrior", GAMEFLAG_SW},
 	{ "Exhumed", GAMEFLAG_POWERSLAVE | GAMEFLAG_EXHUMED},
@@ -1499,11 +1536,11 @@ bool validFilter(const char* str)
 DEFINE_ACTION_FUNCTION(_Screen, GetViewWindow)
 {
 	PARAM_PROLOGUE;
-	if (numret > 0) ret[0].SetInt(windowxy1.x);
-	if (numret > 1) ret[1].SetInt(windowxy1.y);
-	if (numret > 2) ret[2].SetInt(windowxy2.x - windowxy1.x + 1);
-	if (numret > 3) ret[3].SetInt(windowxy2.y - windowxy1.y + 1);
-	return MIN(numret, 4);
+	if (numret > 0) ret[0].SetInt(windowxy1.X);
+	if (numret > 1) ret[1].SetInt(windowxy1.Y);
+	if (numret > 2) ret[2].SetInt(windowxy2.X - windowxy1.X + 1);
+	if (numret > 3) ret[3].SetInt(windowxy2.Y - windowxy1.Y + 1);
+	return min(numret, 4);
 }
 
 DEFINE_ACTION_FUNCTION_NATIVE(_Raze, ShadeToLight, shadeToLight)
@@ -1511,33 +1548,6 @@ DEFINE_ACTION_FUNCTION_NATIVE(_Raze, ShadeToLight, shadeToLight)
 	PARAM_PROLOGUE;
 	PARAM_INT(shade);
 	ACTION_RETURN_INT(shadeToLight(shade));
-}
-
-DEFINE_ACTION_FUNCTION_NATIVE(_Raze, StopAllSounds, FX_StopAllSounds)
-{
-	FX_StopAllSounds();
-	return 0;
-}
-
-DEFINE_ACTION_FUNCTION_NATIVE(_Raze, StopMusic, Mus_Stop)
-{
-	Mus_Stop();
-	return 0;
-}
-
-DEFINE_ACTION_FUNCTION_NATIVE(_Raze, SoundEnabled, SoundEnabled)
-{
-	ACTION_RETURN_INT(SoundEnabled());
-}
-
-DEFINE_ACTION_FUNCTION_NATIVE(_Raze, MusicEnabled, MusicEnabled)
-{
-	ACTION_RETURN_INT(MusicEnabled());
-}
-
-DEFINE_ACTION_FUNCTION_NATIVE(_Raze, GetTimeFrac, I_GetTimeFrac)
-{
-	ACTION_RETURN_INT(I_GetTimeFrac());
 }
 
 DEFINE_ACTION_FUNCTION(_Raze, PlayerName)
@@ -1563,10 +1573,32 @@ DEFINE_ACTION_FUNCTION_NATIVE(_Raze, bcos, bcos)
 	ACTION_RETURN_INT(bcos(v, shift));
 }
 
+DEFINE_ACTION_FUNCTION_NATIVE(_Raze, GetBuildTime, I_GetBuildTime)
+{
+	ACTION_RETURN_INT(I_GetBuildTime());
+}
+
+DEFINE_ACTION_FUNCTION(_Raze, PickTexture)
+{
+	PARAM_PROLOGUE;
+	PARAM_INT(texid);
+	TexturePick pick;
+	if (PickTexture(TexMan.GetGameTexture(FSetTextureID(texid)), TRANSLATION(Translation_Remap, 0), pick))
+	{
+		ACTION_RETURN_INT(pick.texture->GetID().GetIndex());
+	}
+	ACTION_RETURN_INT(texid);
+}
+
 DEFINE_ACTION_FUNCTION(_MapRecord, GetCluster)
 {
 	PARAM_SELF_STRUCT_PROLOGUE(MapRecord);
 	ACTION_RETURN_POINTER(FindCluster(self->cluster));
+}
+
+DEFINE_ACTION_FUNCTION(_Screen, GetTextScreenSize)
+{
+	ACTION_RETURN_VEC2(DVector2(640, 480));
 }
 
 extern bool demoplayback;
@@ -1578,6 +1610,8 @@ DEFINE_GLOBAL(demoplayback)
 DEFINE_GLOBAL(consoleplayer)
 DEFINE_GLOBAL(currentLevel)
 DEFINE_GLOBAL(paused)
+DEFINE_GLOBAL(automapMode)
+DEFINE_GLOBAL(PlayClock)
 
 DEFINE_FIELD_X(ClusterDef, ClusterDef, name)
 DEFINE_FIELD_X(ClusterDef, ClusterDef, InterBackground)

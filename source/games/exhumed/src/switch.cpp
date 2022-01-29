@@ -28,7 +28,7 @@ BEGIN_PS_NS
 
 enum { kMaxSwitches = 1024 };
 
-short SwitchCount = -1;
+int SwitchCount = -1;
 
 struct Link
 {
@@ -37,15 +37,16 @@ struct Link
 
 struct Switch
 {
-    short nWaitTimer;
-    short nWait;
-    short nChannel;
-    short nLink;
-    short nRunPtr;
-    short nSector;
-    short nRun2;
-    short nWall;
-    short nRun3;
+    walltype* pWall;
+    sectortype* pSector;
+    int nChannel;
+    int nLink;
+    int16_t nWaitTimer;
+    int16_t nWait;
+    int16_t nRunPtr;
+    int16_t nRun2;
+
+    int16_t nRun3;
     uint16_t nKeyMask;
 };
 
@@ -67,9 +68,9 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, Switch& w, Switch*
             ("channel", w.nChannel)
             ("link", w.nLink)
             ("runptr", w.nRunPtr)
-            ("sector", w.nSector)
+            ("sector", w.pSector)
             ("run2", w.nRun2)
-            ("wall", w.nWall)
+            ("wall", w.pWall)
             ("run3", w.nRun3)
             ("keymask", w.nKeyMask)
             .EndObject();
@@ -122,63 +123,45 @@ void InitSwitch()
     memset(SwitchData, 0, sizeof(SwitchData));
 }
 
-int BuildSwReady(int nChannel, short nLink)
+std::pair<int, int> BuildSwReady(int nChannel, int nLink)
 {
     if (SwitchCount <= 0 || nLink < 0) {
         I_Error("Too many switch readys!\n");
-        return -1;
     }
 
     SwitchCount--;
     SwitchData[SwitchCount].nChannel = nChannel;
     SwitchData[SwitchCount].nLink = nLink;
 
-    return SwitchCount | 0x10000;
+    return { SwitchCount, 0x10000 };
 }
 
-void FuncSwReady(int a, int, int nRun)
+void AISWReady::Process(RunListEvent* ev)
 {
-    short nSwitch = RunData[nRun].nVal;
+    int nSwitch = RunData[ev->nRun].nObjIndex;
     assert(nSwitch >= 0 && nSwitch < kMaxSwitches);
 
-    int nMessage = a & 0x7F0000;
+    int nChannel = SwitchData[nSwitch].nChannel;
+    int nLink = SwitchData[nSwitch].nLink;
 
-    short nChannel = SwitchData[nSwitch].nChannel;
-    short nLink = SwitchData[nSwitch].nLink;
-
-    switch (nMessage)
-    {
-        case 0x10000:
-            return;
-
-        case 0x30000:
-        {
-            assert(sRunChannels[nChannel].c < 8);
-            int8_t nVal = LinkMap[nLink].v[sRunChannels[nChannel].c];
-            if (nVal >= 0) {
-                runlist_ChangeChannel(nChannel, nVal);
-            }
-
-            break;
-        }
-
-        default:
-            return;
+    assert(sRunChannels[nChannel].c < 8);
+    int8_t nVal = LinkMap[nLink].v[sRunChannels[nChannel].c];
+    if (nVal >= 0) {
+        runlist_ChangeChannel(nChannel, nVal);
     }
 }
 
-int BuildSwPause(int nChannel, int nLink, int ebx)
+std::pair<int, int> BuildSwPause(int nChannel, int nLink, int ebx)
 {
     for (int i = kMaxSwitches - 1; i >= SwitchCount; i--)
     {
         if (SwitchData[i].nChannel == nChannel && SwitchData[i].nWait != 0) {
-            return i | 0x20000;
+            return { i, 0x20000 };
         }
     }
 
     if (SwitchCount <= 0 || nLink < 0) {
         I_Error("Too many switches!\n");
-        return -1;
     }
 
     SwitchCount--;
@@ -188,317 +171,289 @@ int BuildSwPause(int nChannel, int nLink, int ebx)
     SwitchData[SwitchCount].nWait = ebx;
     SwitchData[SwitchCount].nRunPtr = -1;
 
-    return SwitchCount | 0x20000;
+    return { SwitchCount, 0x20000 };
 }
 
-void FuncSwPause(int a, int, int nRun)
+void AISWPause::ProcessChannel(RunListEvent* ev)
 {
-    short nSwitch = RunData[nRun].nVal;
-    assert(nSwitch >= 0 && nSwitch < kMaxSwitches);
-
-    int nMessage = a & 0x7F0000;
-
-    short nChannel = SwitchData[nSwitch].nChannel;
-    short nLink = SwitchData[nSwitch].nLink;
-
-    switch (nMessage)
+    int nSwitch = RunData[ev->nRun].nObjIndex;
+    if (SwitchData[nSwitch].nRunPtr >= 0)
     {
-        default:
-            return;
-
-        case 0x10000:
-        {
-            if (SwitchData[nSwitch].nRunPtr >= 0)
-            {
-                runlist_SubRunRec(SwitchData[nSwitch].nRunPtr);
-                SwitchData[nSwitch].nRunPtr = -1;
-            }
-
-            return;
-        }
-
-        case 0x20000:
-        {
-            SwitchData[nSwitch].nWaitTimer--;
-            if (SwitchData[nSwitch].nWaitTimer <= 0)
-            {
-                runlist_SubRunRec(SwitchData[nSwitch].nRunPtr);
-                SwitchData[nSwitch].nRunPtr = -1;
-
-                assert(sRunChannels[nChannel].c < 8);
-                assert(nLink < 1024);
-
-                runlist_ChangeChannel(nChannel, LinkMap[nLink].v[sRunChannels[nChannel].c]);
-            }
-
-            return;
-        }
-
-        case 0x30000:
-        {
-            assert(sRunChannels[nChannel].c < 8);
-
-            if (LinkMap[nLink].v[sRunChannels[nChannel].c] < 0) {
-                return;
-            }
-
-            if (SwitchData[nSwitch].nRunPtr >= 0) {
-                return;
-            }
-
-            SwitchData[nSwitch].nRunPtr = runlist_AddRunRec(NewRun, RunData[nRun].nMoves);
-
-            int eax;
-
-            if (SwitchData[nSwitch].nWait <= 0)
-            {
-                eax = 100;
-            }
-            else
-            {
-                eax = SwitchData[nSwitch].nWait;
-            }
-
-            SwitchData[nSwitch].nWaitTimer = eax;
-            return;
-        }
+        runlist_SubRunRec(SwitchData[nSwitch].nRunPtr);
+        SwitchData[nSwitch].nRunPtr = -1;
     }
 }
 
-int BuildSwStepOn(int nChannel, int nLink, int nSector)
+void AISWPause::Tick(RunListEvent* ev)
 {
-    if (SwitchCount <= 0 || nLink < 0 || nSector < 0)
+    int nSwitch = RunData[ev->nRun].nObjIndex;
+    int nChannel = SwitchData[nSwitch].nChannel;
+    int nLink = SwitchData[nSwitch].nLink;
+
+    SwitchData[nSwitch].nWaitTimer--;
+    if (SwitchData[nSwitch].nWaitTimer <= 0)
+    {
+        runlist_SubRunRec(SwitchData[nSwitch].nRunPtr);
+        SwitchData[nSwitch].nRunPtr = -1;
+
+        assert(sRunChannels[nChannel].c < 8);
+        assert(nLink < 1024);
+
+        runlist_ChangeChannel(nChannel, LinkMap[nLink].v[sRunChannels[nChannel].c]);
+    }
+}
+
+void AISWPause::Process(RunListEvent* ev)
+{
+    int nSwitch = RunData[ev->nRun].nObjIndex;
+    int nChannel = SwitchData[nSwitch].nChannel;
+    int nLink = SwitchData[nSwitch].nLink;
+    assert(sRunChannels[nChannel].c < 8);
+
+    if (LinkMap[nLink].v[sRunChannels[nChannel].c] < 0) {
+        return;
+    }
+
+    if (SwitchData[nSwitch].nRunPtr >= 0) {
+        return;
+    }
+
+    SwitchData[nSwitch].nRunPtr = runlist_AddRunRec(NewRun, &RunData[ev->nRun]);
+
+    int eax;
+
+    if (SwitchData[nSwitch].nWait <= 0)
+    {
+        eax = 100;
+    }
+    else
+    {
+        eax = SwitchData[nSwitch].nWait;
+    }
+
+    SwitchData[nSwitch].nWaitTimer = eax;
+}
+
+std::pair<int, int> BuildSwStepOn(int nChannel, int nLink, sectortype* pSector)
+{
+    if (SwitchCount <= 0 || nLink < 0 || pSector == nullptr)
         I_Error("Too many switches!\n");
 
     int nSwitch = --SwitchCount;
 
     SwitchData[nSwitch].nChannel = nChannel;
     SwitchData[nSwitch].nLink = nLink;
-    SwitchData[nSwitch].nSector = nSector;
+    SwitchData[nSwitch].pSector = pSector;
     SwitchData[nSwitch].nRun2 = -1;
 
-    return nSwitch | 0x30000;
+    return { nSwitch , 0x30000 };
 }
 
-void FuncSwStepOn(int a, int, int nRun)
+void AISWStepOn::ProcessChannel(RunListEvent* ev)
 {
-    short nSwitch = RunData[nRun].nVal;
+    int nSwitch = RunData[ev->nRun].nObjIndex;
     assert(nSwitch >= 0 && nSwitch < kMaxSwitches);
 
-    short nLink = SwitchData[nSwitch].nLink;
-    short nChannel = SwitchData[nSwitch].nChannel;
-    short nSector = SwitchData[nSwitch].nSector;
+    int nLink = SwitchData[nSwitch].nLink;
+    int nChannel = SwitchData[nSwitch].nChannel;
+    auto pSector =SwitchData[nSwitch].pSector;
 
     assert(sRunChannels[nChannel].c < 8);
 
     int8_t var_14 = LinkMap[nLink].v[sRunChannels[nChannel].c];
 
-    int nMessage = a & 0x7F0000;
-
-    switch (nMessage)
+    if (SwitchData[nSwitch].nRun2 >= 0)
     {
-        default:
-            return;
-
-        case 0x10000:
-        {
-            if (SwitchData[nSwitch].nRun2 >= 0)
-            {
-                runlist_SubRunRec(SwitchData[nSwitch].nRun2);
-                SwitchData[nSwitch].nRun2 = -1;
-            }
-
-            if (var_14 >= 0)
-            {
-                SwitchData[nSwitch].nRun2 = runlist_AddRunRec(sector[nSector].lotag - 1, RunData[nRun].nMoves);
-            }
-
-            return;
-        }
-
-        case 0x50000:
-        {
-            if (var_14 != sRunChannels[nChannel].c)
-            {
-                short nWall = sector[nSector].wallptr;
-                PlayFXAtXYZ(StaticSound[nSwitchSound], wall[nWall].x, wall[nWall].y, sector[nSector].floorz, nSector);
-
-                assert(sRunChannels[nChannel].c < 8);
-
-                runlist_ChangeChannel(nChannel, LinkMap[nLink].v[sRunChannels[nChannel].c]);
-            }
-        }
-
-        return;
+        runlist_SubRunRec(SwitchData[nSwitch].nRun2);
+        SwitchData[nSwitch].nRun2 = -1;
     }
 
+    if (var_14 >= 0)
+    {
+        SwitchData[nSwitch].nRun2 = runlist_AddRunRec(pSector->lotag - 1, &RunData[ev->nRun]);
+    }
 }
 
-int BuildSwNotOnPause(int nChannel, int nLink, int nSector, int ecx)
+void AISWStepOn::TouchFloor(RunListEvent* ev)
 {
-    if (SwitchCount <= 0 || nLink < 0 || nSector < 0)
-        I_Error("Too many switches!\n");
-
-    int nSwitch = --SwitchCount;
-
-    SwitchData[nSwitch].nChannel = nChannel;
-    SwitchData[nSwitch].nLink    = nLink;
-    SwitchData[nSwitch].nWait  = ecx;
-    SwitchData[nSwitch].nSector  = nSector;
-    SwitchData[nSwitch].nRunPtr  = -1;
-    SwitchData[nSwitch].nRun2  = -1;
-
-    return nSwitch | 0x40000;
-}
-
-void FuncSwNotOnPause(int a, int, int nRun)
-{
-    short nSwitch = RunData[nRun].nVal;
+    int nSwitch = RunData[ev->nRun].nObjIndex;
     assert(nSwitch >= 0 && nSwitch < kMaxSwitches);
 
-    int nMessage = a & 0x7F0000;
+    int nLink = SwitchData[nSwitch].nLink;
+    int nChannel = SwitchData[nSwitch].nChannel;
+    auto pSector = SwitchData[nSwitch].pSector;
 
-    short nChannel = SwitchData[nSwitch].nChannel;
-    short nLink = SwitchData[nSwitch].nLink;
+    assert(sRunChannels[nChannel].c < 8);
 
-    switch (nMessage)
+    int8_t var_14 = LinkMap[nLink].v[sRunChannels[nChannel].c];
+
+    if (var_14 != sRunChannels[nChannel].c)
     {
-        default:
-            return;
+        auto pWall = pSector->firstWall();
+        PlayFXAtXYZ(StaticSound[nSwitchSound], pWall->pos.X, pWall->pos.Y, pSector->floorz);
 
-        case 0x10000:
-        {
-            if (SwitchData[nSwitch].nRun2 >= 0)
-            {
-                runlist_SubRunRec(SwitchData[nSwitch].nRun2);
-                SwitchData[nSwitch].nRun2 = -1;
-            }
+        assert(sRunChannels[nChannel].c < 8);
 
-            if (SwitchData[nSwitch].nRunPtr >= 0)
-            {
-                runlist_SubRunRec(SwitchData[nSwitch].nRunPtr);
-                SwitchData[nSwitch].nRunPtr = -1;
-            }
-
-            return;
-        }
-
-        case 0x20000:
-        {
-            SwitchData[nSwitch].nWaitTimer -= 4;
-            if (SwitchData[nSwitch].nWaitTimer <= 0)
-            {
-                assert(sRunChannels[nChannel].c < 8);
-
-                runlist_ChangeChannel(nChannel, LinkMap[nLink].v[sRunChannels[nChannel].c]);
-            }
-
-            return;
-        }
-
-        case 0x30000:
-        {
-            assert(sRunChannels[nChannel].c < 8);
-
-            if (LinkMap[nLink].v[sRunChannels[nChannel].c] >= 0)
-            {
-                if (SwitchData[nSwitch].nRunPtr < 0)
-                {
-                    SwitchData[nSwitch].nRunPtr = runlist_AddRunRec(NewRun, RunData[nRun].nMoves);
-
-                    short nSector = SwitchData[nSwitch].nSector;
-
-                    SwitchData[nSwitch].nWaitTimer = SwitchData[nSwitch].nWait;
-                    SwitchData[nSwitch].nRun2 = runlist_AddRunRec(sector[nSector].lotag - 1, RunData[nRun].nMoves);
-                }
-            }
-
-            return;
-        }
-
-        case 0x50000:
-        {
-            SwitchData[nSwitch].nWaitTimer = SwitchData[nSwitch].nWait;
-            return;
-        }
+        runlist_ChangeChannel(nChannel, LinkMap[nLink].v[sRunChannels[nChannel].c]);
     }
 }
 
-int BuildSwPressSector(int nChannel, int nLink, int nSector, int keyMask)
+std::pair<int, int> BuildSwNotOnPause(int nChannel, int nLink, sectortype* pSector, int ecx)
 {
-    if (SwitchCount <= 0 || nLink < 0 || nSector < 0)
+    if (SwitchCount <= 0 || nLink < 0 || pSector == nullptr)
         I_Error("Too many switches!\n");
 
     int nSwitch = --SwitchCount;
 
     SwitchData[nSwitch].nChannel = nChannel;
     SwitchData[nSwitch].nLink = nLink;
-    SwitchData[nSwitch].nSector = nSector;
-    SwitchData[nSwitch].nKeyMask = keyMask;
+    SwitchData[nSwitch].nWait = ecx;
+    SwitchData[nSwitch].pSector = pSector;
+    SwitchData[nSwitch].nRunPtr = -1;
     SwitchData[nSwitch].nRun2 = -1;
 
-    return nSwitch | 0x50000;
+    return { nSwitch, 0x40000 };
 }
 
-void FuncSwPressSector(int a, int, int nRun)
+void AISWNotOnPause::ProcessChannel(RunListEvent* ev)
 {
-    short nSwitch = RunData[nRun].nVal;
+    int nSwitch = RunData[ev->nRun].nObjIndex;
     assert(nSwitch >= 0 && nSwitch < kMaxSwitches);
 
-    int nMessage = a & 0x7F0000;
-
-    short nChannel = SwitchData[nSwitch].nChannel;
-    short nLink = SwitchData[nSwitch].nLink;
-    short nPlayer = a & 0xFFFF;
-
-    switch (nMessage)
+    if (SwitchData[nSwitch].nRun2 >= 0)
     {
-        default:
-            return;
+        runlist_SubRunRec(SwitchData[nSwitch].nRun2);
+        SwitchData[nSwitch].nRun2 = -1;
+    }
 
-        case 0x10000:
+    if (SwitchData[nSwitch].nRunPtr >= 0)
+    {
+        runlist_SubRunRec(SwitchData[nSwitch].nRunPtr);
+        SwitchData[nSwitch].nRunPtr = -1;
+    }
+
+    return;
+}
+
+void AISWNotOnPause::Tick(RunListEvent* ev)
+{
+    int nSwitch = RunData[ev->nRun].nObjIndex;
+    assert(nSwitch >= 0 && nSwitch < kMaxSwitches);
+
+    int nChannel = SwitchData[nSwitch].nChannel;
+    int nLink = SwitchData[nSwitch].nLink;
+
+    SwitchData[nSwitch].nWaitTimer -= 4;
+    if (SwitchData[nSwitch].nWaitTimer <= 0)
+    {
+        assert(sRunChannels[nChannel].c < 8);
+
+        runlist_ChangeChannel(nChannel, LinkMap[nLink].v[sRunChannels[nChannel].c]);
+    }
+}
+
+void AISWNotOnPause::Process(RunListEvent* ev)
+{
+    int nSwitch = RunData[ev->nRun].nObjIndex;
+    assert(nSwitch >= 0 && nSwitch < kMaxSwitches);
+
+    int nChannel = SwitchData[nSwitch].nChannel;
+    int nLink = SwitchData[nSwitch].nLink;
+
+    assert(sRunChannels[nChannel].c < 8);
+
+    if (LinkMap[nLink].v[sRunChannels[nChannel].c] >= 0)
+    {
+        if (SwitchData[nSwitch].nRunPtr < 0)
         {
-            if (SwitchData[nSwitch].nRun2 >= 0)
-            {
-                runlist_SubRunRec(SwitchData[nSwitch].nRun2);
-                SwitchData[nSwitch].nRun2 = -1;
-            }
+            SwitchData[nSwitch].nRunPtr = runlist_AddRunRec(NewRun, &RunData[ev->nRun]);
 
-            assert(sRunChannels[nChannel].c < 8);
+            auto pSector = SwitchData[nSwitch].pSector;
 
-            if (LinkMap[nLink].v[sRunChannels[nChannel].c] < 0) {
-                return;
-            }
-
-            short nSector = SwitchData[nSwitch].nSector;
-
-            SwitchData[nSwitch].nRun2 = runlist_AddRunRec(sector[nSector].lotag - 1, RunData[nRun].nMoves);
-            return;
-        }
-
-        case 0x40000:
-        {
-            if ((PlayerList[nPlayer].keys & SwitchData[nSwitch].nKeyMask) == SwitchData[nSwitch].nKeyMask)
-            {
-                runlist_ChangeChannel(nChannel, LinkMap[nLink].v[sRunChannels[nChannel].c]);
-            }
-            else
-            {
-                if (SwitchData[nSwitch].nKeyMask)
-                {
-                    short nSprite = PlayerList[nPlayer].nSprite;
-                    PlayFXAtXYZ(StaticSound[nSwitchSound], sprite[nSprite].x, sprite[nSprite].y, 0, sprite[nSprite].sectnum, CHANF_LISTENERZ);
-
-                    StatusMessage(300, "YOU NEED THE KEY FOR THIS DOOR");
-                }
-            }
+            SwitchData[nSwitch].nWaitTimer = SwitchData[nSwitch].nWait;
+            SwitchData[nSwitch].nRun2 = runlist_AddRunRec(pSector->lotag - 1, &RunData[ev->nRun]);
         }
     }
 }
 
-int BuildSwPressWall(short nChannel, short nLink, short nWall)
+void AISWNotOnPause::TouchFloor(RunListEvent* ev)
 {
-    if (SwitchCount <= 0 || nLink < 0 || nWall < 0) {
+    int nSwitch = RunData[ev->nRun].nObjIndex;
+
+    SwitchData[nSwitch].nWaitTimer = SwitchData[nSwitch].nWait;
+    return;
+}
+
+std::pair<int, int> BuildSwPressSector(int nChannel, int nLink, sectortype* pSector, int keyMask)
+{
+    if (SwitchCount <= 0 || nLink < 0 || pSector == nullptr)
+        I_Error("Too many switches!\n");
+
+    int nSwitch = --SwitchCount;
+
+    SwitchData[nSwitch].nChannel = nChannel;
+    SwitchData[nSwitch].nLink = nLink;
+    SwitchData[nSwitch].pSector = pSector;
+    SwitchData[nSwitch].nKeyMask = keyMask;
+    SwitchData[nSwitch].nRun2 = -1;
+
+    return { nSwitch, 0x50000 };
+}
+
+void AISWPressSector::ProcessChannel(RunListEvent* ev)
+{
+    int nSwitch = RunData[ev->nRun].nObjIndex;
+    assert(nSwitch >= 0 && nSwitch < kMaxSwitches);
+
+    int nChannel = SwitchData[nSwitch].nChannel;
+    int nLink = SwitchData[nSwitch].nLink;
+
+    if (SwitchData[nSwitch].nRun2 >= 0)
+    {
+        runlist_SubRunRec(SwitchData[nSwitch].nRun2);
+        SwitchData[nSwitch].nRun2 = -1;
+    }
+
+    assert(sRunChannels[nChannel].c < 8);
+
+    if (LinkMap[nLink].v[sRunChannels[nChannel].c] < 0) {
+        return;
+    }
+
+    auto pSector = SwitchData[nSwitch].pSector;
+
+    SwitchData[nSwitch].nRun2 = runlist_AddRunRec(pSector->lotag - 1, &RunData[ev->nRun]);
+}
+
+void AISWPressSector::Use(RunListEvent* ev)
+{
+    int nSwitch = RunData[ev->nRun].nObjIndex;
+    assert(nSwitch >= 0 && nSwitch < kMaxSwitches);
+
+    int nChannel = SwitchData[nSwitch].nChannel;
+    int nLink = SwitchData[nSwitch].nLink;
+    int nPlayer = ev->nParam;
+
+    if ((PlayerList[nPlayer].keys & SwitchData[nSwitch].nKeyMask) == SwitchData[nSwitch].nKeyMask)
+    {
+        runlist_ChangeChannel(nChannel, LinkMap[nLink].v[sRunChannels[nChannel].c]);
+    }
+    else
+    {
+        if (SwitchData[nSwitch].nKeyMask)
+        {
+            auto& pos = PlayerList[nPlayer].pActor->spr.pos;
+            PlayFXAtXYZ(StaticSound[nSwitchSound], pos.X, pos.Y, 0, CHANF_LISTENERZ);
+
+            StatusMessage(300, "YOU NEED THE KEY FOR THIS DOOR");
+        }
+    }
+
+}
+
+std::pair<int, int> BuildSwPressWall(int nChannel, int nLink, walltype* pWall)
+{
+    if (SwitchCount <= 0 || nLink < 0 || !pWall) {
         I_Error("Too many switches!\n");
     }
 
@@ -506,67 +461,56 @@ int BuildSwPressWall(short nChannel, short nLink, short nWall)
 
     SwitchData[SwitchCount].nChannel = nChannel;
     SwitchData[SwitchCount].nLink = nLink;
-    SwitchData[SwitchCount].nWall = nWall;
+    SwitchData[SwitchCount].pWall = pWall;
     SwitchData[SwitchCount].nRun3 = -1;
+    SwitchData[SwitchCount].pSector = nullptr;
 
-    return SwitchCount | 0x60000;
+    return { SwitchCount, 0x60000 };
 }
 
-void FuncSwPressWall(int a, int, int nRun)
+void AISWPressWall::Process(RunListEvent* ev)
 {
-    short nSwitch = RunData[nRun].nVal;
+    int nSwitch = RunData[ev->nRun].nObjIndex;
     assert(nSwitch >= 0 && nSwitch < kMaxSwitches);
 
-    short nChannel = SwitchData[nSwitch].nChannel;
-    short nLink = SwitchData[nSwitch].nLink;
+    int nChannel = SwitchData[nSwitch].nChannel;
+    int nLink = SwitchData[nSwitch].nLink;
 
-    // TEMP
-//	assert(nLink < 1024);
-//	assert(nChannel < 8);
-
-    int nMessage = a & 0x7F0000;
-
-    switch (nMessage)
+    if (SwitchData[nSwitch].nRun3 >= 0)
     {
-        default:
-            return;
+        runlist_SubRunRec(SwitchData[nSwitch].nRun3);
+        SwitchData[nSwitch].nRun3 = -1;
+    }
 
-        case 0x30000:
-        {
-            if (SwitchData[nSwitch].nRun3 >= 0)
-            {
-                runlist_SubRunRec(SwitchData[nSwitch].nRun3);
-                SwitchData[nSwitch].nRun3 = -1;
-            }
-
-            if (LinkMap[nLink].v[sRunChannels[nChannel].c] >= 0)
-            {
-                short nWall = SwitchData[nSwitch].nWall;
-                SwitchData[nSwitch].nRun3 = runlist_AddRunRec(wall[nWall].lotag - 1, RunData[nRun].nMoves);
-            }
-
-            return;
-        }
-
-        case 0x40000:
-        {
-            int8_t cx = LinkMap[nLink].v[sRunChannels[nChannel].c];
-
-            runlist_ChangeChannel(nChannel, LinkMap[nLink].v[sRunChannels[nChannel].c]);
-
-            if (cx < 0 || LinkMap[nLink].v[cx] < 0)
-            {
-                runlist_SubRunRec(SwitchData[nSwitch].nRun3);
-                SwitchData[nSwitch].nRun3 = -1;
-            }
-
-            short nWall = SwitchData[nSwitch].nWall;
-            short nSector = SwitchData[nSwitch].nSector; // CHECKME - where is this set??
-
-            PlayFXAtXYZ(StaticSound[nSwitchSound], wall[nWall].x, wall[nWall].y, 0, nSector, CHANF_LISTENERZ);
-
-            return;
-        }
+    if (LinkMap[nLink].v[sRunChannels[nChannel].c] >= 0)
+    {
+        auto pWall = SwitchData[nSwitch].pWall;
+        SwitchData[nSwitch].nRun3 = runlist_AddRunRec(pWall->lotag - 1, &RunData[ev->nRun]);
     }
 }
+
+void AISWPressWall::Use(RunListEvent* ev)
+{
+    int nSwitch = RunData[ev->nRun].nObjIndex;
+    assert(nSwitch >= 0 && nSwitch < kMaxSwitches);
+
+    int nChannel = SwitchData[nSwitch].nChannel;
+    int nLink = SwitchData[nSwitch].nLink;
+
+    int8_t cx = LinkMap[nLink].v[sRunChannels[nChannel].c];
+
+    runlist_ChangeChannel(nChannel, LinkMap[nLink].v[sRunChannels[nChannel].c]);
+
+    if (cx < 0 || LinkMap[nLink].v[cx] < 0)
+    {
+        runlist_SubRunRec(SwitchData[nSwitch].nRun3);
+        SwitchData[nSwitch].nRun3 = -1;
+    }
+
+    auto pWall = SwitchData[nSwitch].pWall;
+    auto pSector = SwitchData[nSwitch].pSector;
+
+    PlayFXAtXYZ(StaticSound[nSwitchSound], pWall->pos.X, pWall->pos.Y, 0, CHANF_LISTENERZ);
+}
+
 END_PS_NS

@@ -203,6 +203,7 @@ grpinfo
 	dependency DUKE13_CRC
 	gamefilter "Duke.DukeDC.13"
 	GameID "DukeDC13"
+	exclepisodes "L.A. MELTDOWN", "LUNAR APOCALYPSE", "THE BIRTH"
 }
 
 grpinfo
@@ -214,6 +215,7 @@ grpinfo
 	dependency DUKE15_CRC
 	gamefilter "Duke.DukeDC.13"
 	GameID "DukeDC"
+	exclepisodes "L.A. MELTDOWN", "LUNAR APOCALYPSE", "THE BIRTH"
 }
 
 grpinfo
@@ -225,6 +227,7 @@ grpinfo
 	dependency DUKE15_CRC
 	gamefilter "Duke.DukeDC.15"
 	GameID "DukeDC"
+	exclepisodes "L.A. MELTDOWN", "LUNAR APOCALYPSE", "THE BIRTH"
 }
 
 grpinfo
@@ -237,6 +240,20 @@ grpinfo
 	dependency DUKE15_CRC
 	gamefilter "Duke.DukeDC.15"
 	GameID "DukeDC"
+	exclepisodes "L.A. MELTDOWN", "LUNAR APOCALYPSE", "THE BIRTH"
+}
+
+grpinfo
+{
+	name "Duke it out in D.C."
+	scriptname "DUKEDC.CON"
+	size 8410183
+	crc 0x777c77b1
+	flags GAMEFLAG_DUKE|GAMEFLAG_ADDON|GAMEFLAG_DUKEDC
+	dependency DUKE15_CRC
+	gamefilter "Duke.DukeDC.15"
+	GameID "DukeDC"
+	exclepisodes "L.A. MELTDOWN", "LUNAR APOCALYPSE", "THE BIRTH"
 }
 
 grpinfo
@@ -250,6 +267,7 @@ grpinfo
 	FgColor 0x00004f
 	BkColor 0x8f8fff
 	GameID "DukeVacation13"
+	exclepisodes "L.A. MELTDOWN", "VACATION DUKEMATCH", "THE BIRTH"
 }
 
 grpinfo
@@ -263,6 +281,7 @@ grpinfo
 	FgColor 0x00004f
 	BkColor 0x8f8fff
 	GameID "DukeVacation"
+	exclepisodes "L.A. MELTDOWN", "VACATION DUKEMATCH", "THE BIRTH"
 }
 
 grpinfo
@@ -276,6 +295,7 @@ grpinfo
 	FgColor 0x00004f
 	BkColor 0x8f8fff
 	GameID "DukeVacation"
+	exclepisodes "L.A. MELTDOWN", "VACATION DUKEMATCH", "THE BIRTH"
 }
 
 
@@ -284,12 +304,13 @@ grpinfo
 	name "Duke Caribbean: Life's a Beach"
 	size 22213819
 	crc DUKECB_CRC
-	flags GAMEFLAG_DUKE|GAMEFLAG_ADDON|GAMEFLAG_DUKEVACA
+	flags GAMEFLAG_DUKE|GAMEFLAG_ADDON
 	dependency DUKE15_CRC
 	gamefilter "Duke.Vacation.15"
 	FgColor 0x00004f
 	BkColor 0x8f8fff
 	GameID "DukeVacation"
+	exclepisodes "L.A. MELTDOWN", "VACATION DUKEMATCH", "THE BIRTH"
 }
 
 grpinfo
@@ -298,12 +319,28 @@ grpinfo
 	scriptname "VACATION.CON"
 	size 22397273
 	crc 0x65B5F690
-	flags GAMEFLAG_DUKE|GAMEFLAG_ADDON|GAMEFLAG_DUKEVACA
+	flags GAMEFLAG_DUKE|GAMEFLAG_ADDON
 	dependency DUKE15_CRC
 	gamefilter "Duke.Vacation.15"
 	FgColor 0x00004f
 	BkColor 0x8f8fff
 	GameID "DukeVacation"
+	exclepisodes "L.A. MELTDOWN", "VACATION DUKEMATCH", "THE BIRTH"
+}
+
+grpinfo
+{
+	name "Duke Caribbean: Life's a Beach"
+	scriptname "VACATION.CON"
+	size 22201375
+	crc 0xb28e883c
+	flags GAMEFLAG_DUKE|GAMEFLAG_ADDON
+	dependency DUKE15_CRC
+	gamefilter "Duke.Vacation.15"
+	FgColor 0x00004f
+	BkColor 0x8f8fff
+	GameID "DukeVacation"
+	exclepisodes "L.A. MELTDOWN", "VACATION DUKEMATCH", "THE BIRTH"
 }
 
 grpinfo
@@ -312,12 +349,13 @@ grpinfo
 	scriptname "NWINTER.CON"
 	size 16169365
 	crc DUKENW_CRC
-	flags GAMEFLAG_DUKE|GAMEFLAG_ADDON|GAMEFLAG_DUKENW
+	flags GAMEFLAG_DUKE|GAMEFLAG_ADDON
 	dependency DUKE15_CRC
 	gamefilter "Duke.NWinter"
 	FgColor 0
 	BkColor 0x8f8f8f
 	GameID "NuclearWinter"
+	exclepisodes "L.A. MELTDOWN"
 }
 
 grpinfo
@@ -326,17 +364,19 @@ grpinfo
 	scriptname "NWINTER.CON"
 	size 10965909
 	crc 0xC7EFBFA9
-	flags GAMEFLAG_DUKE|GAMEFLAG_ADDON|GAMEFLAG_DUKENW
+	flags GAMEFLAG_DUKE|GAMEFLAG_ADDON
 	dependency DUKE15_CRC
 	gamefilter "Duke.NWinter"
 	FgColor 0
 	BkColor 0x8f8f8f
+	exclepisodes "L.A. MELTDOWN"
 }
 
 grpinfo
 {
-    name "Duke: Alien World Order"
-    dependency DUKE15_CRC
+	name "Duke: Alien World Order"
+	dependency DUKE15_CRC
+	flags GAMEFLAG_DUKE|GAMEFLAG_ADDON
 	mustcontain "FIREFLYTROOPER.CON", "FLAMETHROWER.CON", "music/E5L1_BulletDam.ogg", "sound/VO_E5L1_Duke_CreamAndSugar.ogg"
 	gamefilter "Duke.Worldtour"
 	GameID "DukeWorldTour"
@@ -371,14 +411,52 @@ grpinfo
 	size 3186656
 	crc 0x1E9516F1
 	flags GAMEFLAG_DUKE|GAMEFLAG_ADDON
-	dependency DUKE13_CRC
-	gamefilter "Duke.Zone.13"
+	dependency DUKE15_CRC
+	gamefilter "Duke.Zone.15"
+	exclepisodes "THE BIRTH"
 }
 
 grpinfo
 {
-	name "Blood 1.0"
-	size 9570681
+	name "Duke!ZONE II"
+	scriptname "DZ-GAME.CON"
+	size 3186656
+	crc 0x1E9516F1
+	flags GAMEFLAG_DUKE|GAMEFLAG_ADDON
+	dependency DUKE13_CRC
+	gamefilter "Duke.Zone.13"
+}
+
+// original .zip release
+grpinfo
+{
+	name "Duke Nukem's Penthouse Paradise"
+	scriptname "PPAKGAME.CON"
+	size 2112419
+	crc 0x7CD82A3B
+	flags GAMEFLAG_DUKE|GAMEFLAG_ADDON
+	dependency DUKE15_CRC
+	gamefilter "Duke.PParadise"
+	exclepisodes "LUNAR APOCALYPSE", "SHRAPNEL CITY", "THE BIRTH"
+}
+
+// ZOOM Platform repacked .grp
+grpinfo
+{
+	name "Duke Nukem's Penthouse Paradise"
+	scriptname "PPAKGAME.CON"
+	size 4247491
+	crc 0xCF928A58
+	flags GAMEFLAG_DUKE|GAMEFLAG_ADDON
+	dependency DUKE15_CRC
+	gamefilter "Duke.PParadise"
+	exclepisodes "LUNAR APOCALYPSE", "SHRAPNEL CITY", "THE BIRTH"
+}
+
+grpinfo
+{
+	name "BLOOD: 1.0"
+	size 8200353
 	crc BLOOD10_CRC
 	defname "blood.def"
 	scriptname "BLOOD.INI"
@@ -393,8 +471,8 @@ grpinfo
 
 grpinfo
 {
-	name "Blood 1.1"
-	size 9570681
+	name "BLOOD: 1.1"
+	size 8231173
 	crc BLOOD11_CRC
 	defname "blood.def"
 	scriptname "BLOOD.INI"
@@ -420,22 +498,6 @@ grpinfo
 	gamefilter "Blood.Blood"
 	FgColor 0
 	BkColor 0xaf0024
-	GameID "Blood"
-}
-
-grpinfo
-{
-	name "BLOOD: One Unit Whole Blood"
-	size 9570681
-	crc BLOOD_CRC
-	defname "blood.def"
-	scriptname "BLOOD.INI"
-	flags GAMEFLAG_BLOOD
-	dependency 0
-	loadgrp "SOUNDS.RFF", "GUI.RFF"
-	gamefilter "Blood.Blood"
-	FgColor 0
-	BkColor 0x7f002f
 	GameID "Blood"
 }
 
@@ -691,7 +753,7 @@ grpinfo
 	FgColor 0xbc9e89
 	BkColor 0x7f3300
 	GameID "Redneck"
-	mpepisodes "PISSIN' CONTEST"
+	exclepisodes "PISSIN' CONTEST"
 }
 
 grpinfo
@@ -706,7 +768,7 @@ grpinfo
 	FgColor 0xbc9e89
 	BkColor 0x7f3300
 	GameID "RedneckRides"
-	mpepisodes "PISSIN' CONTEST"
+	exclepisodes "PISSIN' CONTEST"
 }
 
 grpinfo
@@ -748,7 +810,7 @@ grpinfo
 	FgColor 0
 	BkColor 0x78720d
 	GameID "Nam"
-	mpepisodes "MULTIPLAYER I", "MULTIPLAYER II"
+	exclepisodes "MULTIPLAYER I", "MULTIPLAYER II"
 }
 
 grpinfo
@@ -762,7 +824,7 @@ grpinfo
 	FgColor 0
 	BkColor 0x78720d
 	GameID "Nam"
-	mpepisodes "MULTIPLAYER I", "MULTIPLAYER II"
+	exclepisodes "MULTIPLAYER I", "MULTIPLAYER II"
 }
 
 grpinfo
@@ -776,7 +838,7 @@ grpinfo
 	FgColor 0
 	BkColor 0x78720d
 	GameID "WW2GI"
-	mpepisodes "MULTIPLAYER I", "MULTIPLAYER II"
+	exclepisodes "MULTIPLAYER I", "MULTIPLAYER II"
 }
 
 grpinfo
@@ -789,7 +851,7 @@ grpinfo
 	dependency WW2GI_CRC
 	gamefilter "WW2GI.Platoon"
 	GameID "PlatoonLeader"
-	mpepisodes "MULTIPLAYER I", "MULTIPLAYER II"
+	exclepisodes "MULTIPLAYER I", "MULTIPLAYER II"
 }
 
 grpinfo

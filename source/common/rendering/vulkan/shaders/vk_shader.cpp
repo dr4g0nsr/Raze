@@ -150,7 +150,7 @@ static const char *shaderBindings = R"(
 		int useVertexData;
 		vec4 uVertexColor;
 		vec4 uVertexNormal;
-		
+
 		vec4 uGlowTopPlane;
 		vec4 uGlowTopColor;
 		vec4 uGlowBottomPlane;
@@ -386,7 +386,8 @@ FString VkShaderManager::GetTargetGlslVersion()
 
 FString VkShaderManager::LoadPublicShaderLump(const char *lumpname)
 {
-	int lump = fileSystem.CheckNumForFullName(lumpname);
+	int lump = fileSystem.CheckNumForFullName(lumpname, 0);
+	if (lump == -1) lump = fileSystem.CheckNumForFullName(lumpname);
 	if (lump == -1) I_Error("Unable to load '%s'", lumpname);
 	FileData data = fileSystem.ReadFile(lump);
 	return data.GetString();

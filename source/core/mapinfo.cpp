@@ -40,6 +40,7 @@
 #include "printf.h"
 #include "gamecontrol.h"
 #include "raze_sound.h"
+#include "zstring.h"
 
 FString gSkillNames[MAXSKILLS];
 int gDefaultVolume = 0, gDefaultSkill = 1;
@@ -48,6 +49,7 @@ GlobalCutscenes globalCutscenes;
 TArray<ClusterDef> clusters;
 TArray<VolumeRecord> volumes;
 TArray<TPointer<MapRecord>> mapList;	// must be allocated as pointers because it can whack the currentlLevel pointer if this was a flat array.
+static TMap<FString, FString> musicReplacements;
 MapRecord *currentLevel;	// level that is currently played.
 MapRecord* lastLevel;		// Same here, for the last level.
 
@@ -69,17 +71,9 @@ CCMD(listmaps)
 	}
 }
 
-int CutsceneDef::GetSound()
-{
-	int id;
-	if (soundName.IsNotEmpty()) id = soundEngine->FindSound(soundName);
-	if (id <= 0) id = soundEngine->FindSoundByResID(soundID);
-	return id;
-}
-
-
 MapRecord *FindMapByName(const char *nm)
 {
+	if (!nm || !*nm) return nullptr;
 	for (auto& map : mapList)
 	{
 		if (map->labelName.CompareNoCase(nm) == 0)
@@ -165,11 +159,28 @@ MapRecord* FindNextSecretMap(MapRecord* thismap)
 	return next? next : FindNextMap(thismap);
 }
 
+void SetMusicReplacement(const char *mapname, const char *music)
+{
+	musicReplacements[mapname] = music;
+}
+
+void ReplaceMusics(bool namehack)
+{
+	TMap<FString, FString>::Iterator it(musicReplacements);
+	TMap<FString, FString>::Pair* pair;
+	while (it.NextPair(pair))
+	{
+		FString mapname = pair->Key;
+		FString music = pair->Value;
+		SetMusicForMap(mapname, music, namehack);
+	}
+	musicReplacements.Clear();
+}
 
 bool SetMusicForMap(const char* mapname, const char* music, bool namehack)
 {
 	static const char* specials[] = { "intro", "briefing", "loading" };
-	for (int i = 0; i < 3; i++)
+	for (unsigned i = 0; i < 3; i++)
 	{
 		if (!stricmp(mapname, specials[i]))
 		{
@@ -200,6 +211,7 @@ bool SetMusicForMap(const char* mapname, const char* music, bool namehack)
 		index->music = music;
 		return true;
 	}
+	DPrintf(DMSG_WARNING, "Could not replace %s music with %s\n", mapname, music);
 	return false;
 }
 
@@ -237,6 +249,8 @@ MapRecord* SetupUserMap(const char* boardfilename, const char *defaultmusic)
 	map->name = "";
 	map->SetFileName(boardfilename);
 	map->flags = MI_USERMAP|MI_FORCEEOG;
-	map->music = G_SetupFilenameBasedMusic(boardfilename, defaultmusic);
+	int lookup = LookupMusic(boardfilename, true);
+	if (lookup >= 0) map->music = fileSystem.GetFileFullName(lookup);
+	else map->music = defaultmusic;
 	return map;
 }

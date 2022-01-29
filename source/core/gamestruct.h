@@ -12,7 +12,10 @@ bool System_WantGuiCapture();	// During playing this tells us whether the game m
 
 class FSerializer;
 struct FRenderViewpoint;
-struct spritetype;
+struct sectortype;
+struct tspritetype;
+class DCoreActor;
+struct MapRecord;
 
 struct GameStats
 {
@@ -24,6 +27,7 @@ struct GameStats
 
 struct FNewGameStartup
 {
+	MapRecord* Map;
 	int Episode;
 	int Level;
 	int Skill;
@@ -49,9 +53,9 @@ extern cycle_t drawtime, actortime, thinktime, gameupdatetime;
 
 struct GeoEffect
 {
-	int* geosectorwarp;
-	int* geosectorwarp2;
-	int* geosector;
+	sectortype** geosectorwarp;
+	sectortype** geosectorwarp2;
+	sectortype** geosector;
 	int* geox;
 	int* geoy;
 	int* geox2;
@@ -66,6 +70,7 @@ struct GameInterface
 	virtual ~GameInterface() {}
 	virtual bool GenerateSavePic() { return false; }
 	virtual void app_init() = 0;
+	virtual void LoadGameTextures() {}
 	virtual void loadPalette();
 	virtual void clearlocalinputstate() {}
 	virtual void UpdateScreenSize() {}
@@ -88,7 +93,7 @@ struct GameInterface
 	virtual FString GetCoordString() { return "'stat coord' not implemented"; }
 	virtual void ExitFromMenu() { throw CExitEvent(0); }
 	virtual ReservedSpace GetReservedScreenSpace(int viewsize) { return { 0, 0 }; }
-	virtual void GetInput(InputPacket* packet, ControlInfo* const hidInput) {}
+	virtual void GetInput(ControlInfo* const hidInput, double const scaleAdjust, InputPacket* packet = nullptr) {}
 	virtual void UpdateSounds() {}
 	virtual void ErrorCleanup() {}
 	virtual void Startup() {}
@@ -101,7 +106,7 @@ struct GameInterface
 	virtual void NextLevel(MapRecord* map, int skill) {}
 	virtual void NewGame(MapRecord* map, int skill, bool special = false) {}
 	virtual void LevelCompleted(MapRecord* map, int skill) {}
-	virtual bool DrawAutomapPlayer(int x, int y, int z, int a, double const smoothratio) { return false; }
+	virtual bool DrawAutomapPlayer(int mx, int my, int x, int y, int z, int a, double const smoothratio) { return false; }
 	virtual void SetTileProps(int tile, int surf, int vox, int shade) {}
 	virtual fixed_t playerHorizMin() { return IntToFixed(-200); }
 	virtual fixed_t playerHorizMax() { return IntToFixed(200); }
@@ -113,13 +118,17 @@ struct GameInterface
 	virtual int chaseCamX(binangle ang) { return 0; }
 	virtual int chaseCamY(binangle ang) { return 0; }
 	virtual int chaseCamZ(fixedhoriz horiz) { return 0; }
-	virtual void processSprites(spritetype* tsprite, int& spritesortcnt, int viewx, int viewy, int viewz, binangle viewang, double smoothRatio) = 0;
+	virtual void processSprites(tspritetype* tsprite, int& spritesortcnt, int viewx, int viewy, int viewz, binangle viewang, double smoothRatio) = 0;
 	virtual void UpdateCameras(double smoothratio) {}
-	virtual void EnterPortal(spritetype* viewer, int type) {}
-	virtual void LeavePortal(spritetype* viewer, int type) {}
-	virtual bool GetGeoEffect(GeoEffect* eff, int viewsector) { return false; }
+	virtual void EnterPortal(DCoreActor* viewer, int type) {}
+	virtual void LeavePortal(DCoreActor* viewer, int type) {}
+	virtual bool GetGeoEffect(GeoEffect* eff, sectortype* viewsector) { return false; }
 	virtual int Voxelize(int sprnum) { return -1; }
-	virtual void AddMultiplayerEpisode(FString name) {}
+	virtual void AddExcludedEpisode(const FString& episode) {}
+	virtual int GetCurrentSkill() { return -1; }
+	virtual bool IsQAVInterpTypeValid(const FString& type) { return false; }
+	virtual void AddQAVInterpProps(const int res_id, const FString& interptype, const bool loopable, const TMap<int, TArray<int>>&& ignoredata) { }
+	virtual void RemoveQAVInterpProps(const int res_id) { }
 
 	virtual FString statFPS()
 	{

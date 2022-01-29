@@ -36,8 +36,18 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 BEGIN_BLD_NS
 
 
-void GameInterface::LevelCompleted(MapRecord *map, int skill)
+void GameInterface::LevelCompleted(MapRecord* map, int skill)
 {
+	// Save the player state before taking down anything.
+	for (int i = connecthead; i >= 0; i = connectpoint2[i])
+	{
+		if (gPlayer[i].actor)
+		{
+			memcpy(&gPlayerTemp[i], &gPlayer[i], sizeof(PLAYER));
+			gHealthTemp[i] = gPlayer[i].actor->xspr.health;
+		}
+	}
+
 	EndLevel();
 	Mus_Stop();
 
@@ -47,21 +57,16 @@ void GameInterface::LevelCompleted(MapRecord *map, int skill)
 	info.maxkills = gKillMgr.TotalKills;
 	info.secrets = gSecretMgr.Founds;
 	info.maxsecrets = gSecretMgr.Total;
-	info.time = gSecretMgr.Super;
+	info.supersecrets = gSecretMgr.Super;
 	info.endofgame = map == nullptr;
 
 	ShowIntermission(currentLevel, map, &info, [=](bool)
 		{
 			soundEngine->StopAllChannels();
-			gameaction = map? ga_nextlevel : ga_creditsmenu;
+			gameaction = map ? ga_nextlevel : ga_creditsmenu;
 		});
 }
 
-
-CKillMgr::CKillMgr()
-{
-	Clear();
-}
 
 void CKillMgr::SetCount(int nCount)
 {
@@ -73,23 +78,21 @@ void CKillMgr::AddNewKill(int nCount)
 	TotalKills += nCount;
 }
 
-void CKillMgr::AddKill(spritetype* pSprite)
+void CKillMgr::AddKill(DBloodActor* actor)
 {
-	if (pSprite->statnum == kStatDude && pSprite->type != kDudeBat && pSprite->type != kDudeRat && pSprite->type != kDudeInnocent && pSprite->type != kDudeBurningInnocent)
+	if (actor->spr.statnum == kStatDude && actor->spr.type != kDudeBat && actor->spr.type != kDudeRat && actor->spr.type != kDudeInnocent && actor->spr.type != kDudeBurningInnocent)
 		Kills++;
 }
 
 void CKillMgr::CountTotalKills(void)
 {
 	TotalKills = 0;
-	int nSprite;
-	StatIterator it(kStatDude);
-	while ((nSprite = it.NextIndex()) >= 0)
+	BloodStatIterator it(kStatDude);
+	while (auto actor = it.Next())
 	{
-		spritetype* pSprite = &sprite[nSprite];
-		if (pSprite->type < kDudeBase || pSprite->type >= kDudeMax)
-			I_Error("Non-enemy sprite (%d) in the enemy sprite list.", nSprite);
-		if (pSprite->statnum == kStatDude && pSprite->type != kDudeBat && pSprite->type != kDudeRat && pSprite->type != kDudeInnocent && pSprite->type != kDudeBurningInnocent)
+		if (actor->spr.type < kDudeBase || actor->spr.type >= kDudeMax)
+			I_Error("Non-enemy sprite (%d) in the enemy sprite list.", actor->GetIndex());
+		if (actor->spr.statnum == kStatDude && actor->spr.type != kDudeBat && actor->spr.type != kDudeRat && actor->spr.type != kDudeInnocent && actor->spr.type != kDudeBurningInnocent)
 			TotalKills++;
 	}
 }
@@ -97,11 +100,6 @@ void CKillMgr::CountTotalKills(void)
 void CKillMgr::Clear(void)
 {
 	TotalKills = Kills = 0;
-}
-
-CSecretMgr::CSecretMgr(void)
-{
-	Clear();
 }
 
 void CSecretMgr::SetCount(int nCount)
@@ -117,10 +115,6 @@ void CSecretMgr::Found(int nType)
 		return;
 	}
 	else Super++;
-
-	if (gGameOptions.nGameType == 0) {
-		viewSetMessage(GStrings(FStringf("TXTB_SECRET%d", Random(2))), 0, MESSAGE_PRIORITY_SECRET);
-	}
 }
 
 void CSecretMgr::Clear(void)

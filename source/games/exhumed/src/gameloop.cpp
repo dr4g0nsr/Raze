@@ -16,7 +16,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 //-------------------------------------------------------------------------
 #include "ns.h"
-#include "compat.h"
 #include "engine.h"
 #include "exhumed.h"
 #include "sequence.h"
@@ -39,7 +38,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "c_dispatch.h"
 #include "raze_sound.h"
 #include "gamestate.h"
-#include "screenjob.h"
+#include "screenjob_.h"
 #include "c_console.h"
 #include "cheathandler.h"
 #include "statistics.h"
@@ -53,7 +52,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 BEGIN_PS_NS
 
-short nBestLevel;
+int nBestLevel;
 
 void RunCinemaScene(int num);
 void GameMove(void);
@@ -65,7 +64,6 @@ void DoTitle(CompletionFunc completion);
 
 void GameInterface::Render()
 {
-    CheckKeys2();
     drawtime.Reset();
     drawtime.Clock();
 
@@ -77,15 +75,21 @@ void GameInterface::Render()
 
     double const smoothratio = calc_smoothratio();
 
-    DrawView(smoothratio);
-    DrawStatusBar();
-    DrawCrosshair(kCrosshairTile, PlayerList[nLocalPlayer].nHealth >> 3, -PlayerList[nLocalPlayer].angle.look_anghalf(smoothratio), 0, 1);
 
-    if (paused && !M_Active())
+
+    DrawView(smoothratio);
+    if (nFreeze != 2) // Hide when Ramses is talking.
     {
-        auto tex = GStrings("TXTB_PAUSED");
-		int nStringWidth = SmallFont->StringWidth(tex);
-		DrawText(twod, SmallFont, CR_UNTRANSLATED, 160 - nStringWidth / 2, 100, tex, DTA_FullscreenScale, FSMode_Fit320x200, TAG_DONE);
+        DrawStatusBar();
+        DrawCrosshair(kCrosshairTile, PlayerList[nLocalPlayer].nHealth >> 3, -PlayerList[nLocalPlayer].angle.look_anghalf(smoothratio), 0, 1);
+
+        if (paused && !M_Active())
+        {
+            auto tex = GStrings("TXTB_PAUSED");
+            auto font = PickSmallFont(tex);
+            int nStringWidth = font->StringWidth(tex);
+            DrawText(twod, font, CR_UNTRANSLATED, 160 - nStringWidth / 2, 100, tex, DTA_FullscreenScale, FSMode_Fit320x200, TAG_DONE);
+        }
     }
 
     drawtime.Unclock();
@@ -121,9 +125,9 @@ void GameInterface::NextLevel(MapRecord *map, int skill)
 	{
 		nBestLevel = map->levelNumber - 1;
 	}
-	
+
 	STAT_NewLevel(currentLevel->labelName);
-	
+
 }
 
 //---------------------------------------------------------------------------
@@ -138,6 +142,11 @@ void GameInterface::NewGame(MapRecord *map, int skill, bool frommenu)
 	InitNewGame();
     InitLevel(map);
     gameaction = ga_level;
+}
+
+int GameInterface::GetCurrentSkill()
+{
+    return -2;
 }
 
 int selectedlevelnew;
@@ -168,7 +177,7 @@ void GameInterface::LevelCompleted(MapRecord *to_map, int skill)
     {
         if (to_map->levelNumber > nBestLevel) nBestLevel = to_map->levelNumber - 1;
 
-        if (to_map->gameflags & LEVEL_EX_COUNTDOWN) nPlayerLives[0] = 0;
+        if (to_map->gameflags & LEVEL_EX_COUNTDOWN) PlayerList[0].nLives = 0;
         if (to_map->gameflags & LEVEL_EX_TRAINING)
         {
             gameaction = ga_nextlevel;
@@ -180,7 +189,7 @@ void GameInterface::LevelCompleted(MapRecord *to_map, int skill)
     info.maxkills = nCreaturesTotal;
     info.supersecrets = nBestLevel;
     info.time = PlayClock * GameTicRate / 120;
-    selectedlevelnew = to_map->levelNumber;
+    if (to_map) selectedlevelnew = to_map->levelNumber;
     ShowIntermission(currentLevel, to_map, &info, [=](bool)
         {
             if (!to_map) gameaction = ga_startup; // this was the end of the game

@@ -37,8 +37,6 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 
 BEGIN_SW_NS
 
-extern short BossSpriteNum[3];
-
 DECISION SerpBattle[] =
 {
     {670,   InitActorMoveCloser         },
@@ -70,7 +68,7 @@ DECISION SerpSurprised[] =
 DECISION SerpEvasive[] =
 {
     {10,   InitActorEvade  },
-    {1024, NULL            }
+    {1024, nullptr            }
 };
 
 DECISION SerpLostTarget[] =
@@ -168,7 +166,7 @@ STATE s_SerpRun[5][4] =
 };
 
 
-STATEp sg_SerpRun[] =
+STATE* sg_SerpRun[] =
 {
     &s_SerpRun[0][0],
     &s_SerpRun[1][0],
@@ -252,7 +250,7 @@ STATE s_SerpSlash[5][10] =
 };
 
 
-STATEp sg_SerpSlash[] =
+STATE* sg_SerpSlash[] =
 {
     &s_SerpSlash[0][0],
     &s_SerpSlash[1][0],
@@ -327,7 +325,7 @@ STATE s_SerpSkullSpell[5][8] =
 };
 
 
-STATEp sg_SerpSkullSpell[] =
+STATE* sg_SerpSkullSpell[] =
 {
     &s_SerpSkullSpell[0][0],
     &s_SerpSkullSpell[1][0],
@@ -402,7 +400,7 @@ STATE s_SerpSpell[5][8] =
 };
 
 
-STATEp sg_SerpSpell[] =
+STATE* sg_SerpSpell[] =
 {
     &s_SerpSpell[0][0],
     &s_SerpSpell[1][0],
@@ -474,7 +472,7 @@ STATE s_SerpMonstSpell[5][8] =
 };
 
 
-STATEp sg_SerpMonstSpell[] =
+STATE* sg_SerpMonstSpell[] =
 {
     &s_SerpMonstSpell[0][0],
     &s_SerpMonstSpell[1][0],
@@ -558,7 +556,7 @@ STATE s_SerpRapidSpell[5][10] =
 };
 
 
-STATEp sg_SerpRapidSpell[] =
+STATE* sg_SerpRapidSpell[] =
 {
     &s_SerpRapidSpell[0][0],
     &s_SerpRapidSpell[1][0],
@@ -595,7 +593,7 @@ STATE s_SerpStand[5][1] =
 };
 
 
-STATEp sg_SerpStand[] =
+STATE* sg_SerpStand[] =
 {
     s_SerpStand[0],
     s_SerpStand[1],
@@ -633,37 +631,37 @@ STATE s_SerpDead[] =
     {SERP_DEAD, SERP_DIE_RATE, DoActorDebris, &s_SerpDead[0]},
 };
 
-STATEp sg_SerpDie[] =
+STATE* sg_SerpDie[] =
 {
     s_SerpDie
 };
 
-STATEp sg_SerpDead[] =
+STATE* sg_SerpDead[] =
 {
     s_SerpDead
 };
 
 /*
-STATEp *Stand[MAX_WEAPONS];
-STATEp *Run;
-STATEp *Jump;
-STATEp *Fall;
-STATEp *Crawl;
-STATEp *Swim;
-STATEp *Fly;
-STATEp *Rise;
-STATEp *Sit;
-STATEp *Look;
-STATEp *Climb;
-STATEp *Pain;
-STATEp *Death1;
-STATEp *Death2;
-STATEp *Dead;
-STATEp *DeathJump;
-STATEp *DeathFall;
-STATEp *CloseAttack[2];
-STATEp *Attack[6];
-STATEp *Special[2];
+STATE* *Stand[MAX_WEAPONS];
+STATE* *Run;
+STATE* *Jump;
+STATE* *Fall;
+STATE* *Crawl;
+STATE* *Swim;
+STATE* *Fly;
+STATE* *Rise;
+STATE* *Sit;
+STATE* *Look;
+STATE* *Climb;
+STATE* *Pain;
+STATE* *Death1;
+STATE* *Death2;
+STATE* *Dead;
+STATE* *DeathJump;
+STATE* *DeathFall;
+STATE* *CloseAttack[2];
+STATE* *Attack[6];
+STATE* *Special[2];
 */
 
 
@@ -671,156 +669,140 @@ ACTOR_ACTION_SET SerpActionSet =
 {
     sg_SerpStand,
     sg_SerpRun,
-    NULL, //sg_SerpJump,
-    NULL, //sg_SerpFall,
-    NULL, //sg_SerpCrawl,
-    NULL, //sg_SerpSwim,
-    NULL, //sg_SerpFly,
-    NULL, //sg_SerpRise,
-    NULL, //sg_SerpSit,
-    NULL, //sg_SerpLook,
-    NULL, //climb
-    NULL, //pain
+    nullptr, //sg_SerpJump,
+    nullptr, //sg_SerpFall,
+    nullptr, //sg_SerpCrawl,
+    nullptr, //sg_SerpSwim,
+    nullptr, //sg_SerpFly,
+    nullptr, //sg_SerpRise,
+    nullptr, //sg_SerpSit,
+    nullptr, //sg_SerpLook,
+    nullptr, //climb
+    nullptr, //pain
     sg_SerpDie,
-    NULL, //sg_SerpHariKari,
+    nullptr, //sg_SerpHariKari,
     sg_SerpDead,
-    NULL, //sg_SerpDeathJump,
-    NULL, //sg_SerpDeathFall,
+    nullptr, //sg_SerpDeathJump,
+    nullptr, //sg_SerpDeathFall,
     {sg_SerpSlash},
     {1024},
     {sg_SerpSlash, sg_SerpSpell, sg_SerpRapidSpell, sg_SerpRapidSpell},
     {256, 724, 900, 1024},
-    {NULL},
-    NULL,
-    NULL
+    {nullptr},
+    nullptr,
+    nullptr
 };
 
-int
-SetupSerp(short SpriteNum)
+int SetupSerp(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u;
     ANIMATOR DoActorDecide;
 
-    if (TEST(sp->cstat, CSTAT_SPRITE_RESTORE))
+    if (!(actor->spr.cstat & CSTAT_SPRITE_RESTORE))
     {
-        u = User[SpriteNum].Data();
-        ASSERT(u);
-    }
-    else
-    {
-        u = SpawnUser(SpriteNum,SERP_RUN_R0,s_SerpRun[0]);
-        u->Health = HEALTH_SERP_GOD;
+        SpawnUser(actor,SERP_RUN_R0,s_SerpRun[0]);
+        actor->user.Health = HEALTH_SERP_GOD;
     }
 
-    if (Skill == 0) u->Health = 1100;
-    if (Skill == 1) u->Health = 2200;
+    if (Skill == 0) actor->user.Health = 1100;
+    if (Skill == 1) actor->user.Health = 2200;
 
-    ChangeState(SpriteNum, s_SerpRun[0]);
-    u->Attrib = &SerpAttrib;
-    DoActorSetSpeed(SpriteNum, NORM_SPEED);
-    u->StateEnd = s_SerpDie;
-    u->Rot = sg_SerpRun;
+    ChangeState(actor, s_SerpRun[0]);
+    actor->user.Attrib = &SerpAttrib;
+    DoActorSetSpeed(actor, NORM_SPEED);
+    actor->user.StateEnd = s_SerpDie;
+    actor->user.Rot = sg_SerpRun;
 
-    EnemyDefaults(SpriteNum, &SerpActionSet, &SerpPersonality);
+    EnemyDefaults(actor, &SerpActionSet, &SerpPersonality);
 
     // Mini-Boss Serp
-    if (sp->pal == 16)
+    if (actor->spr.pal == 16)
     {
-        u->Health = 1000;
-        sp->yrepeat = 74;
-        sp->xrepeat = 74;
+        actor->user.Health = 1000;
+        actor->spr.yrepeat = 74;
+        actor->spr.xrepeat = 74;
     }
     else
     {
-        sp->yrepeat = 100;
-        sp->xrepeat = 128;
+        actor->spr.yrepeat = 100;
+        actor->spr.xrepeat = 128;
     }
 
-    sp->clipdist = (512) >> 2;
-    SET(u->Flags, SPR_XFLIP_TOGGLE|SPR_ELECTRO_TOLERANT);
+    actor->spr.clipdist = (512) >> 2;
+    actor->user.Flags |= (SPR_XFLIP_TOGGLE|SPR_ELECTRO_TOLERANT);
 
-    u->loz = sp->z;
+    actor->user.loz = actor->spr.pos.Z;
 
     // amount to move up for clipmove
-    u->zclip = Z(80);
+    actor->user.zclip = Z(80);
     // size of step can walk off of
-    u->lo_step = Z(40);
+    actor->user.lo_step = Z(40);
 
-    u->floor_dist = u->zclip - u->lo_step;
-    u->ceiling_dist = SPRITEp_SIZE_Z(sp) - u->zclip;
+    actor->user.floor_dist = actor->user.zclip - actor->user.lo_step;
+    actor->user.ceiling_dist = ActorSizeZ(actor) - actor->user.zclip;
 
     return 0;
 }
 
-int NullSerp(short SpriteNum)
+int NullSerp(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
+    if (actor->user.Flags & (SPR_SLIDING))
+        DoActorSlide(actor);
 
-    if (TEST(u->Flags,SPR_SLIDING))
-        DoActorSlide(SpriteNum);
+    KeepActorOnFloor(actor);
 
-    KeepActorOnFloor(SpriteNum);
-
-    //DoActorSectorDamage(SpriteNum);
+    //DoActorSectorDamage(actor);
     return 0;
 }
 
-int DoSerpMove(short SpriteNum)
+int DoSerpMove(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u = User[SpriteNum].Data();
+    if (actor->user.Flags & (SPR_SLIDING))
+        DoActorSlide(actor);
 
-    if (TEST(u->Flags,SPR_SLIDING))
-        DoActorSlide(SpriteNum);
-
-    if (u->track >= 0)
-        ActorFollowTrack(SpriteNum, ACTORMOVETICS);
+    if (actor->user.track >= 0)
+        ActorFollowTrack(actor, ACTORMOVETICS);
     else
-        (*u->ActorActionFunc)(SpriteNum);
+        (*actor->user.ActorActionFunc)(actor);
 
     // serp ring
-    if (sp->pal != 16)
+    if (actor->spr.pal != 16)
     {
-        switch (u->Counter2)
+        switch (actor->user.Counter2)
         {
         case 0:
-            if (u->Health != u->MaxHealth)
+            if (actor->user.Health != actor->user.MaxHealth)
             {
-                NewStateGroup(SpriteNum, sg_SerpSkullSpell);
-                u->Counter2++;
+                NewStateGroup(actor, sg_SerpSkullSpell);
+                actor->user.Counter2++;
             }
             break;
 
         case 1:
-            //if (u->Health <= DIV2(u->MaxHealth))
         {
-            if (u->Counter <= 0)
-                NewStateGroup(SpriteNum, sg_SerpSkullSpell);
+            if (actor->user.Counter <= 0)
+                NewStateGroup(actor, sg_SerpSkullSpell);
         }
         break;
         }
     }
 
-    KeepActorOnFloor(SpriteNum);
+    KeepActorOnFloor(actor);
 
-    //DoActorSectorDamage(SpriteNum);
+    //DoActorSectorDamage(actor);
     return 0;
 }
 
-int DoDeathSpecial(short SpriteNum)
+int DoDeathSpecial(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-
-    DoMatchEverything(NULL, sp->lotag, ON);
+    DoMatchEverything(nullptr, actor->spr.lotag, 1);
 
     if (!SW_SHAREWARE)
     {
         // Resume the regular music - in a hack-free fashion.
-        PlaySong(currentLevel->labelName, currentLevel->music, currentLevel->cdSongId);
+        PlaySong(currentLevel->music, currentLevel->cdSongId);
     }
 
-    BossSpriteNum[0] = -2;
+    BossSpriteNum[0] = nullptr;
     return 0;
 }
 
@@ -829,7 +811,6 @@ int DoDeathSpecial(short SpriteNum)
 
 static saveable_code saveable_serp_code[] =
 {
-    SAVE_CODE(SetupSerp),
     SAVE_CODE(NullSerp),
     SAVE_CODE(DoSerpMove),
     SAVE_CODE(DoDeathSpecial),

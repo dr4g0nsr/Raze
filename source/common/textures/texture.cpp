@@ -37,7 +37,7 @@
 #include "printf.h"
 #include "files.h"
 #include "filesystem.h"
-#include "templates.h"
+
 #include "textures.h"
 #include "bitmap.h"
 #include "colormatcher.h"
@@ -97,7 +97,7 @@ FBitmap FTexture::GetBgraBitmap(const PalEntry* remap, int* ptrans)
 int FTexture::CheckRealHeight()
 {
 	auto pixels = Get8BitPixels(false);
-	
+
 	for(int h = GetHeight()-1; h>= 0; h--)
 	{
 		for(int w = 0; w < GetWidth(); w++)
@@ -321,6 +321,7 @@ bool FTexture::ProcessData(unsigned char* buffer, int w, int h, bool ispatch)
 //	Initializes the buffer for the texture data
 //
 //===========================================================================
+void V_ApplyLuminosityTranslation(int translation, uint8_t *buffer, int size);
 
 FTextureBuffer FTexture::CreateTexBuffer(int translation, int flags)
 {
@@ -356,7 +357,7 @@ FTextureBuffer FTexture::CreateTexBuffer(int translation, int flags)
 			buffer = new unsigned char[W * (H + 1) * 4];
 			memset(buffer, 0, W * (H + 1) * 4);
 
-			auto remap = translation <= 0 ? nullptr : GPalette.TranslationToTable(translation);
+			auto remap = translation <= 0 || IsLuminosityTranslation(translation) ? nullptr : GPalette.TranslationToTable(translation);
 			if (remap && remap->Inactive) remap = nullptr;
 			if (remap) translation = remap->Index;
 			FBitmap bmp(buffer, W * 4, W, H);
@@ -364,6 +365,10 @@ FTextureBuffer FTexture::CreateTexBuffer(int translation, int flags)
 			int trans;
 			auto Pixels = GetBgraBitmap(remap ? remap->Palette : nullptr, &trans);
 			bmp.Blit(exx, exx, Pixels);
+			if (IsLuminosityTranslation(translation))
+			{
+				V_ApplyLuminosityTranslation(translation, buffer, W * H);
+			}
 
 			if (remap == nullptr)
 			{
@@ -382,7 +387,7 @@ FTextureBuffer FTexture::CreateTexBuffer(int translation, int flags)
 			FContentIdBuilder builder;
 			builder.id = 0;
 			builder.imageID = GetImage()->GetId();
-			builder.translation = MAX(0, translation);
+			builder.translation = max(0, translation);
 			builder.expand = exx;
 			result.mContentId = builder.id;
 		}

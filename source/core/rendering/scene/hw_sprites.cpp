@@ -56,7 +56,6 @@ void HWSprite::DrawSprite(HWDrawInfo* di, FRenderState& state, bool translucent)
 {
 	bool additivefog = false;
 	bool foglayer = false;
-	auto& vp = di->Viewpoint;
 
 	if (translucent)
 	{
@@ -70,9 +69,7 @@ void HWSprite::DrawSprite(HWDrawInfo* di, FRenderState& state, bool translucent)
 
 		state.SetRenderStyle(RenderStyle);
 		state.SetTextureMode(RenderStyle);
-
-		if (texture && !checkTranslucentReplacement(texture->GetID(), palette)) state.AlphaFunc(Alpha_GEqual, texture->alphaThreshold);
-		else state.AlphaFunc(Alpha_Greater, 0.f);
+		state.AlphaFunc(Alpha_Greater, alphaThreshold);
 
 		if (RenderStyle.BlendOp == STYLEOP_Add && RenderStyle.DestAlpha == STYLEALPHA_One)
 		{
@@ -80,12 +77,14 @@ void HWSprite::DrawSprite(HWDrawInfo* di, FRenderState& state, bool translucent)
 		}
 	}
 
+#if 0
 	if (dynlightindex == -1)	// only set if we got no light buffer index. This covers all cases where sprite lighting is used.
 	{
 		float out[3] = {};
 		//di->GetDynSpriteLight(gl_light_sprites ? actor : nullptr, gl_light_particles ? particle : nullptr, out);
 		//state.SetDynLight(out[0], out[1], out[2]);
 	}
+#endif
 
 
 	if (RenderStyle.Flags & STYLEF_FadeToBlack)
@@ -109,7 +108,10 @@ void HWSprite::DrawSprite(HWDrawInfo* di, FRenderState& state, bool translucent)
 		else RenderStyle.BlendOp = STYLEOP_Fuzz;	// subtractive with models is not going to work.
 	}
 
-	SetLightAndFog(state, fade, palette, shade, visibility, alpha, this->shade <= numshades);
+	SetLightAndFog(di, state, fade, palette, shade, visibility, alpha);
+
+	if (shade >= numshades) state.SetObjectColor(0xff000000); // make sure that nothing lights this up again.
+
 
 	if (modelframe == 0)
 	{
@@ -142,17 +144,20 @@ void HWSprite::DrawSprite(HWDrawInfo* di, FRenderState& state, bool translucent)
 	}
 	else
 	{
-		state.EnableModelMatrix(true);
-		state.mModelMatrix = rotmat;
 		FHWModelRenderer mr(state, dynlightindex);
 		if (modelframe < 0)
 		{
+			state.mModelMatrix = rotmat;
+
 			auto model = voxel->model;
 			state.SetDepthFunc(DF_LEqual);
 			state.EnableTexture(true);
 			model->BuildVertexBuffer(&mr);
+			bool mirrored = ((Sprite->cstat & CSTAT_SPRITE_XFLIP) != 0) ^ ((Sprite->cstat & CSTAT_SPRITE_YFLIP) != 0) ^ portalState.isMirrored();
+			mr.BeginDrawModel(RenderStyle, nullptr, rotmat, mirrored);
 			mr.SetupFrame(model, 0, 0, 0);
 			model->RenderFrame(&mr, TexMan.GetGameTexture(model->GetPaletteTexture()), 0, 0, 0.f, TRANSLATION(Translation_Remap + curbasepal, palette));
+			mr.EndDrawModel(RenderStyle, nullptr);
 			state.SetDepthFunc(DF_Less);
 			state.SetVertexBuffer(screen->mVertexData);
 
@@ -163,7 +168,6 @@ void HWSprite::DrawSprite(HWDrawInfo* di, FRenderState& state, bool translucent)
 		}
 		state.SetObjectColor(0xffffffff);
 		state.SetVertexBuffer(screen->mVertexData);
-		state.EnableModelMatrix(false);
 	}
 
 	if (translucent)
@@ -283,7 +287,9 @@ void HWSprite::CreateVertices(HWDrawInfo* di)
 
 inline void HWSprite::PutSprite(HWDrawInfo* di, bool translucent)
 {
-	// That's a lot of checks...
+	if (translucent && texture && (hw_int_useindexedcolortextures || !checkTranslucentReplacement(texture->GetID(), palette))) alphaThreshold = texture->alphaThreshold;
+	else alphaThreshold = 0;
+
 	/*
 	if (modelframe == 1 && gl_light_sprites)
 	{
@@ -293,6 +299,7 @@ inline void HWSprite::PutSprite(HWDrawInfo* di, bool translucent)
 	else*/
 		dynlightindex = -1;
 
+	rendered_sprites++;
 	vertexindex = -1;
 	if (!screen->BuffersArePersistent())
 	{
@@ -307,7 +314,7 @@ inline void HWSprite::PutSprite(HWDrawInfo* di, bool translucent)
 //
 //==========================================================================
 
-void HWSprite::Process(HWDrawInfo* di, spritetype* spr, sectortype* sector, int thruportal)
+void HWSprite::Process(HWDrawInfo* di, tspritetype* spr, sectortype* sector, int thruportal)
 {
 	if (spr == nullptr)
 		return;
@@ -327,9 +334,9 @@ void HWSprite::Process(HWDrawInfo* di, spritetype* spr, sectortype* sector, int 
 
 	SetSpriteTranslucency(spr, alpha, RenderStyle);
 
-	x = spr->x * (1 / 16.f);
-	z = spr->z * (1 / -256.f);
-	y = spr->y * (1 / -16.f);
+	x = spr->pos.X * (1 / 16.f);
+	z = spr->pos.Z * (1 / -256.f);
+	y = spr->pos.Y * (1 / -16.f);
 	auto vp = di->Viewpoint;
 
 	if ((vp.Pos.XY() - DVector2(x, y)).LengthSquared() < 0.125) return;
@@ -390,9 +397,9 @@ void HWSprite::Process(HWDrawInfo* di, spritetype* spr, sectortype* sector, int 
 		float viewvecX = vp.ViewVector.X;
 		float viewvecY = vp.ViewVector.Y;
 
-		x = spr->x * (1 / 16.f);
-		y = spr->y * (1 / -16.f);
-		z = spr->z * (1 / -256.f);
+		x = spr->pos.X * (1 / 16.f);
+		y = spr->pos.Y * (1 / -16.f);
+		z = spr->pos.Z * (1 / -256.f);
 
 		x1 = x - viewvecY * (xoff - (width * 0.5f));
 		x2 = x - viewvecY * (xoff + (width * 0.5f));
@@ -431,7 +438,6 @@ void HWSprite::Process(HWDrawInfo* di, spritetype* spr, sectortype* sector, int 
 #endif
 
 	PutSprite(di, true);
-	rendered_sprites++;
 }
 
 
@@ -441,10 +447,10 @@ void HWSprite::Process(HWDrawInfo* di, spritetype* spr, sectortype* sector, int 
 //
 //==========================================================================
 
-bool HWSprite::ProcessVoxel(HWDrawInfo* di, voxmodel_t* vox, spritetype* spr, sectortype* sector, bool rotate)
+bool HWSprite::ProcessVoxel(HWDrawInfo* di, voxmodel_t* vox, tspritetype* spr, sectortype* sector, bool rotate)
 {
 	Sprite = spr;
-	auto sprext = &spriteext[spr->owner];
+	auto ownerActor = spr->ownerActor;
 
 	texture = nullptr;
 	modelframe = -1;
@@ -455,15 +461,15 @@ bool HWSprite::ProcessVoxel(HWDrawInfo* di, voxmodel_t* vox, spritetype* spr, se
 	visibility = sectorVisibility(sector);
 	voxel = vox;
 
-	auto ang = spr->ang + sprext->angoff;
-	if ((spr->cstat & CSTAT_SPRITE_MDLROTATE) || rotate)
+	auto ang = spr->ang + ownerActor->sprext.angoff;
+	if ((spr->clipdist & TSPR_MDLROTATE) || rotate)
 	{
 		int myclock = (PlayClock << 3) + MulScale(4 << 3, (int)di->Viewpoint.TicFrac, 16);
 		ang = (ang + myclock) & 2047;
 	}
 
 
-	if (!vox || (spr->cstat & CSTAT_SPRITE_ALIGNMENT) == CSTAT_SPRITE_ALIGNMENT_FLOOR) return false;
+	if (!vox || (spr->cstat & CSTAT_SPRITE_ALIGNMENT_MASK) == CSTAT_SPRITE_ALIGNMENT_FLOOR) return false;
 
 	SetSpriteTranslucency(spr, alpha, RenderStyle);
 
@@ -473,11 +479,11 @@ bool HWSprite::ProcessVoxel(HWDrawInfo* di, voxmodel_t* vox, spritetype* spr, se
 
 	float basescale = voxel->bscale / 64.f;
 	float sprxscale = (float)spr->xrepeat * (256.f / 320.f) * basescale;
-	if ((::sprite[spr->owner].cstat & CSTAT_SPRITE_ALIGNMENT) == CSTAT_SPRITE_ALIGNMENT_WALL)
+	if ((spr->ownerActor->spr.cstat & CSTAT_SPRITE_ALIGNMENT_MASK) == CSTAT_SPRITE_ALIGNMENT_WALL)
 	{
 		sprxscale *= 1.25f;
-		translatevec.Y -= spr->xoffset * bcosf(sprext->angoff, -20);
-		translatevec.X += spr->xoffset * bsinf(sprext->angoff, -20);
+		translatevec.Y -= spr->xoffset * bcosf(ownerActor->sprext.angoff, -20);
+		translatevec.X += spr->xoffset * bsinf(ownerActor->sprext.angoff, -20);
 	}
 
 	if (spr->cstat & CSTAT_SPRITE_YFLIP) 
@@ -500,36 +506,35 @@ bool HWSprite::ProcessVoxel(HWDrawInfo* di, voxmodel_t* vox, spritetype* spr, se
 	scalevec.Z *= sprzscale; 
 	translatevec.Z *= sprzscale;
 
-	float zpos = (float)(spr->z + sprext->position_offset.z);
-	float zscale = ((spr->cstat & CSTAT_SPRITE_YFLIP) && (::sprite[spr->owner].cstat & CSTAT_SPRITE_ALIGNMENT) != 0) ? -4.f : 4.f;
+	float zpos = (float)(spr->pos.Z + ownerActor->sprext.position_offset.Z);
+	float zscale = ((spr->cstat & CSTAT_SPRITE_YFLIP) && (spr->ownerActor->spr.cstat & CSTAT_SPRITE_ALIGNMENT_MASK) != 0) ? -4.f : 4.f;
 	zpos -= (spr->yoffset * spr->yrepeat) * zscale * voxel->bscale;
 
-	x = (spr->x + sprext->position_offset.x) * (1 / 16.f);
+	x = (spr->pos.X + ownerActor->sprext.position_offset.X) * (1 / 16.f);
 	z = zpos * (1 / -256.f);
-	y = (spr->y + sprext->position_offset.y) * (1 / -16.f);
+	y = (spr->pos.Y + ownerActor->sprext.position_offset.Y) * (1 / -16.f);
 
-	float zoff = voxel->siz.z * .5f;
+	float zoff = voxel->siz.Z * .5f;
 	if (!(spr->cstat & CSTAT_SPRITE_YCENTER))
-		zoff += voxel->piv.z;
-	else if ((spr->cstat & CSTAT_SPRITE_ALIGNMENT) != CSTAT_SPRITE_ALIGNMENT_SLAB)
+		zoff += voxel->piv.Z;
+	else if ((spr->cstat & CSTAT_SPRITE_ALIGNMENT_MASK) != CSTAT_SPRITE_ALIGNMENT_SLAB)
 	{
-		zoff += voxel->piv.z;
-		zoff -= voxel->siz.z * .5f;
+		zoff += voxel->piv.Z;
+		zoff -= voxel->siz.Z * .5f;
 	}
-	if (spr->cstat & CSTAT_SPRITE_YFLIP) zoff = voxel->siz.z - zoff;
+	if (spr->cstat & CSTAT_SPRITE_YFLIP) zoff = voxel->siz.Z - zoff;
 
 	rotmat.loadIdentity();
 	rotmat.translate(x + translatevec.X, z - translatevec.Z, y - translatevec.Y);
 	rotmat.rotate(buildang(ang).asdeg() - 90.f, 0, 1, 0);
 	rotmat.scale(scalevec.X, scalevec.Z, scalevec.Y);
 	// Apply pivot last
-	rotmat.translate(-voxel->piv.x, zoff, voxel->piv.y);
+	rotmat.translate(-voxel->piv.X, zoff, voxel->piv.Y);
 
 
 
 	auto vp = di->Viewpoint;
 	depth = (float)((x - vp.Pos.X) * vp.TanCos + (y - vp.Pos.Y) * vp.TanSin);
 	PutSprite(di, spriteHasTranslucency(Sprite));
-	rendered_sprites++;
 	return true;
 }

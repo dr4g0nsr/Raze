@@ -21,7 +21,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 //-------------------------------------------------------------------------
 #pragma once
-#include "compat.h"
 #include "build.h"
 #include "version.h"
 #include "filesystem.h"
@@ -38,10 +37,6 @@ extern int32_t gDetail;
 extern bool gNoClip;
 extern bool gInfiniteAmmo;
 extern int32_t gDeliriumBlur;
-
-///////
-extern int gWeaponsV10x;
-//////
 
 extern bool gFogMode;
 

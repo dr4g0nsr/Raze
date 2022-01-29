@@ -23,16 +23,15 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #include "ns.h"	// Must come before everything else!
 
-#include "compat.h"
 #include "build.h"
 
 #include "blood.h"
 
 BEGIN_BLD_NS
 
-static void innocThinkSearch(DBloodActor *);
-static void innocThinkGoto(DBloodActor *);
-static void innocThinkChase(DBloodActor *);
+static void innocThinkSearch(DBloodActor*);
+static void innocThinkGoto(DBloodActor*);
+static void innocThinkChase(DBloodActor*);
 
 AISTATE innocentIdle = { kAiStateIdle, 0, -1, 0, NULL, NULL, aiThinkTarget, NULL };
 AISTATE innocentSearch = { kAiStateSearch, 6, -1, 1800, NULL, aiMoveForward, innocThinkSearch, &innocentIdle };
@@ -43,75 +42,69 @@ AISTATE innocentGoto = { kAiStateMove, 6, -1, 600, NULL, aiMoveForward, innocThi
 
 static void innocThinkSearch(DBloodActor* actor)
 {
-    auto pXSprite = &actor->x();
-    auto pSprite = &actor->s();
-    aiChooseDirection(pSprite, pXSprite, pXSprite->goalAng);
-    aiThinkTarget(actor);
+	aiChooseDirection(actor, actor->xspr.goalAng);
+	aiThinkTarget(actor);
 }
 
 static void innocThinkGoto(DBloodActor* actor)
 {
-    auto pXSprite = &actor->x();
-    auto pSprite = &actor->s();
-    assert(pSprite->type >= kDudeBase && pSprite->type < kDudeMax);
-    DUDEINFO *pDudeInfo = getDudeInfo(pSprite->type);
-    int dx = pXSprite->targetX-pSprite->x;
-    int dy = pXSprite->targetY-pSprite->y;
-    int nAngle = getangle(dx, dy);
-    int nDist = approxDist(dx, dy);
-    aiChooseDirection(pSprite, pXSprite, nAngle);
-    if (nDist < 512 && abs(pSprite->ang - nAngle) < pDudeInfo->periphery)
-        aiNewState(actor, &innocentSearch);
-    aiThinkTarget(actor);
+	assert(actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax);
+	DUDEINFO* pDudeInfo = getDudeInfo(actor->spr.type);
+	int dx = actor->xspr.TargetPos.X - actor->spr.pos.X;
+	int dy = actor->xspr.TargetPos.Y - actor->spr.pos.Y;
+	int nAngle = getangle(dx, dy);
+	int nDist = approxDist(dx, dy);
+	aiChooseDirection(actor, nAngle);
+	if (nDist < 512 && abs(actor->spr.ang - nAngle) < pDudeInfo->periphery)
+		aiNewState(actor, &innocentSearch);
+	aiThinkTarget(actor);
 }
 
 static void innocThinkChase(DBloodActor* actor)
 {
-    auto pXSprite = &actor->x();
-    auto pSprite = &actor->s();
-    if (pXSprite->target == -1)
-    {
-        aiNewState(actor, &innocentGoto);
-        return;
-    }
-    assert(pSprite->type >= kDudeBase && pSprite->type < kDudeMax);
-    DUDEINFO *pDudeInfo = getDudeInfo(pSprite->type);
-    assert(pXSprite->target >= 0 && pXSprite->target < kMaxSprites);
-    spritetype *pTarget = &sprite[pXSprite->target];
-    XSPRITE *pXTarget = &xsprite[pTarget->extra];
-    int dx = pTarget->x-pSprite->x;
-    int dy = pTarget->y-pSprite->y;
-    aiChooseDirection(pSprite, pXSprite, getangle(dx, dy));
-    if (pXTarget->health == 0)
-    {
-        aiNewState(actor, &innocentSearch);
-        return;
-    }
-    if (IsPlayerSprite(pTarget))
-    {
-        aiNewState(actor, &innocentSearch);
-        return;
-    }
-    int nDist = approxDist(dx, dy);
-    if (nDist <= pDudeInfo->seeDist)
-    {
-        int nDeltaAngle = ((getangle(dx,dy)+1024-pSprite->ang)&2047)-1024;
-        int height = (pDudeInfo->eyeHeight*pSprite->yrepeat)<<2;
-        if (cansee(pTarget->x, pTarget->y, pTarget->z, pTarget->sectnum, pSprite->x, pSprite->y, pSprite->z - height, pSprite->sectnum))
-        {
-            if (nDist < pDudeInfo->seeDist && abs(nDeltaAngle) <= pDudeInfo->periphery)
-            {
-                aiSetTarget(pXSprite, pXSprite->target);
-                if (nDist < 0x666 && abs(nDeltaAngle) < 85)
-                    aiNewState(actor, &innocentIdle);
-                return;
-            }
-        }
-    }
+	if (actor->GetTarget() == nullptr)
+	{
+		aiNewState(actor, &innocentGoto);
+		return;
+	}
+	assert(actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax);
+	DUDEINFO* pDudeInfo = getDudeInfo(actor->spr.type);
+	if (!actor->ValidateTarget(__FUNCTION__)) return;
+	auto target = actor->GetTarget();
 
-    aiPlay3DSound(pSprite, 7000+Random(6), AI_SFX_PRIORITY_1, -1);
-    aiNewState(actor, &innocentGoto);
-    pXSprite->target = -1;
+	int dx = target->spr.pos.X - actor->spr.pos.X;
+	int dy = target->spr.pos.Y - actor->spr.pos.Y;
+	aiChooseDirection(actor, getangle(dx, dy));
+	if (target->xspr.health == 0)
+	{
+		aiNewState(actor, &innocentSearch);
+		return;
+	}
+	if (target->IsPlayerActor())
+	{
+		aiNewState(actor, &innocentSearch);
+		return;
+	}
+	int nDist = approxDist(dx, dy);
+	if (nDist <= pDudeInfo->seeDist)
+	{
+		int nDeltaAngle = ((getangle(dx, dy) + 1024 - actor->spr.ang) & 2047) - 1024;
+		int height = (pDudeInfo->eyeHeight * actor->spr.yrepeat) << 2;
+		if (cansee(target->spr.pos.X, target->spr.pos.Y, target->spr.pos.Z, target->sector(), actor->spr.pos.X, actor->spr.pos.Y, actor->spr.pos.Z - height, actor->sector()))
+		{
+			if (nDist < pDudeInfo->seeDist && abs(nDeltaAngle) <= pDudeInfo->periphery)
+			{
+				aiSetTarget(actor, actor->GetTarget());
+				if (nDist < 0x666 && abs(nDeltaAngle) < 85)
+					aiNewState(actor, &innocentIdle);
+				return;
+			}
+		}
+	}
+
+	aiPlay3DSound(actor, 7000 + Random(6), AI_SFX_PRIORITY_1, -1);
+	aiNewState(actor, &innocentGoto);
+	actor->SetTarget(nullptr);
 }
 
 

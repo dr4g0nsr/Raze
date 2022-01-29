@@ -76,24 +76,15 @@ static int faderamp[32] =
 };
 
 
-typedef struct RGB_color_typ
-{
-	unsigned char red;
-	unsigned char green;
-	unsigned char blue;
-} RGB_color, * RGB_color_ptr;
-
-
 //////////////////////////////////////////
 // Set the amount of redness for damage
 // the player just took
 //////////////////////////////////////////
-void SetFadeAmt(PLAYERp pp, short damage, unsigned char startcolor)
+void SetFadeAmt(PLAYER* pp, short damage, uint8_t startcolor)
 {
     const int FADE_DAMAGE_FACTOR = 3;   // 100 health / 32 shade cycles = 3.125
 
 	short fadedamage = 0;
-    RGB_color color;
 
 	//Printf("SetAmt: fadeamt = %d, startcolor = %d, pp = %d",pp->FadeAmt,startcolor,pp->StartColor);
 
@@ -138,14 +129,12 @@ void SetFadeAmt(PLAYERp pp, short damage, unsigned char startcolor)
 
     pp->FadeTics = 0;
 
-    color.red = GPalette.BaseColors[pp->StartColor].r;
-    color.green = GPalette.BaseColors[pp->StartColor].g;
-    color.blue = GPalette.BaseColors[pp->StartColor].b;
+    auto color = GPalette.BaseColors[pp->StartColor];
 
     // Do initial palette set
     if (pp == Player + screenpeek)
     {
-		videoFadePalette(color.red, color.green, color.blue, faderamp[min(31, max(0, 32 - abs(pp->FadeAmt)))]);
+		videoFadePalette(color.r, color.g, color.b, faderamp[min(31, max(0, 32 - abs(pp->FadeAmt)))]);
         if (damage < -1000)
             pp->FadeAmt = 1000;  // Don't call DoPaletteFlash for underwater stuff
     }
@@ -154,7 +143,7 @@ void SetFadeAmt(PLAYERp pp, short damage, unsigned char startcolor)
 //////////////////////////////////////////
 // Do the screen reddness based on damage
 //////////////////////////////////////////
-void DoPaletteFlash(PLAYERp pp)
+void DoPaletteFlash(PLAYER* pp)
 {
     const int MAXFADETICS = 5;
 

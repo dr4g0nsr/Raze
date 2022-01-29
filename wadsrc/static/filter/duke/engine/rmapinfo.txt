@@ -111,4 +111,5 @@ gameinfo
 {
 	summaryscreen = DukeCutscenes.BuildSPSummary
 	mpsummaryscreen = DukeCutscenes.BuildMPSummary  
+	statusbarclass = DukeStatusBar
 }

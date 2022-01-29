@@ -65,21 +65,19 @@ struct HightileReplacement
 static TMap<int, TArray<HightileReplacement>> tileReplacements;
 static TMap<int, TArray<HightileReplacement>> textureReplacements;
 
-struct FontCharInf
-{
-	FGameTexture* base;
-	FGameTexture* untranslated;
-	FGameTexture* translated;
-};
+static TMap<FGameTexture*, FGameTexture*> deferredChars;
 
-static TArray<FontCharInf> deferredChars;
-
-void FontCharCreated(FGameTexture* base, FGameTexture* untranslated, FGameTexture* translated)
+FGameTexture* GetBaseForChar(FGameTexture* t)
 {
-	// Store these in a list for now - they can only be processed in the finalization step.
-	if (translated == untranslated) translated = nullptr;
-	FontCharInf fci = { base, untranslated, translated };
-	deferredChars.Push(fci);
+	auto c = deferredChars.CheckKey(t);
+	if (c) return *c;
+	return t;
+}
+
+void FontCharCreated(FGameTexture* base, FGameTexture* glyph)
+{
+	if (base->GetName().IsNotEmpty())
+		deferredChars.Insert(glyph, base);
 }
 
 
@@ -159,7 +157,7 @@ FGameTexture* SkyboxReplacement(FTextureID picnum, int palnum)
 //
 //==========================================================================
 
-void PostLoadSetup()
+void highTileSetup()
 {
 	for(int i=0;i<MAXTILES;i++)
 	{
@@ -167,8 +165,33 @@ void PostLoadSetup()
 		if (!tex->isValid()) continue;
 		auto Hightile = tileReplacements.CheckKey(i);
 		if (!Hightile) continue;
+		textureReplacements.Insert(tex->GetID().GetIndex(), std::move(*Hightile));
+	}
+	tileReplacements.Clear();
 
-		FGameTexture* detailTex = nullptr, * glowTex = nullptr, * normalTex = nullptr, *specTex = nullptr;
+	decltype(deferredChars)::Iterator it(deferredChars);
+	decltype(deferredChars)::Pair* pair;
+	while (it.NextPair(pair))
+	{
+		auto rep = textureReplacements.CheckKey(pair->Value->GetID().GetIndex());
+		if (rep)
+		{
+			auto myrep = *rep; // don't create copies directly from the map we're inserting in!
+			auto chk = textureReplacements.CheckKey(pair->Key->GetID().GetIndex());
+			if (!chk) textureReplacements.Insert(pair->Key->GetID().GetIndex(), std::move(myrep));
+		}
+	}
+	deferredChars.Clear();
+	decltype(textureReplacements)::Iterator it2(textureReplacements);
+	decltype(textureReplacements)::Pair* pair2;
+	while (it2.NextPair(pair2))
+	{
+		auto tex = TexMan.GameByIndex(pair2->Key);
+		if (!tex->isValid()) continue;
+		auto Hightile = &pair2->Value;
+		if (!Hightile) continue;
+
+		FGameTexture* detailTex = nullptr, * glowTex = nullptr, * normalTex = nullptr, * specTex = nullptr;
 		float scalex = 1.f, scaley = 1.f;
 		for (auto& rep : *Hightile)
 		{
@@ -199,43 +222,15 @@ void PostLoadSetup()
 				if (rep.issky) continue;	// do not muck around with skyboxes (yet)
 				if (rep.palnum < NORMALPAL)
 				{
-					auto tex = rep.image;
+					auto imgtex = rep.image;
 					// Make a copy so that multiple appearances of the same texture with different layers can be handled. They will all refer to the same internal texture anyway.
-					tex = MakeGameTexture(tex->GetTexture(), "", ETextureType::Any);
-					if (glowTex) tex->SetGlowmap(glowTex->GetTexture());
-					if (detailTex) tex->SetDetailmap(detailTex->GetTexture());
-					if (normalTex) tex->SetNormalmap(normalTex->GetTexture());
-					if (specTex) tex->SetSpecularmap(specTex->GetTexture());
-					tex->SetDetailScale(scalex, scaley);
-					rep.image = tex;
-				}
-			}
-		}
-		textureReplacements.Insert(tex->GetID().GetIndex(), std::move(*Hightile));
-	}
-	tileReplacements.Clear();
-
-	int i = 0;
-	for (auto& ci : deferredChars)
-	{
-		i++;
-		auto rep = textureReplacements.CheckKey(ci.base->GetID().GetIndex());
-		if (rep)
-		{
-			if (ci.untranslated)
-			{
-				auto rrep = *rep;
-				textureReplacements.Insert(ci.untranslated->GetID().GetIndex(), std::move(rrep));
-			}
-
-			if (ci.translated)
-			{
-				//auto reptex = FindReplacement(ci.base->GetID(), 0, false);
-				//if (reptex)
-				{
-					// Todo: apply the translation.
-					//auto rrep = *rep;
-					//textureReplacements.Insert(ci.translated->GetID().GetIndex(), std::move(rrep));
+					imgtex = MakeGameTexture(imgtex->GetTexture(), "", ETextureType::Any);
+					if (glowTex) imgtex->SetGlowmap(glowTex->GetTexture());
+					if (detailTex) imgtex->SetDetailmap(detailTex->GetTexture());
+					if (normalTex) imgtex->SetNormalmap(normalTex->GetTexture());
+					if (specTex) imgtex->SetSpecularmap(specTex->GetTexture());
+					imgtex->SetDetailScale(scalex, scaley);
+					rep.image = imgtex;
 				}
 			}
 		}
@@ -330,23 +325,26 @@ int tileSetSkybox(int picnum, int palnum, FString* facenames, bool indexed)
 //
 //===========================================================================
 
-bool PickTexture(FRenderState *state, FGameTexture* tex, int paletteid, TexturePick& pick)
+bool PickTexture(FGameTexture* tex, int paletteid, TexturePick& pick, bool wantindexed)
 {
 	if (!tex->isValid() || tex->GetTexelWidth() <= 0 || tex->GetTexelHeight() <= 0) return false;
 
-	int usepalette = paletteid == 0? 0 : GetTranslationType(paletteid) - Translation_Remap;
-	int usepalswap = GetTranslationIndex(paletteid);
-	bool foggy = state && (state->GetFogColor() & 0xffffff);
-	int TextureType = hw_int_useindexedcolortextures && !foggy? TT_INDEXED : TT_TRUECOLOR;
+	int usepalette = 0, useremap = 0;
+	if (!IsLuminosityTranslation(paletteid))
+	{
+		usepalette = paletteid == 0 ? 0 : GetTranslationType(paletteid) - Translation_Remap;
+		useremap = GetTranslationIndex(paletteid);
+	}
+	int TextureType = wantindexed? TT_INDEXED : TT_TRUECOLOR;
 
 	pick.translation = paletteid;
 	pick.basepalTint = 0xffffff;
 
-	auto& h = lookups.tables[usepalswap];
+	auto& h = lookups.tables[useremap];
 	bool applytint = false;
 	// Canvas textures must be treated like hightile replacements in the following code.
 
-	int hipalswap = usepalette >= 0 ? usepalswap : 0;
+	int hipalswap = usepalette >= 0 ? useremap : 0;
 	auto rep = (hw_hightile && !(h.tintFlags & TINTF_ALWAYSUSEART)) ? FindReplacement(tex->GetID(), hipalswap, false) : nullptr;
 	if (rep || tex->GetTexture()->isHardwareCanvas())
 	{
@@ -370,7 +368,7 @@ bool PickTexture(FRenderState *state, FGameTexture* tex, int paletteid, TextureP
 
 			if (!rep || rep->palnum != hipalswap || (h.tintFlags & TINTF_APPLYOVERALTPAL))
 				applytint = true;
-			pick.translation = 0;
+			if (!IsLuminosityTranslation(paletteid)) pick.translation = 0;
 		}
 	}
 	else
@@ -381,9 +379,9 @@ bool PickTexture(FRenderState *state, FGameTexture* tex, int paletteid, TextureP
 			if (h.tintFlags & (TINTF_ALWAYSUSEART | TINTF_USEONART))
 			{
 				applytint = true;
-				if (!(h.tintFlags & TINTF_APPLYOVERPALSWAP)) usepalswap = 0;
+				if (!(h.tintFlags & TINTF_APPLYOVERPALSWAP)) useremap = 0;
 			}
-			pick.translation = paletteid == 0? 0 : TRANSLATION(usepalette + Translation_Remap, usepalswap);
+			pick.translation = IsLuminosityTranslation(paletteid)? paletteid : paletteid == 0? 0 : TRANSLATION(usepalette + Translation_Remap, useremap);
 		}
 		else pick.translation |= 0x80000000;
 	}
@@ -410,9 +408,9 @@ bool PreBindTexture(FRenderState* state, FGameTexture*& tex, EUpscaleFlags& flag
 
 	if (tex->GetUseType() == ETextureType::Special) return true;
 
-	if (PickTexture(state, tex, translation, pick))
+	bool foggy = state && (state->GetFogColor() & 0xffffff);
+	if (PickTexture(tex, translation, pick, hw_int_useindexedcolortextures && !foggy))
 	{
-		int TextureType = (pick.translation & 0x80000000) ? TT_INDEXED : TT_TRUECOLOR;
 		int lookuppal = pick.translation & 0x7fffffff;
 
 		if (pick.translation & 0x80000000)
@@ -426,12 +424,12 @@ bool PreBindTexture(FRenderState* state, FGameTexture*& tex, EUpscaleFlags& flag
 		FVector4 addcol(0, 0, 0, 0);
 		FVector4 modcol(pick.basepalTint.r * (1.f / 255.f), pick.basepalTint.g * (1.f / 255.f), pick.basepalTint.b * (1.f / 255.f), 0);
 		FVector4 blendcol(0, 0, 0, 0);
-		int flags = 0;
+		int tmflags = 0;
 
-		if (pick.basepalTint != 0xffffff) flags |= TextureManipulation::ActiveBit;
+		if (pick.basepalTint != 0xffffff) tmflags |= TextureManipulation::ActiveBit;
 		if (pick.tintFlags != -1)
 		{
-			flags |= TextureManipulation::ActiveBit;
+			tmflags |= TextureManipulation::ActiveBit;
 			if (pick.tintFlags & TINTF_COLORIZE)
 			{
 				modcol.X *= pick.tintColor.r  * (1.f / 64.f);
@@ -442,15 +440,15 @@ bool PreBindTexture(FRenderState* state, FGameTexture*& tex, EUpscaleFlags& flag
 				modcol.W = 1.f;
 
 			if (pick.tintFlags & TINTF_INVERT)
-				flags |= TextureManipulation::InvertBit;
+				tmflags |= TextureManipulation::InvertBit;
 
 			if (pick.tintFlags & TINTF_BLENDMASK)
 			{
 				blendcol = modcol;	// WTF???, but the tinting code really uses the same color for both!
-				flags |= (((pick.tintFlags & TINTF_BLENDMASK) >> 6) + 1) & TextureManipulation::BlendMask;
+				tmflags |= (((pick.tintFlags & TINTF_BLENDMASK) >> 6) + 1) & TextureManipulation::BlendMask;
 			}
 		}
-		addcol.W = flags;
+		addcol.W = (float)tmflags;
 		if ((pick.translation & 0x80000000) && hw_shadeinterpolate) addcol.W += 16384;	// hijack a free bit in here.
 		state->SetTextureColors(&modcol.X, &addcol.X, &blendcol.X);
 	}

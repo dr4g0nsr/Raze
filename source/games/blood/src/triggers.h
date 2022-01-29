@@ -30,17 +30,41 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "player.h"
 
 BEGIN_BLD_NS
-void trTriggerSector(unsigned int nSector, XSECTOR *pXSector, int command);
-void trMessageSector(unsigned int nSector, EVENT event);
-void trTriggerWall(unsigned int nWall, XWALL *pXWall, int command);
-void trMessageWall(unsigned int nWall, EVENT event);
-void trTriggerSprite(unsigned int nSprite, XSPRITE *pXSprite, int command);
-void trMessageSprite(unsigned int nSprite, EVENT event);
+
+enum BUSYID {
+	BUSYID_0 = 0,
+	BUSYID_1,
+	BUSYID_2,
+	BUSYID_3,
+	BUSYID_4,
+	BUSYID_5,
+	BUSYID_6,
+	BUSYID_7,
+};
+
+struct BUSY {
+	sectortype* sect;
+	int delta;
+	int busy;
+	int/*BUSYID*/ type;
+};
+
+extern TArray<BUSY> gBusy;
+
+void trTriggerSector(sectortype* pSector, int command);
+void trMessageSector(sectortype* pSector, EVENT event);
+void trTriggerWall(walltype*, int command);
+void trMessageWall(walltype* pWall, EVENT& event);
+void trTriggerSprite(DBloodActor* actor, int command);
+void trMessageSprite(DBloodActor* actor, EVENT event);
 void trProcessBusy(void);
-void trInit(void);
+void trInit(TArray<DBloodActor*>& actors);
 void trTextOver(int nId);
-char SetSpriteState(int nSprite, XSPRITE* pXSprite, int nState);
-char SetWallState(int nWall, XWALL* pXWall, int nState);
-void TeleFrag(int nKiller, int nSector);
+bool SetSpriteState(DBloodActor* actor, int nState);
+bool SetWallState(walltype* pWall, int nState);
+bool SetSectorState(sectortype* pSector, int nState);
+void TeleFrag(DBloodActor* killer, sectortype* pSector);
+void SectorStartSound(sectortype* pSector, int nState);
+void SectorEndSound(sectortype* pSector, int nState);
 
 END_BLD_NS

@@ -16,7 +16,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 //-------------------------------------------------------------------------
 #include "ns.h"
-#include "compat.h"
 #include "engine.h"
 #include "exhumed.h"
 #include "sequence.h"
@@ -50,14 +49,51 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "razemenu.h"
 #include "v_draw.h"
 #include "interpolate.h"
+#include "psky.h"
 
 BEGIN_PS_NS
+
+TObjPtr<DExhumedActor*> bestTarget;
+
+IMPLEMENT_CLASS(DExhumedActor, false, true)
+IMPLEMENT_POINTERS_START(DExhumedActor)
+IMPLEMENT_POINTER(pTarget)
+IMPLEMENT_POINTERS_END
+
+size_t MarkMove();
+size_t MarkBullets();
+size_t MarkInput();
+size_t MarkItems();
+size_t MarkLighting();
+size_t MarkObjects();
+size_t MarkPlayers();
+size_t MarkQueen();
+size_t MarkRa();
+size_t MarkSnake();
+size_t MarkRunlist();
+
+
+static void markgcroots()
+{
+    MarkBullets();
+    MarkInput();
+    MarkItems();
+    MarkLighting();
+    MarkObjects();
+    MarkPlayers();
+    MarkQueen();
+    MarkRa();
+    MarkSnake();
+    MarkRunlist();
+
+    GC::Mark(bestTarget);
+    GC::Mark(pSpiritSprite);
+}
 
 static MapRecord* NextMap;
 
 void uploadCinemaPalettes();
 int32_t registerosdcommands(void);
-void InitFonts();
 void InitCheats();
 
 int EndLevel = 0;
@@ -73,87 +109,68 @@ void ResetEngine()
     resettiming();
 }
 
-void InstallEngine()
+void GameInterface::loadPalette()
 {
+    paletteLoadFromDisk();
     uploadCinemaPalettes();
     LoadPaletteLookups();
 }
 
-void CopyTileToBitmap(short nSrcTile, short nDestTile, int xPos, int yPos);
+void CopyTileToBitmap(int nSrcTile, int nDestTile, int xPos, int yPos);
 
 // void TestSaveLoad();
-void EraseScreen(int nVal);
 void LoadStatus();
 void MySetView(int x1, int y1, int x2, int y2);
 
 char sHollyStr[40];
 
-short nFontFirstChar;
-short nBackgroundPic;
-short nShadowPic;
+int nFontFirstChar;
+int nBackgroundPic;
+int nShadowPic;
 
-short nCreaturesKilled = 0, nCreaturesTotal = 0;
+int nCreaturesKilled = 0, nCreaturesTotal = 0;
 
-short nFreeze;
+int nFreeze;
 
-short nSnakeCam = -1;
-
-short nLocalSpr;
+int nSnakeCam = -1;
 
 int nNetPlayerCount = 0;
 
-short nClockVal;
-short nRedTicks;
-short nAlarmTicks;
-short nButtonColor;
-short nEnergyChan;
+int nClockVal;
+int nRedTicks;
+int nAlarmTicks;
+int nButtonColor;
+int nEnergyChan;
 
-
-short bModemPlay = false;
 int lCountDown = 0;
-short nEnergyTowers = 0;
+int nEnergyTowers = 0;
 
-short nCfgNetPlayers = 0;
-FILE *vcrfp = NULL;
+int nCfgNetPlayers = 0;
 
 int lLocalCodes = 0;
 
-short bCoordinates = false;
+bool bCoordinates = false;
 
 int nNetTime = -1;
 
-short nCodeMin = 0;
-short nCodeMax = 0;
-short nCodeIndex = 0;
-
-//short nScreenWidth = 320;
-//short nScreenHeight = 200;
 int flash;
 int totalmoves;
 
-short nCurBodyNum = 0;
+int nCurBodyNum = 0;
 
-short nBodyTotal = 0;
+int nBodyTotal = 0;
 
-short lastfps;
-short nTotalPlayers = 1;
+int nTotalPlayers = 1;
 // TODO: Rename this (or make it static) so it doesn't conflict with library function
-//short socket = 0;
 
-short nFirstPassword = 0;
-short nFirstPassInfo = 0;
-short nPasswordCount = 0;
 
-short bSnakeCam = false;
-short bRecord = false;
-short bPlayback = false;
-short bInDemo = false;
-short bSlipMode = false;
-short bDoFlashes = true;
+bool bSnakeCam = false;
+bool bRecord = false;
+bool bPlayback = false;
+bool bInDemo = false;
+bool bSlipMode = false;
+bool bDoFlashes = true;
 
-short besttarget;
-
-short scan_char = 0;
 
 int nStartLevel;
 int nTimeLimit;
@@ -171,9 +188,8 @@ void DebugOut(const char *fmt, ...)
 
 void DoClockBeep()
 {
-    int i;
-    StatIterator it(407);
-    while ((i = it.NextIndex()) >= 0)
+    ExhumedStatIterator it(407);
+    while (auto i = it.Next())
     {
         PlayFX2(StaticSound[kSound74], i);
     }
@@ -187,14 +203,13 @@ void DoRedAlert(int nVal)
         nRedTicks = 30;
     }
 
-    int i;
-    StatIterator it(405);
-    while ((i = it.NextIndex()) >= 0)
+    ExhumedStatIterator it(405);
+    while (auto ac = it.Next())
     {
         if (nVal)
         {
-            PlayFXAtXYZ(StaticSound[kSoundAlarm], sprite[i].x, sprite[i].y, sprite[i].z, sprite[i].sectnum);
-            AddFlash(sprite[i].sectnum, sprite[i].x, sprite[i].y, sprite[i].z, 192);
+            PlayFXAtXYZ(StaticSound[kSoundAlarm], ac->spr.pos.X, ac->spr.pos.Y, ac->spr.pos.Z);
+            AddFlash(ac->sector(), ac->spr.pos.X, ac->spr.pos.Y, ac->spr.pos.Z, 192);
         }
     }
 }
@@ -232,7 +247,7 @@ void DrawClock()
 
 double calc_smoothratio()
 {
-    if (bRecord || bPlayback || nFreeze != 0 || paused)
+    if (bRecord || bPlayback || nFreeze != 0 || paused || cl_capfps || !cl_interpolate)
         return MaxSmoothRatio;
 
     return I_GetTimeFrac() * MaxSmoothRatio;
@@ -251,9 +266,10 @@ void GameMove(void)
 {
     FixPalette();
 
-    for (int i = 0; i < MAXSPRITES; i++)
+	ExhumedSpriteIterator it;
+    while (auto ac = it.Next())
     {
-        sprite[i].backuploc();
+		ac->backuploc();
     }
 
     if (currentLevel->gameflags & LEVEL_EX_COUNTDOWN)
@@ -289,7 +305,7 @@ void GameMove(void)
 
     obobangle = bobangle;
 
-    if (totalvel[nLocalPlayer] == 0)
+    if (PlayerList[nLocalPlayer].totalvel == 0)
     {
         bobangle = 0;
     }
@@ -334,7 +350,7 @@ void GameInterface::Ticker()
 
         if (localInput.actions & SB_INVPREV)
         {
-            int nItem = nPlayerItem[nLocalPlayer];
+            int nItem = PlayerList[nLocalPlayer].nItem;
 
             int i;
             for (i = 6; i > 0; i--)
@@ -346,12 +362,12 @@ void GameInterface::Ticker()
                     break;
             }
 
-            if (i > 0) SetPlayerItem(nLocalPlayer, nItem);
+            if (i > 0) PlayerList[nLocalPlayer].nItem = nItem;
         }
 
         if (localInput.actions & SB_INVNEXT)
         {
-            int nItem = nPlayerItem[nLocalPlayer];
+            int nItem = PlayerList[nLocalPlayer].nItem;
 
             int i;
             for (i = 6; i > 0; i--)
@@ -363,14 +379,14 @@ void GameInterface::Ticker()
                     break;
             }
 
-            if (i > 0) SetPlayerItem(nLocalPlayer, nItem);
+            if (i > 0) PlayerList[nLocalPlayer].nItem = nItem;
         }
 
         if (localInput.actions & SB_INVUSE)
         {
-            if (nPlayerItem[nLocalPlayer] != -1)
+            if (PlayerList[nLocalPlayer].nItem != -1)
             {
-                localInput.setItemUsed(nPlayerItem[nLocalPlayer]);
+                localInput.setItemUsed(PlayerList[nLocalPlayer].nItem);
             }
         }
 
@@ -395,7 +411,7 @@ void GameInterface::Ticker()
         if (weap2 == WeaponSel_Next)
         {
             auto newWeap = currWeap == 6 ? 0 : currWeap + 1;
-            while (newWeap != 0 && (!(nPlayerWeapons[nLocalPlayer] & (1 << newWeap)) || (nPlayerWeapons[nLocalPlayer] & (1 << newWeap) && PlayerList[nLocalPlayer].nAmmo[newWeap] == 0)))
+            while (newWeap != 0 && (!(PlayerList[nLocalPlayer].nPlayerWeapons & (1 << newWeap)) || (PlayerList[nLocalPlayer].nPlayerWeapons & (1 << newWeap) && PlayerList[nLocalPlayer].nAmmo[newWeap] == 0)))
             {
                 newWeap++;
                 if (newWeap > 6) newWeap = 0;
@@ -405,7 +421,7 @@ void GameInterface::Ticker()
         else if (weap2 == WeaponSel_Prev)
         {
             auto newWeap = currWeap == 0 ? 6 : currWeap - 1;
-            while (newWeap != 0 && ((!(nPlayerWeapons[nLocalPlayer] & (1 << newWeap)) || (nPlayerWeapons[nLocalPlayer] & (1 << newWeap) && PlayerList[nLocalPlayer].nAmmo[newWeap] == 0))))
+            while (newWeap != 0 && ((!(PlayerList[nLocalPlayer].nPlayerWeapons & (1 << newWeap)) || (PlayerList[nLocalPlayer].nPlayerWeapons & (1 << newWeap) && PlayerList[nLocalPlayer].nAmmo[newWeap] == 0))))
             {
                 newWeap--;
             }
@@ -427,11 +443,11 @@ void GameInterface::Ticker()
         sPlayerInput[nLocalPlayer].xVel = lPlayerXVel;
         sPlayerInput[nLocalPlayer].yVel = lPlayerYVel;
         sPlayerInput[nLocalPlayer].buttons = lLocalCodes;
-        sPlayerInput[nLocalPlayer].nTarget = besttarget;
+        sPlayerInput[nLocalPlayer].pTarget = bestTarget;
         sPlayerInput[nLocalPlayer].nAngle = localInput.avel;
         sPlayerInput[nLocalPlayer].pan = localInput.horz;
 
-        Ra[nLocalPlayer].nTarget = besttarget;
+        Ra[nLocalPlayer].pTarget = bestTarget;
 
         lLocalCodes = 0;
 
@@ -447,7 +463,9 @@ void GameInterface::Ticker()
             PlayLocalSound(StaticSound[59], 0, true, CHANF_UI);
 
         if (EndLevel > 1) EndLevel--;
-		r_NoInterpolate = true;
+        PlayerList[nLocalPlayer].pActor->backuppos();
+        PlayerList[nLocalPlayer].ototalvel = PlayerList[nLocalPlayer].totalvel;
+        obobangle = bobangle;
         int flash = 7 - abs(EndLevel - 7);
         videoTintBlood(flash * 30, flash * 30, flash * 30);
         if (EndLevel == 1)
@@ -475,6 +493,7 @@ static void SetTileNames()
     auto registerName = [](const char* name, int index)
     {
         TexMan.AddAlias(name, tileGetTexture(index));
+        TileFiles.addName(name, index);
     };
 #include "namelist.h"
 }
@@ -482,9 +501,8 @@ static void SetTileNames()
 
 void GameInterface::app_init()
 {
-    int i;
-    //int esi = 1;
-    //int edi = esi;
+    GC::AddMarkerFunc(markgcroots);
+
 
 #if 0
     help_disabled = true;
@@ -498,52 +516,36 @@ void GameInterface::app_init()
         nTotalPlayers += nNetPlayerCount;
     }
 
-    // temp - moving InstallEngine(); before FadeOut as we use nextpage() in FadeOut
-    InstallEngine();
-    LoadDefinitions();
-    InitFonts();
     SetTileNames();
-
-    TileFiles.SetBackup();
+    defineSky(DEFAULTPSKY, 2, nullptr, 256, 1.f);
 
     InitFX();
     seq_LoadSequences();
     InitStatus();
-    
-    for (i = 0; i < kMaxPlayers; i++) {
-        nPlayerLives[i] = kDefaultLives;
-    }
+
     resettiming();
     GrabPalette();
 
     enginecompatibility_mode = ENGINECOMPATIBILITY_19950829;
 }
 
-void mychangespritesect(int nSprite, int nSector)
+void DeleteActor(DExhumedActor* actor) 
 {
-    changespritesect(nSprite, nSector);
-}
-
-void mydeletesprite(int nSprite)
-{
-    if (nSprite < 0 || nSprite > kMaxSprites) {
-        I_Error("bad sprite value %d handed to mydeletesprite", nSprite);
+    if (!actor) 
+    {
+        return;
     }
 
-    FVector3 pos = GetSoundPos(&sprite[nSprite].pos);
-    soundEngine->RelinkSound(SOURCE_Actor, &sprite[nSprite], nullptr, &pos);
-
-    deletesprite(nSprite);
-    sprite[nSprite].ox = 0x80000000;
-
-    if (nSprite == besttarget) {
-        besttarget = -1;
+    if (actor == bestTarget) {
+        bestTarget = nullptr;
     }
+
+    actor->Destroy();
 }
 
 
 
-void CopyTileToBitmap(short nSrcTile,  short nDestTile, int xPos, int yPos)
+void CopyTileToBitmap(int nSrcTile,  int nDestTile, int xPos, int yPos)
 {
     int nOffs = tileHeight(nDestTile) * xPos;
 
@@ -601,14 +603,28 @@ bool GameInterface::CanSave()
     return new GameInterface;
 }
 
-extern short cPupData[300];
-extern uint8_t* Worktile;
-extern int lHeadStartClock;
-extern short* pPupData;
+void DExhumedActor::Serialize(FSerializer& arc)
+{
+    Super::Serialize(arc);
+    arc("phase", nPhase)
+        ("health", nHealth)
+        ("frame", nFrame)
+        ("action", nAction)
+        ("target", pTarget)
+        ("count", nCount)
+        ("run", nRun)
+        ("index", nIndex)
+        ("index2", nIndex2)
+        ("channel", nChannel)
+        ("damage", nDamage)
+
+        ("turn", nTurn)
+        ("x", x)
+        ("y", y);
+}
 
 void SerializeState(FSerializer& arc)
 {
-    int loaded = 0;
     if (arc.BeginObject("state"))
     {
         if (arc.isReading() && (currentLevel->gameflags & LEVEL_EX_COUNTDOWN))
@@ -616,12 +632,11 @@ void SerializeState(FSerializer& arc)
             InitEnergyTile();
     }
 
-        arc ("besttarget", besttarget)
+        arc ("besttarget", bestTarget)
             ("creaturestotal", nCreaturesTotal)
             ("creatureskilled", nCreaturesKilled)
             ("freeze", nFreeze)
             ("snakecam", nSnakeCam)
-            ("localspr", nLocalSpr)
             ("clockval", nClockVal)  // kTile3603
             ("redticks", nRedTicks)
             ("alarmticks", nAlarmTicks)
@@ -635,7 +650,7 @@ void SerializeState(FSerializer& arc)
             ("bsnakecam", bSnakeCam)
             ("slipmode", bSlipMode)
             ("PlayClock", PlayClock)
-            ("spiritsprite", nSpiritSprite)
+            ("spiritsprite", pSpiritSprite)
             .EndObject();
     }
 }

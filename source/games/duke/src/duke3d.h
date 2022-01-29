@@ -2,9 +2,6 @@
 
 #include "build.h"
 
-#include "compat.h"
-
-
 #include "polymost.h"
 #include "gamecvars.h"
 #include "razemenu.h"
@@ -19,16 +16,15 @@
 #include "soundefs.h"
 #include "gamestruct.h"
 #include "v_draw.h"
+#include "gamefuncs.h"
 
 BEGIN_DUKE_NS
-
-extern FFont* IndexFont;
-extern FFont* DigiFont;
 
 struct GameInterface : public ::GameInterface
 {
 	const char* Name() override { return "Duke"; }
 	void app_init() override;
+	void loadPalette();
 	void clearlocalinputstate() override;
 	bool GenerateSavePic() override;
 	void PlayHudSound() override;
@@ -44,7 +40,7 @@ struct GameInterface : public ::GameInterface
 	void ExitFromMenu() override;
 	ReservedSpace GetReservedScreenSpace(int viewsize) override;
 	void DrawPlayerSprite(const DVector2& origin, bool onteam) override;
-	void GetInput(InputPacket* packet, ControlInfo* const hidInput) override;
+	void GetInput(ControlInfo* const hidInput, double const scaleAdjust, InputPacket* packet = nullptr) override;
 	void UpdateSounds() override;
 	void Startup() override;
 	void DrawBackground() override;
@@ -55,7 +51,7 @@ struct GameInterface : public ::GameInterface
 	void NextLevel(MapRecord* map, int skill) override;
 	void NewGame(MapRecord* map, int skill, bool) override;
 	void LevelCompleted(MapRecord* map, int skill) override;
-	bool DrawAutomapPlayer(int x, int y, int z, int a, double const smoothratio) override;
+	bool DrawAutomapPlayer(int mx, int my, int x, int y, int z, int a, double const smoothratio) override;
 	int playerKeyMove() override { return 40; }
 	void WarpToCoords(int x, int y, int z, int a, int h) override;
 	void ToggleThirdPerson() override;
@@ -64,20 +60,18 @@ struct GameInterface : public ::GameInterface
 	int chaseCamX(binangle ang) { return -ang.bcos(-4); }
 	int chaseCamY(binangle ang) { return -ang.bsin(-4); }
 	int chaseCamZ(fixedhoriz horiz) { return horiz.asq16() >> 9; }
-	void processSprites(spritetype* tsprite, int& spritesortcnt, int viewx, int viewy, int viewz, binangle viewang, double smoothRatio) override;
+	void processSprites(tspritetype* tsprite, int& spritesortcnt, int viewx, int viewy, int viewz, binangle viewang, double smoothRatio) override;
 	void UpdateCameras(double smoothratio) override;
-	void EnterPortal(spritetype* viewer, int type) override;
-	void LeavePortal(spritetype* viewer, int type) override;
-	bool GetGeoEffect(GeoEffect* eff, int viewsector) override;
-	void AddMultiplayerEpisode(FString name) override;
+	void EnterPortal(DCoreActor* viewer, int type) override;
+	void LeavePortal(DCoreActor* viewer, int type) override;
+	bool GetGeoEffect(GeoEffect* eff, sectortype* viewsector) override;
+	void AddExcludedEpisode(const FString& episode) override;
+	int GetCurrentSkill() override;
 
 };
 
 struct Dispatcher
 {
-	// global stuff
-	void (*InitFonts)();
-
 	// sectors_?.cpp
 	void (*think)();
 	void (*initactorflags)();
@@ -85,27 +79,26 @@ struct Dispatcher
 	void (*animatewalls)();
 	void (*operaterespawns)(int low);
 	void (*operateforcefields)(DDukeActor* act, int low);
-	bool (*checkhitswitch)(int snum, int w, DDukeActor* act);
-	void (*activatebysector)(int sect, DDukeActor* j);
-	void (*checkhitwall)(DDukeActor* spr, int dawallnum, int x, int y, int z, int atwith);
-	bool (*checkhitceiling)(int sn);
+	bool (*checkhitswitch)(int snum, walltype* w, DDukeActor* act);
+	void (*activatebysector)(sectortype* sect, DDukeActor* j);
+	void (*checkhitwall)(DDukeActor* spr, walltype* dawall, int x, int y, int z, int atwith);
+	bool (*checkhitceiling)(sectortype* sn);
 	void (*checkhitsprite)(DDukeActor* i, DDukeActor* sn);
 	void (*checksectors)(int low);
+	DDukeActor* (*spawninit)(DDukeActor* actj, DDukeActor* act, TArray<DDukeActor*>* actors);
 
-	bool (*ceilingspace)(int sectnum);
-	bool (*floorspace)(int sectnum);
+	bool (*ceilingspace)(sectortype* sectp);
+	bool (*floorspace)(sectortype* sectp);
 	void (*addweapon)(struct player_struct *p, int weapon);
 	void (*hitradius)(DDukeActor* i, int  r, int  hp1, int  hp2, int  hp3, int  hp4);
-	void (*lotsofmoney)(DDukeActor *s, short n);
-	void (*lotsofmail)(DDukeActor *s, short n);
-	void (*lotsofpaper)(DDukeActor *s, short n);
-	void (*guts)(DDukeActor* s, short gtype, short n, short p);
-	DDukeActor* (*ifhitsectors)(int sectnum);
+	void (*lotsofmoney)(DDukeActor *s, int n);
+	void (*lotsofmail)(DDukeActor *s, int n);
+	void (*lotsofpaper)(DDukeActor *s, int n);
+	void (*guts)(DDukeActor* s, int gtype, int n, int p);
 	int  (*ifhitbyweapon)(DDukeActor* sectnum);
 	void (*fall)(DDukeActor* actor, int g_p);
 	bool (*spawnweapondebris)(int picnum, int dnum);
 	void (*respawnhitag)(DDukeActor* g_sp);
-	void (*checktimetosleep)(DDukeActor* actor);
 	void (*move)(DDukeActor* i, int g_p, int g_x);
 
 	// player
@@ -118,7 +111,7 @@ struct Dispatcher
 	void (*displayweapon)(int snum, double smoothratio);
 	void (*displaymasks)(int snum, int p, double smoothratio);
 
-	void (*animatesprites)(spritetype* tsprite, int& spritesortcnt, int x, int y, int a, int smoothratio);
+	void (*animatesprites)(tspritetype* tsprite, int& spritesortcnt, int x, int y, int a, int smoothratio);
 
 
 };

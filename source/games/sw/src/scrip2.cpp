@@ -44,7 +44,7 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 
 BEGIN_SW_NS
 
-ParentalStruct aVoxelArray[MAXTILES];
+TILE_INFO_TYPE aVoxelArray[MAXTILES];
 
 
 /*
@@ -58,7 +58,6 @@ ParentalStruct aVoxelArray[MAXTILES];
 
 static char* script_p, * scriptend_p;
 static char    token[MAXTOKEN];
-static int     grabbed;
 static int     scriptline;
 static bool    endofscript;
 static bool    tokenready;                     // only true if UnGetToken was just called
@@ -196,12 +195,8 @@ void LoadKVXFromScript(const char* filename)
     int lNumber = 0, lTile = 0; // lNumber is the voxel no. and lTile is the editart tile being
     // replaced.
 
-    int grabbed = 0;          // Number of lines parsed
-
     // zero out the array memory with -1's for pics not being voxelized
     memset(&aVoxelArray[0], -1, sizeof(struct TILE_INFO_TYPE) * MAXTILES);
-
-    grabbed = 0;
 
     // Load the file
     auto buffer = LoadScriptFile(filename);
@@ -235,14 +230,10 @@ void LoadKVXFromScript(const char* filename)
 
         if (lNumber >= nextvoxid)   // JBF: so voxels in the def file append to the list
             nextvoxid = lNumber + 1;
-
-        grabbed++;
-        ASSERT(grabbed < MAXSPRITES);
-
     }
     while (script_p < scriptend_p);
 
-    script_p = NULL;
+    script_p = nullptr;
 }
 
 /*
@@ -509,7 +500,7 @@ void LoadCustomInfoFromScript(const char *filename)
             curep = sc.Number;
 
             if (sc.ParseError) curep = -1;
-            else if ((unsigned)--curep >= 2u)
+            else if ((unsigned)curep > 2u)
             {
                 sc.ScriptMessage("Episode number %d not in range 1-2\n", curep + 1);
                 curep = -1;
@@ -808,8 +799,8 @@ void LoadCustomInfoFromScript(const char *filename)
             break;
         }
     }
-    auto vol0 = MustFindVolume(0);
-    auto vol1 = MustFindVolume(1);
+    auto vol0 = MustFindVolume(1);
+    auto vol1 = MustFindVolume(2);
     auto map1 = FindMapByLevelNum(1);
     auto map5 = FindMapByLevelNum(5);
     if (vol0 && map1) vol0->startmap = map1->labelName;

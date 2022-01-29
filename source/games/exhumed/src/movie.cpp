@@ -154,7 +154,7 @@ public:
 
                 uint8_t* pFrame = CurFrame;
 
-                int nRead = fp.Read(&yOffset, sizeof(yOffset));
+                int nRead = (int)fp.Read(&yOffset, sizeof(yOffset));
                 nSize -= nRead;
 
                 pFrame += yOffset * 200; // row position
@@ -169,7 +169,7 @@ public:
 
                     if (nPixels)
                     {
-                        int nRead = fp.Read(pFrame, nPixels);
+                        nRead = (int)fp.Read(pFrame, nPixels);
                         pFrame += nRead;
                         nSize -= nRead;
                     }
@@ -193,7 +193,7 @@ public:
         LMFPlayer* pId = (LMFPlayer*)userdata;
         memcpy(buff, &pId->audio.samples[pId->audio.nRead], len);
         pId->audio.nRead += len / 2;
-        if (pId->audio.nRead >= countof(pId->audio.samples)) pId->audio.nRead = 0;
+        if (pId->audio.nRead >= (int)countof(pId->audio.samples)) pId->audio.nRead = 0;
         return true;
     }
 

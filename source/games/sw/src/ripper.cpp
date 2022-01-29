@@ -39,7 +39,6 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 BEGIN_SW_NS
 
 ANIMATOR InitRipperHang;
-ANIMATOR DoActorMoveJump;
 ANIMATOR DoRipperMoveJump;
 ANIMATOR DoRipperHangJF;
 ANIMATOR DoRipperQuickJump;
@@ -77,7 +76,7 @@ DECISION RipperSurprised[] =
 DECISION RipperEvasive[] =
 {
     {6, InitRipperHang},
-    {1024, NULL}
+    {1024, nullptr}
 };
 
 DECISION RipperLostTarget[] =
@@ -161,7 +160,7 @@ STATE s_RipperRun[5][4] =
 };
 
 
-STATEp sg_RipperRun[] =
+STATE* sg_RipperRun[] =
 {
     &s_RipperRun[0][0],
     &s_RipperRun[1][0],
@@ -198,7 +197,7 @@ STATE s_RipperStand[5][1] =
 };
 
 
-STATEp sg_RipperStand[] =
+STATE* sg_RipperStand[] =
 {
     s_RipperStand[0],
     s_RipperStand[1],
@@ -272,7 +271,7 @@ STATE s_RipperSwipe[5][8] =
 };
 
 
-STATEp sg_RipperSwipe[] =
+STATE* sg_RipperSwipe[] =
 {
     &s_RipperSwipe[0][0],
     &s_RipperSwipe[1][0],
@@ -342,7 +341,7 @@ STATE s_RipperSpew[5][7] =
 };
 
 
-STATEp sg_RipperSpew[] =
+STATE* sg_RipperSpew[] =
 {
     &s_RipperSpew[0][0],
     &s_RipperSpew[1][0],
@@ -380,7 +379,7 @@ STATE s_RipperHeart[5][4] =
     }
 };
 
-STATEp sg_RipperHeart[] =
+STATE* sg_RipperHeart[] =
 {
     &s_RipperHeart[0][0],
     &s_RipperHeart[1][0],
@@ -418,7 +417,7 @@ STATE s_RipperHang[5][4] =
 };
 
 
-STATEp sg_RipperHang[] =
+STATE* sg_RipperHang[] =
 {
     &s_RipperHang[0][0],
     &s_RipperHang[1][0],
@@ -456,7 +455,7 @@ STATE s_RipperPain[5][1] =
     }
 };
 
-STATEp sg_RipperPain[] =
+STATE* sg_RipperPain[] =
 {
     &s_RipperPain[0][0],
     &s_RipperPain[1][0],
@@ -498,7 +497,7 @@ STATE s_RipperJump[5][6] =
 };
 
 
-STATEp sg_RipperJump[] =
+STATE* sg_RipperJump[] =
 {
     &s_RipperJump[0][0],
     &s_RipperJump[1][0],
@@ -536,7 +535,7 @@ STATE s_RipperFall[5][6] =
 };
 
 
-STATEp sg_RipperFall[] =
+STATE* sg_RipperFall[] =
 {
     &s_RipperFall[0][0],
     &s_RipperFall[1][0],
@@ -553,7 +552,7 @@ STATEp sg_RipperFall[] =
 //////////////////////
 
 #define RIPPER_JUMP_ATTACK_RATE 35
-int DoRipperBeginJumpAttack(short SpriteNum);
+int DoRipperBeginJumpAttack(DSWActor* actor);
 
 STATE s_RipperJumpAttack[5][6] =
 {
@@ -585,7 +584,7 @@ STATE s_RipperJumpAttack[5][6] =
 };
 
 
-STATEp sg_RipperJumpAttack[] =
+STATE* sg_RipperJumpAttack[] =
 {
     &s_RipperJumpAttack[0][0],
     &s_RipperJumpAttack[1][0],
@@ -628,7 +627,7 @@ STATE s_RipperHangJump[5][6] =
 };
 
 
-STATEp sg_RipperHangJump[] =
+STATE* sg_RipperHangJump[] =
 {
     &s_RipperHangJump[0][0],
     &s_RipperHangJump[1][0],
@@ -665,7 +664,7 @@ STATE s_RipperHangFall[5][6] =
 };
 
 
-STATEp sg_RipperHangFall[] =
+STATE* sg_RipperHangFall[] =
 {
     &s_RipperHangFall[0][0],
     &s_RipperHangFall[1][0],
@@ -703,12 +702,12 @@ STATE s_RipperDead[] =
     {RIPPER_DEAD, RIPPER_DEAD_RATE, DoActorDebris, &s_RipperDead[3]},
 };
 
-STATEp sg_RipperDie[] =
+STATE* sg_RipperDie[] =
 {
     s_RipperDie
 };
 
-STATEp sg_RipperDead[] =
+STATE* sg_RipperDead[] =
 {
     s_RipperDead
 };
@@ -724,38 +723,38 @@ STATE s_RipperDeathFall[] =
 };
 
 
-STATEp sg_RipperDeathJump[] =
+STATE* sg_RipperDeathJump[] =
 {
     s_RipperDeathJump
 };
 
-STATEp sg_RipperDeathFall[] =
+STATE* sg_RipperDeathFall[] =
 {
     s_RipperDeathFall
 };
 
 
 /*
-STATEp *Stand[MAX_WEAPONS];
-STATEp *Run;
-STATEp *Jump;
-STATEp *Fall;
-STATEp *Crawl;
-STATEp *Swim;
-STATEp *Fly;
-STATEp *Rise;
-STATEp *Sit;
-STATEp *Look;
-STATEp *Climb;
-STATEp *Pain;
-STATEp *Death1;
-STATEp *Death2;
-STATEp *Dead;
-STATEp *DeathJump;
-STATEp *DeathFall;
-STATEp *CloseAttack[2];
-STATEp *Attack[6];
-STATEp *Special[2];
+STATE* *Stand[MAX_WEAPONS];
+STATE* *Run;
+STATE* *Jump;
+STATE* *Fall;
+STATE* *Crawl;
+STATE* *Swim;
+STATE* *Fly;
+STATE* *Rise;
+STATE* *Sit;
+STATE* *Look;
+STATE* *Climb;
+STATE* *Pain;
+STATE* *Death1;
+STATE* *Death2;
+STATE* *Dead;
+STATE* *DeathJump;
+STATE* *DeathFall;
+STATE* *CloseAttack[2];
+STATE* *Attack[6];
+STATE* *Special[2];
 */
 
 
@@ -765,16 +764,16 @@ ACTOR_ACTION_SET RipperActionSet =
     sg_RipperRun,
     sg_RipperJump,
     sg_RipperFall,
-    NULL,                               // sg_RipperCrawl,
-    NULL,                               // sg_RipperSwim,
-    NULL,                               // sg_RipperFly,
-    NULL,                               // sg_RipperRise,
-    NULL,                               // sg_RipperSit,
-    NULL,                               // sg_RipperLook,
-    NULL,                               // climb
+    nullptr,                               // sg_RipperCrawl,
+    nullptr,                               // sg_RipperSwim,
+    nullptr,                               // sg_RipperFly,
+    nullptr,                               // sg_RipperRise,
+    nullptr,                               // sg_RipperSit,
+    nullptr,                               // sg_RipperLook,
+    nullptr,                               // climb
     sg_RipperPain,
     sg_RipperDie,
-    NULL,                               // sg_RipperHariKari,
+    nullptr,                               // sg_RipperHariKari,
     sg_RipperDead,
     sg_RipperDeathJump,
     sg_RipperDeathFall,
@@ -783,8 +782,8 @@ ACTOR_ACTION_SET RipperActionSet =
     {sg_RipperJumpAttack, sg_RipperSpew},
     {400, 1024},
     {sg_RipperHeart, sg_RipperHang},
-    NULL,
-    NULL
+    nullptr,
+    nullptr
 };
 
 ACTOR_ACTION_SET RipperBrownActionSet =
@@ -793,16 +792,16 @@ ACTOR_ACTION_SET RipperBrownActionSet =
     sg_RipperRun,
     sg_RipperJump,
     sg_RipperFall,
-    NULL,                               // sg_RipperCrawl,
-    NULL,                               // sg_RipperSwim,
-    NULL,                               // sg_RipperFly,
-    NULL,                               // sg_RipperRise,
-    NULL,                               // sg_RipperSit,
-    NULL,                               // sg_RipperLook,
-    NULL,                               // climb
+    nullptr,                               // sg_RipperCrawl,
+    nullptr,                               // sg_RipperSwim,
+    nullptr,                               // sg_RipperFly,
+    nullptr,                               // sg_RipperRise,
+    nullptr,                               // sg_RipperSit,
+    nullptr,                               // sg_RipperLook,
+    nullptr,                               // climb
     sg_RipperPain,                      // pain
     sg_RipperDie,
-    NULL,                               // sg_RipperHariKari,
+    nullptr,                               // sg_RipperHariKari,
     sg_RipperDead,
     sg_RipperDeathJump,
     sg_RipperDeathFall,
@@ -811,124 +810,105 @@ ACTOR_ACTION_SET RipperBrownActionSet =
     {sg_RipperJumpAttack, sg_RipperSwipe},
     {800, 1024},
     {sg_RipperHeart, sg_RipperHang},
-    NULL,
-    NULL
+    nullptr,
+    nullptr
 };
 
-int
-SetupRipper(short SpriteNum)
+int SetupRipper(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u;
     ANIMATOR DoActorDecide;
 
-    if (TEST(sp->cstat, CSTAT_SPRITE_RESTORE))
+    if (!(actor->spr.cstat & CSTAT_SPRITE_RESTORE))
     {
-        u = User[SpriteNum].Data();
-        ASSERT(u);
+        SpawnUser(actor, RIPPER_RUN_R0, s_RipperRun[0]);
+        actor->user.Health = HEALTH_RIPPER/2; // Baby rippers are weaker
+    }
+
+    ChangeState(actor, s_RipperRun[0]);
+    actor->user.Attrib = &RipperAttrib;
+    DoActorSetSpeed(actor, FAST_SPEED);
+    actor->user.StateEnd = s_RipperDie;
+    actor->user.Rot = sg_RipperRun;
+    actor->spr.xrepeat = 64;
+    actor->spr.yrepeat = 64;
+
+    if (actor->spr.pal == PALETTE_BROWN_RIPPER)
+    {
+        EnemyDefaults(actor, &RipperBrownActionSet, &RipperPersonality);
+        actor->spr.xrepeat = 106;
+        actor->spr.yrepeat = 90;
+
+        if (!(actor->spr.cstat & CSTAT_SPRITE_RESTORE))
+            actor->user.Health = HEALTH_MOMMA_RIPPER;
+
+        actor->spr.clipdist += 128 >> 2;
     }
     else
     {
-        u = SpawnUser(SpriteNum, RIPPER_RUN_R0, s_RipperRun[0]);
-        u->Health = HEALTH_RIPPER/2; // Baby rippers are weaker
+        EnemyDefaults(actor, &RipperActionSet, &RipperPersonality);
     }
 
-    ChangeState(SpriteNum, s_RipperRun[0]);
-    u->Attrib = &RipperAttrib;
-    DoActorSetSpeed(SpriteNum, FAST_SPEED);
-    u->StateEnd = s_RipperDie;
-    u->Rot = sg_RipperRun;
-    sp->xrepeat = 64;
-    sp->yrepeat = 64;
-
-    if (sp->pal == PALETTE_BROWN_RIPPER)
-    {
-        EnemyDefaults(SpriteNum, &RipperBrownActionSet, &RipperPersonality);
-        sp->xrepeat = 106;
-        sp->yrepeat = 90;
-
-        if (!TEST(sp->cstat, CSTAT_SPRITE_RESTORE))
-            u->Health = HEALTH_MOMMA_RIPPER;
-
-        sp->clipdist += 128 >> 2;
-    }
-    else
-    {
-        EnemyDefaults(SpriteNum, &RipperActionSet, &RipperPersonality);
-    }
-
-    SET(u->Flags, SPR_XFLIP_TOGGLE);
+    actor->user.Flags |= (SPR_XFLIP_TOGGLE);
 
     return 0;
 }
 
-int
-GetJumpHeight(short jump_speed, short jump_grav)
+int GetJumpHeight(int jump_speed, int jump_grav)
 {
     int jump_iterations;
     int height;
 
-    jump_speed = labs(jump_speed);
+    jump_speed = abs(jump_speed);
 
     jump_iterations = jump_speed / (jump_grav * ACTORMOVETICS);
 
     height = jump_speed * jump_iterations * ACTORMOVETICS;
 
-    height = DIV256(height);
-
-    return DIV2(height);
+    return height >> 9;
 }
 
-int
-PickJumpSpeed(short SpriteNum, int pix_height)
+int PickJumpSpeed(DSWActor* actor, int pix_height)
 {
-    USERp u = User[SpriteNum].Data();
-
-    //ASSERT(pix_height < 128);
-
-    u->jump_speed = -600;
-    u->jump_grav = 8;
+    actor->user.jump_speed = -600;
+    actor->user.jump_grav = 8;
 
     while (true)
     {
-        if (GetJumpHeight(u->jump_speed, u->jump_grav) > pix_height + 20)
+        if (GetJumpHeight(actor->user.jump_speed, actor->user.jump_grav) > pix_height + 20)
             break;
 
-        u->jump_speed -= 100;
+        actor->user.jump_speed -= 100;
 
-        ASSERT(u->jump_speed > -3000);
+        ASSERT(actor->user.jump_speed > -3000);
     }
 
-    return u->jump_speed;
+    return actor->user.jump_speed;
 }
 
 
-int
-PickJumpMaxSpeed(short SpriteNum, short max_speed)
+int PickJumpMaxSpeed(DSWActor* actor, short max_speed)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u = User[SpriteNum].Data();
     int zh;
 
     ASSERT(max_speed < 0);
 
-    u->jump_speed = max_speed;
-    u->jump_grav = 8;
+    actor->user.jump_speed = max_speed;
+    actor->user.jump_grav = 8;
 
-    zh = SPRITEp_TOS(sp);
+    zh = ActorZOfTop(actor);
 
     while (true)
     {
-        if (zh - Z(GetJumpHeight(u->jump_speed, u->jump_grav)) - Z(16) > u->hiz)
+        if (zh - Z(GetJumpHeight(actor->user.jump_speed, actor->user.jump_grav)) - Z(16) > actor->user.hiz)
             break;
 
-        u->jump_speed += 100;
+        actor->user.jump_speed += 100;
 
-        if (u->jump_speed > -200)
+        if (actor->user.jump_speed > -200)
             break;
     }
 
-    return u->jump_speed;
+    return actor->user.jump_speed;
 }
 
 
@@ -936,115 +916,95 @@ PickJumpMaxSpeed(short SpriteNum, short max_speed)
 // HANGING - Jumping/Falling/Stationary
 //
 
-int
-InitRipperHang(short SpriteNum)
+int InitRipperHang(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u = User[SpriteNum].Data();
     int dist;
 
-    hitdata_t hitinfo = { { 0, 0, 0 }, -2, 0, -2 };
+    HitInfo hit{};
 
     bool Found = false;
     short dang, tang;
 
     for (dang = 0; dang < 2048; dang += 128)
     {
-        tang = NORM_ANGLE(sp->ang + dang);
+        tang = NORM_ANGLE(actor->spr.ang + dang);
 
-        FAFhitscan(sp->x, sp->y, sp->z - SPRITEp_SIZE_Z(sp), sp->sectnum,  // Start position
+        FAFhitscan(actor->spr.pos.X, actor->spr.pos.Y, actor->spr.pos.Z - ActorSizeZ(actor), actor->sector(),  // Start position
                    bcos(tang),   // X vector of 3D ang
                    bsin(tang),   // Y vector of 3D ang
                    0,            // Z vector of 3D ang
-                   &hitinfo, CLIPMASK_MISSILE);
+                   hit, CLIPMASK_MISSILE);
 
-        //ASSERT(hitinfo.sect >= 0);
-        if (hitinfo.sect < 0)
+        if (hit.hitSector == nullptr)
             continue;
 
-        dist = Distance(sp->x, sp->y, hitinfo.pos.x, hitinfo.pos.y);
+        dist = Distance(actor->spr.pos.X, actor->spr.pos.Y, hit.hitpos.X, hit.hitpos.Y);
 
-        if (hitinfo.wall < 0 || dist < 2000 || dist > 7000)
+        if (hit.hitWall == nullptr || dist < 2000 || dist > 7000)
         {
             continue;
         }
 
         Found = true;
-        sp->ang = tang;
+        actor->spr.ang = tang;
         break;
     }
 
     if (!Found)
     {
-        InitActorDecide(SpriteNum);
+        InitActorDecide(actor);
         return 0;
     }
 
-    NewStateGroup(SpriteNum, sg_RipperHangJump);
-    u->StateFallOverride = sg_RipperHangFall;
-    DoActorSetSpeed(SpriteNum, FAST_SPEED);
+    NewStateGroup(actor, sg_RipperHangJump);
+    actor->user.StateFallOverride = sg_RipperHangFall;
+    DoActorSetSpeed(actor, FAST_SPEED);
 
-    //u->jump_speed = -800;
-    PickJumpMaxSpeed(SpriteNum, -800);
+    //actor->user.jump_speed = -800;
+    PickJumpMaxSpeed(actor, -800);
 
-    SET(u->Flags, SPR_JUMPING);
-    RESET(u->Flags, SPR_FALLING);
+    actor->user.Flags |= (SPR_JUMPING);
+    actor->user.Flags &= ~(SPR_FALLING);
 
     // set up individual actor jump gravity
-    u->jump_grav = 8;
+    actor->user.jump_grav = 8;
 
-    DoJump(SpriteNum);
+    DoJump(actor);
 
     return 0;
 }
 
-int
-DoRipperHang(short SpriteNum)
+int DoRipperHang(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-
-    if ((u->WaitTics -= ACTORMOVETICS) > 0)
+    if ((actor->user.WaitTics -= ACTORMOVETICS) > 0)
         return 0;
 
-    NewStateGroup(SpriteNum, sg_RipperJumpAttack);
+    NewStateGroup(actor, sg_RipperJumpAttack);
     // move to the 2nd frame - past the pause frame
-    u->Tics += u->State->Tics;
+    actor->user.Tics += actor->user.State->Tics;
     return 0;
 }
 
-int
-DoRipperMoveHang(short SpriteNum)
+int DoRipperMoveHang(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u = User[SpriteNum].Data();
     int nx, ny;
 
     // Move while jumping
-    nx = MulScale(sp->xvel, bcos(sp->ang), 14);
-    ny = MulScale(sp->xvel, bsin(sp->ang), 14);
+    nx = MulScale(actor->spr.xvel, bcos(actor->spr.ang), 14);
+    ny = MulScale(actor->spr.xvel, bsin(actor->spr.ang), 14);
 
     // if cannot move the sprite
-    if (!move_actor(SpriteNum, nx, ny, 0L))
+    if (!move_actor(actor, nx, ny, 0L))
     {
-        switch (TEST(u->ret, HIT_MASK))
+        if (actor->user.coll.type == kHitWall)
         {
-        case HIT_WALL:
-        {
-            short hit_wall;
-            short w, nw;
-
-            hit_wall = NORM_WALL(u->ret);
-
-            NewStateGroup(SpriteNum, u->ActorActionSet->Special[1]);
-            u->WaitTics = 2 + ((RANDOM_P2(4 << 8) >> 8) * 120);
+            NewStateGroup(actor, actor->user.ActorActionSet->Special[1]);
+            actor->user.WaitTics = 2 + ((RANDOM_P2(4 << 8) >> 8) * 120);
 
             // hang flush with the wall
-            w = hit_wall;
-            nw = wall[w].point2;
-            sp->ang = NORM_ANGLE(getangle(wall[nw].x - wall[w].x, wall[nw].y - wall[w].y) - 512);
+            actor->spr.ang = NORM_ANGLE(getangle(actor->user.coll.hitWall->delta()) - 512);
 
             return 0;
-        }
         }
     }
 
@@ -1052,28 +1012,25 @@ DoRipperMoveHang(short SpriteNum)
 }
 
 
-int
-DoRipperHangJF(short SpriteNum)
+int DoRipperHangJF(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-
-    if (TEST(u->Flags, SPR_JUMPING | SPR_FALLING))
+    if (actor->user.Flags & (SPR_JUMPING | SPR_FALLING))
     {
-        if (TEST(u->Flags, SPR_JUMPING))
-            DoJump(SpriteNum);
+        if (actor->user.Flags & (SPR_JUMPING))
+            DoJump(actor);
         else
-            DoFall(SpriteNum);
+            DoFall(actor);
     }
 
-    if (!TEST(u->Flags, SPR_JUMPING | SPR_FALLING))
+    if (!(actor->user.Flags & (SPR_JUMPING | SPR_FALLING)))
     {
-        if (DoRipperQuickJump(SpriteNum))
+        if (DoRipperQuickJump(actor))
             return 0;
 
-        InitActorDecide(SpriteNum);
+        InitActorDecide(actor);
     }
 
-    DoRipperMoveHang(SpriteNum);
+    DoRipperMoveHang(actor);
 
     return 0;
 
@@ -1083,63 +1040,59 @@ DoRipperHangJF(short SpriteNum)
 // JUMP ATTACK
 //
 
-int
-DoRipperBeginJumpAttack(short SpriteNum)
+int DoRipperBeginJumpAttack(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u = User[SpriteNum].Data();
-    SPRITEp psp = User[SpriteNum]->tgt_sp;
+    DSWActor* target = actor->user.targetActor;
     short tang;
 
-    tang = getangle(psp->x - sp->x, psp->y - sp->y);
+    tang = getangle(target->spr.pos.X - actor->spr.pos.X, target->spr.pos.Y - actor->spr.pos.Y);
 
-    if (move_sprite(SpriteNum, bcos(tang, -7), bsin(tang, -7),
-                    0L, u->ceiling_dist, u->floor_dist, CLIPMASK_ACTOR, ACTORMOVETICS))
-        sp->ang = NORM_ANGLE((sp->ang + 1024) + (RANDOM_NEG(256, 6) >> 6));
+	Collision coll = move_sprite(actor, bcos(tang, -7), bsin(tang, -7),
+							   0L, actor->user.ceiling_dist, actor->user.floor_dist, CLIPMASK_ACTOR, ACTORMOVETICS);
+
+    if (coll.type != kHitNone)
+        actor->spr.ang = NORM_ANGLE((actor->spr.ang + 1024) + (RANDOM_NEG(256, 6) >> 6));
     else
-        sp->ang = NORM_ANGLE(tang + (RANDOM_NEG(256, 6) >> 6));
+        actor->spr.ang = NORM_ANGLE(tang + (RANDOM_NEG(256, 6) >> 6));
 
-    DoActorSetSpeed(SpriteNum, FAST_SPEED);
+    DoActorSetSpeed(actor, FAST_SPEED);
 
-    //u->jump_speed = -800;
-    PickJumpMaxSpeed(SpriteNum, -400); // was -800
+    //actor->user.jump_speed = -800;
+    PickJumpMaxSpeed(actor, -400); // was -800
 
-    SET(u->Flags, SPR_JUMPING);
-    RESET(u->Flags, SPR_FALLING);
+    actor->user.Flags |= (SPR_JUMPING);
+    actor->user.Flags &= ~(SPR_FALLING);
 
     // set up individual actor jump gravity
-    u->jump_grav = 17; // was 8
+    actor->user.jump_grav = 17; // was 8
 
     // if I didn't do this here they get stuck in the air sometimes
-    DoActorZrange(SpriteNum);
+    DoActorZrange(actor);
 
-    DoJump(SpriteNum);
+    DoJump(actor);
 
     return 0;
 }
 
-int
-DoRipperMoveJump(short SpriteNum)
+int DoRipperMoveJump(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-
-    if (TEST(u->Flags, SPR_JUMPING | SPR_FALLING))
+    if (actor->user.Flags & (SPR_JUMPING | SPR_FALLING))
     {
-        if (TEST(u->Flags, SPR_JUMPING))
-            DoJump(SpriteNum);
+        if (actor->user.Flags & (SPR_JUMPING))
+            DoJump(actor);
         else
-            DoFall(SpriteNum);
+            DoFall(actor);
     }
 
-    if (!TEST(u->Flags, SPR_JUMPING | SPR_FALLING))
+    if (!(actor->user.Flags & (SPR_JUMPING | SPR_FALLING)))
     {
-        if (DoRipperQuickJump(SpriteNum))
+        if (DoRipperQuickJump(actor))
             return 0;
 
-        InitActorDecide(SpriteNum);
+        InitActorDecide(actor);
     }
 
-    DoRipperMoveHang(SpriteNum);
+    DoRipperMoveHang(actor);
     return 0;
 }
 
@@ -1147,176 +1100,141 @@ DoRipperMoveJump(short SpriteNum)
 // STD MOVEMENT
 //
 
-int
-DoRipperQuickJump(short SpriteNum)
+int DoRipperQuickJump(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-
     // Tests to see if ripper is on top of a player/enemy and then immediatly
     // does another jump
 
-    if (u->lo_sp)
+    DSWActor* low = actor->user.lowActor;
+    if (low)
     {
-        SPRITEp tsp = u->lo_sp;
-
-        if (TEST(tsp->extra, SPRX_PLAYER_OR_ENEMY))
+        if ((low->spr.extra & SPRX_PLAYER_OR_ENEMY))
         {
-            NewStateGroup(SpriteNum, sg_RipperJumpAttack);
+            NewStateGroup(actor, sg_RipperJumpAttack);
             // move past the first state
-            u->Tics = 30;
+            actor->user.Tics = 30;
             return true;
         }
     }
-
     return false;
 }
 
 
-int
-NullRipper(short SpriteNum)
+int NullRipper(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
+    if (actor->user.Flags & (SPR_SLIDING))
+        DoActorSlide(actor);
 
-    if (TEST(u->Flags,SPR_SLIDING))
-        DoActorSlide(SpriteNum);
-
-    DoActorSectorDamage(SpriteNum);
+    DoActorSectorDamage(actor);
 
     return 0;
 }
 
 
-int DoRipperPain(short SpriteNum)
+int DoRipperPain(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
+    NullRipper(actor);
 
-    NullRipper(SpriteNum);
-
-    if ((u->WaitTics -= ACTORMOVETICS) <= 0)
-        InitActorDecide(SpriteNum);
+    if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0)
+        InitActorDecide(actor);
     return 0;
 }
 
 
-// CTW MODIFICATION
-//int DoRipperRipHeart(SpriteNum)
-int DoRipperRipHeart(short SpriteNum)
-// CTW MODIFICATION END
+int DoRipperRipHeart(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u = User[SpriteNum].Data();
+    DSWActor* target = actor->user.targetActor;
 
-    SPRITEp tsp = u->tgt_sp;
-
-    NewStateGroup(SpriteNum, sg_RipperHeart);
-    u->WaitTics = 6 * 120;
+    NewStateGroup(actor, sg_RipperHeart);
+    actor->user.WaitTics = 6 * 120;
 
     // player face ripper
-    tsp->ang = getangle(sp->x - tsp->x, sp->y - tsp->y);
+    target->spr.ang = getangle(actor->spr.pos.X - target->spr.pos.X, actor->spr.pos.Y - target->spr.pos.Y);
     return 0;
 }
 
-// CTW MODIFICATION
-//int DoRipperStandHeart(SpriteNum)
-int DoRipperStandHeart(short SpriteNum)
-// CTW MODIFICATION END
+
+int DoRipperStandHeart(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
+    NullRipper(actor);
 
-    NullRipper(SpriteNum);
-
-    if ((u->WaitTics -= ACTORMOVETICS) <= 0)
-        NewStateGroup(SpriteNum, sg_RipperRun);
+    if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0)
+        NewStateGroup(actor, sg_RipperRun);
     return 0;
 }
 
-void RipperHatch(short Weapon)
+void RipperHatch(DSWActor* actor)
 {
-    SPRITEp wp = &sprite[Weapon];
-
-    short New,i;
-    SPRITEp np;
-    USERp nu;
-#define MAX_RIPPERS 1
+	const int MAX_RIPPERS = 1;
     short rip_ang[MAX_RIPPERS];
 
     rip_ang[0] = RANDOM_P2(2048);
-    // rip_ang[1] = NORM_ANGLE(rip_ang[0] + 1024 + (RANDOM_P2(512) - 256));
 
-    for (i = 0; i < MAX_RIPPERS; i++)
+    for (int i = 0; i < MAX_RIPPERS; i++)
     {
-        New = COVERinsertsprite(wp->sectnum, STAT_DEFAULT);
-        np = &sprite[New];
-        memset(np,0,sizeof(SPRITE));
-        np->sectnum = wp->sectnum;
-        np->statnum = STAT_DEFAULT;
-        np->x = wp->x;
-        np->y = wp->y;
-        np->z = wp->z;
-        np->owner = -1;
-        //np->xrepeat = np->yrepeat = 36;
-        np->xrepeat = np->yrepeat = 64;
-        np->ang = rip_ang[i];
-        np->pal = 0;
-        SetupRipper(New);
-        nu = User[New].Data();
+        auto actorNew = insertActor(actor->sector(), STAT_DEFAULT);
+        ClearOwner(actorNew);
+        actorNew->spr.pos.X = actor->spr.pos.X;
+        actorNew->spr.pos.Y = actor->spr.pos.Y;
+        actorNew->spr.pos.Z = actor->spr.pos.Z;
+        actorNew->spr.xrepeat = actorNew->spr.yrepeat = 64;
+        actorNew->spr.ang = rip_ang[i];
+        actorNew->spr.pal = 0;
+        SetupRipper(actorNew);
 
         // make immediately active
-        SET(nu->Flags, SPR_ACTIVE);
+        actorNew->user.Flags |= (SPR_ACTIVE);
 
-        NewStateGroup(New, nu->ActorActionSet->Jump);
-        nu->ActorActionFunc = DoActorMoveJump;
-        DoActorSetSpeed(New, FAST_SPEED);
-        PickJumpMaxSpeed(New, -600);
+        NewStateGroup(actorNew, actorNew->user.ActorActionSet->Jump);
+        actorNew->user.ActorActionFunc = DoActorMoveJump;
+        DoActorSetSpeed(actorNew, FAST_SPEED);
+        PickJumpMaxSpeed(actorNew, -600);
 
-        SET(nu->Flags, SPR_JUMPING);
-        RESET(nu->Flags, SPR_FALLING);
+        actorNew->user.Flags |= (SPR_JUMPING);
+        actorNew->user.Flags &= ~(SPR_FALLING);
 
-        nu->jump_grav = 8;
+        actorNew->user.jump_grav = 8;
 
         // if I didn't do this here they get stuck in the air sometimes
-        DoActorZrange(New);
+        DoActorZrange(actorNew);
 
-        DoJump(New);
+        DoJump(actorNew);
     }
 }
 
-int
-DoRipperMove(short SpriteNum)
+int DoRipperMove(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-
-    if (u->scale_speed)
+    if (actor->user.scale_speed)
     {
-        DoScaleSprite(SpriteNum);
+        DoScaleSprite(actor);
     }
 
-    if (TEST(u->Flags, SPR_JUMPING | SPR_FALLING))
+    if (actor->user.Flags & (SPR_JUMPING | SPR_FALLING))
     {
-        if (TEST(u->Flags, SPR_JUMPING))
-            DoJump(SpriteNum);
+        if (actor->user.Flags & (SPR_JUMPING))
+            DoJump(actor);
         else
-            DoFall(SpriteNum);
+            DoFall(actor);
     }
 
     // if on a player/enemy sprite jump quickly
-    if (!TEST(u->Flags, SPR_JUMPING | SPR_FALLING))
+    if (!(actor->user.Flags & (SPR_JUMPING | SPR_FALLING)))
     {
-        if (DoRipperQuickJump(SpriteNum))
+        if (DoRipperQuickJump(actor))
             return 0;
 
-        KeepActorOnFloor(SpriteNum);
+        KeepActorOnFloor(actor);
     }
 
-    if (TEST(u->Flags, SPR_SLIDING))
-        DoActorSlide(SpriteNum);
+    if (actor->user.Flags & (SPR_SLIDING))
+        DoActorSlide(actor);
 
-    if (u->track >= 0)
-        ActorFollowTrack(SpriteNum, ACTORMOVETICS);
+    if (actor->user.track >= 0)
+        ActorFollowTrack(actor, ACTORMOVETICS);
     else
-        (*u->ActorActionFunc)(SpriteNum);
+        (*actor->user.ActorActionFunc)(actor);
 
-    DoActorSectorDamage(SpriteNum);
+    DoActorSectorDamage(actor);
     return 0;
 }
 
@@ -1325,10 +1243,6 @@ DoRipperMove(short SpriteNum)
 
 static saveable_code saveable_ripper_code[] =
 {
-    SAVE_CODE(SetupRipper),
-    SAVE_CODE(GetJumpHeight),
-    SAVE_CODE(PickJumpSpeed),
-    SAVE_CODE(PickJumpMaxSpeed),
 
     SAVE_CODE(InitRipperHang),
     SAVE_CODE(DoRipperHang),
@@ -1343,7 +1257,6 @@ static saveable_code saveable_ripper_code[] =
     SAVE_CODE(DoRipperPain),
     SAVE_CODE(DoRipperRipHeart),
     SAVE_CODE(DoRipperStandHeart),
-    SAVE_CODE(RipperHatch),
     SAVE_CODE(DoRipperMove),
 };
 

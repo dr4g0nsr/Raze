@@ -157,8 +157,8 @@ void BuildTiles::Init()
 
 void BuildTiles::AddTile(int tilenum, FGameTexture* tex, bool permap)
 {
-	assert(!tex->GetID().isValid());	// must not be added yet.
-	TexMan.AddGameTexture(tex);
+	if (!tex->GetID().isValid())
+		TexMan.AddGameTexture(tex);
 	tiledata[tilenum].texture = tex;
 	if (!permap) tiledata[tilenum].backup = tex;
 }
@@ -274,7 +274,7 @@ void BuildTiles::MakeCanvas(int tilenum, int width, int height)
 {
 	auto canvas = ValidateCustomTile(tilenum, ReplacementType::Canvas);
 	canvas->SetSize(width*4, height*4);
-	canvas->SetDisplaySize(width, height);
+	canvas->SetDisplaySize((float)width, (float)height);
 	canvas->GetTexture()->SetSize(width * 4, height * 4);
 	static_cast<FCanvasTexture*>(canvas->GetTexture())->aspectRatio = (float)width / height;
 }
@@ -291,7 +291,7 @@ void BuildTiles::MakeCanvas(int tilenum, int width, int height)
 
 int BuildTiles::LoadArtFile(const char *fn, const char *mapname, int firsttile)
 {
-	auto old = FindFile(fn);
+	unsigned old = FindFile(fn);
 	if (old >= ArtFiles.Size())	// Do not process if already loaded.
 	{
 		FileReader fr = fileSystem.OpenFileReader(fn);
@@ -391,10 +391,24 @@ FGameTexture* BuildTiles::ValidateCustomTile(int tilenum, ReplacementType type)
 	}
 	else if (type == ReplacementType::Canvas)
 	{
+		// necessary fuckery thanks to SW considering camera textures the same as mirrors and deleting them if opportune.
+		// If we do not remember them this would create new ones over and over again.
+		auto check = cameratextures.CheckKey(tilenum);
+		if (check)
+		{
+			// if this once was a camera texture but now isn't anymore, grab that camera texture from the cache and reuse it.
+			AddTile(tilenum, *check);
+			return *check;
+		}
+
 		replacement = new FCanvasTexture(1, 1);
 	}
 	else return nullptr;
 	auto rep = MakeGameTexture(replacement, tile->GetName(), ETextureType::Override);
+	if (type == ReplacementType::Canvas)
+	{
+		cameratextures.Insert(tilenum, rep);
+	}
 	AddTile(tilenum, rep);
 	return rep;
 }
@@ -408,7 +422,7 @@ FGameTexture* BuildTiles::ValidateCustomTile(int tilenum, ReplacementType type)
 int32_t BuildTiles::artLoadFiles(const char* filename)
 {
 	TileFiles.LoadArtSet(filename);
-	memset(gotpic, 0, sizeof(gotpic));
+	gotpic.Zero();
 	return 0;
 }
 
@@ -648,6 +662,7 @@ void artSetupMapArt(const char* filename)
 void tileDelete(int tile)
 {
 	TileFiles.tiledata[tile].texture = TileFiles.tiledata[tile].backup = TexMan.GameByIndex(0);
+	TileFiles.tiledata[tile].replacement = ReplacementType::Art; // whatever this was, now it isn't anymore. (SW tries to nuke camera textures with this, :( )
 	tiletovox[tile] = -1; // clear the link but don't clear the voxel. It may be in use for another tile.
 	md_undefinetile(tile);
 }
@@ -757,7 +772,7 @@ void tileCopySection(int tilenum1, int sx1, int sy1, int xsiz, int ysiz, int til
 		auto p1 = tilePtr(tilenum1);
 		auto p2 = tileData(tilenum2);
 		if (p2 == nullptr) return;	// Error: Destination is not writable.
-		
+
 		int x1 = sx1;
 		int x2 = sx2;
 		for (int i=0; i<xsiz; i++)
@@ -772,7 +787,7 @@ void tileCopySection(int tilenum1, int sx1, int sy1, int xsiz, int ysiz, int til
 					if (src != TRANSPARENT_INDEX)
 						p2[x2 * ysiz2 + y2] = src;
 				}
-				
+
 				y1++;
 				y2++;
 				if (y1 >= ysiz1) y1 = 0;

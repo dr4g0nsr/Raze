@@ -46,7 +46,7 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 #include "v_video.h"
 #include "render.h"
 
-EXTERN_CVAR(Bool, testnewrenderer)
+EXTERN_CVAR(Bool, vid_renderer)
 
 BEGIN_SW_NS
 
@@ -70,39 +70,13 @@ bool bAutoSize = true;                  // Autosizing on/off
 extern AMB_INFO ambarray[];
 extern short NormalVisibility;
 
-extern ParentalStruct aVoxelArray[MAXTILES];
+extern TILE_INFO_TYPE aVoxelArray[MAXTILES];
 
 // F U N C T I O N S //////////////////////////////////////////////////////////////////////////////
 
 
-/////////////////////////////////////////////////////
-//  SpawnWallSound
-/////////////////////////////////////////////////////
-void SpawnWallSound(short sndnum, short i)
-{
-    short SpriteNum;
-    vec3_t mid;
-    SPRITEp sp;
 
-    SpriteNum = COVERinsertsprite(0, STAT_DEFAULT);
-    if (SpriteNum < 0)
-        return;
-
-    sp = &sprite[SpriteNum];
-    sp->cstat = 0;
-    sp->extra = 0;
-    // Get wall midpoint for offset in mirror view
-    mid.x = (wall[i].x + wall[wall[i].point2].x) / 2;
-    mid.y = (wall[i].y + wall[wall[i].point2].y) / 2;
-    mid.z = (sector[wall[i].nextsector].ceilingz + sector[wall[i].nextsector].floorz) / 2;
-    setspritez(SpriteNum, &mid);
-    sp = &sprite[SpriteNum];
-
-    PlaySound(sndnum, sp, v3df_dontpan | v3df_doppler);
-}
-
-short
-CheckTileSound(short picnum)
+short CheckTileSound(short picnum)
 {
     short sndnum = -1;
 
@@ -169,66 +143,55 @@ ANIMATOR GenerateDrips;
 /////////////////////////////////////////////////////
 //  Initialize any of my special use sprites
 /////////////////////////////////////////////////////
-void
-JS_SpriteSetup(void)
+void JS_SpriteSetup(void)
 {
-    SPRITEp sp;
-    int SpriteNum;
-    USERp u;
-    short i;
-
-    StatIterator it(STAT_DEFAULT);
-    while ((SpriteNum = it.NextIndex()) >= 0)
+    SWStatIterator it(STAT_DEFAULT);
+    while (auto itActor = it.Next())
     {
-        short tag;
+        int tag;
 
-        sp = &sprite[SpriteNum];
-        tag = sp->hitag;
+        tag = itActor->spr.hitag;
 
         // Non static camera. Camera sprite will be drawn!
-        if (tag == MIRROR_CAM && sprite[SpriteNum].picnum != ST1)
+        if (tag == MIRROR_CAM && itActor->spr.picnum != ST1)
         {
             // Just change it to static, sprite has all the info I need
-//          u = SpawnUser(SpriteNum, sp->picnum, NULL);
-//          RESET(sp->cstat, CSTAT_SPRITE_BLOCK);
-//          SET(sp->cstat, CSTAT_SPRITE_BLOCK_HITSCAN);
-            change_sprite_stat(SpriteNum, STAT_SPAWN_SPOT);
+            change_actor_stat(itActor, STAT_SPAWN_SPOT);
         }
 
-        switch (sprite[SpriteNum].picnum)
+        switch (itActor->spr.picnum)
         {
         case ST1:
             if (tag == MIRROR_CAM)
             {
                 // Just change it to static, sprite has all the info I need
                 // ST1 cameras won't move with SOBJ's!
-                change_sprite_stat(SpriteNum, STAT_ST1);
+                change_actor_stat(itActor, STAT_ST1);
             }
             else if (tag == MIRROR_SPAWNSPOT)
             {
                 // Just change it to static, sprite has all the info I need
-                change_sprite_stat(SpriteNum, STAT_ST1);
+                change_actor_stat(itActor, STAT_ST1);
             }
             else if (tag == AMBIENT_SOUND)
             {
-                change_sprite_stat(SpriteNum, STAT_AMBIENT);
+                change_actor_stat(itActor, STAT_AMBIENT);
             }
             else if (tag == TAG_ECHO_SOUND)
             {
-                change_sprite_stat(SpriteNum, STAT_ECHO);
+                change_actor_stat(itActor, STAT_ECHO);
             }
             else if (tag == TAG_DRIPGEN)
             {
-                u = SpawnUser(SpriteNum, 0, NULL);
+                SpawnUser(itActor, 0, nullptr);
 
-                ASSERT(u != NULL);
-                u->RotNum = 0;
-                u->WaitTics = sp->lotag * 120;
+                itActor->user.RotNum = 0;
+                itActor->user.WaitTics = itActor->spr.lotag * 120;
 
-                u->ActorActionFunc = GenerateDrips;
+                itActor->user.ActorActionFunc = GenerateDrips;
 
-                change_sprite_stat(SpriteNum, STAT_NO_STATE);
-                SET(sp->cstat, CSTAT_SPRITE_INVISIBLE);
+                change_actor_stat(itActor, STAT_NO_STATE);
+                itActor->spr.cstat |= CSTAT_SPRITE_INVISIBLE;
             }
             break;
         // Sprites in editart that should play ambient sounds
@@ -243,25 +206,22 @@ JS_SpriteSetup(void)
         case 2720:
         case 3143:
         case 3157:
-            PlaySound(DIGI_FIRE1, sp, v3df_follow|v3df_dontpan|v3df_doppler);
+            PlaySound(DIGI_FIRE1, itActor, v3df_follow|v3df_dontpan|v3df_doppler);
             break;
         case 795:
         case 880:
-            PlaySound(DIGI_WATERFLOW1, sp, v3df_follow|v3df_dontpan|v3df_doppler);
+            PlaySound(DIGI_WATERFLOW1, itActor, v3df_follow|v3df_dontpan|v3df_doppler);
             break;
         case 460:  // Wind Chimes
-            InitAmbient(79, sp);
+            InitAmbient(79, itActor);
             break;
 
         }
     }
     // Check for certain walls to make sounds
-    for (i = 0; i < numwalls; i++)
+    for(auto& wal : wall)
     {
-        short picnum;
-
-
-        picnum = wall[i].picnum;
+        int picnum = wal.picnum;
 
         // Set the don't stick bit for liquid tiles
         switch (picnum)
@@ -277,7 +237,7 @@ JS_SpriteSetup(void)
         case 2608:
         case 2616:
             //case 3834:
-            SET(wall[i].extra, WALLFX_DONT_STICK);
+            wal.extra |= WALLFX_DONT_STICK;
             break;
         }
     }
@@ -291,7 +251,6 @@ void JS_InitMirrors(void)
 {
     short startwall, endwall;
     int i, j, s;
-    int SpriteNum;
     bool Found_Cam = false;
 
 
@@ -310,67 +269,63 @@ void JS_InitMirrors(void)
     {
 		tileDelete(i + MIRRORLABEL);
         mirror[i].campic = -1;
-        mirror[i].camsprite = -1;
-        mirror[i].camera = -1;
+        mirror[i].camspriteActor = nullptr;
+        mirror[i].cameraActor = nullptr;
         mirror[i].ismagic = false;
     }
 
-    for (i = 0; i < numwalls; i++)
+    for(auto& wal : wall)
     {
-        s = wall[i].nextsector;
-        if ((s >= 0) && (wall[i].overpicnum == MIRROR) && (wall[i].cstat & 32))
+        if (wal.twoSided() && (wal.overpicnum == MIRROR) && (wal.cstat & CSTAT_WALL_1WAY))
         {
-            if ((sector[s].floorstat & 1) == 0)
+            auto sec = wal.nextSector();
+            if ((sec->floorstat & CSTAT_SECTOR_SKY) == 0)
             {
                 if (mirrorcnt >= MAXMIRRORS)
                 {
-                    Printf("MAXMIRRORS reached! Skipping mirror wall[%d]\n", i);
-                    wall[i].overpicnum = sector[s].ceilingpicnum;
+                    Printf("MAXMIRRORS reached! Skipping mirror wall\n");
+                    wal.overpicnum = sec->ceilingpicnum;
                     continue;
                 }
 
-                wall[i].overpicnum = MIRRORLABEL + mirrorcnt;
-                wall[i].picnum = MIRRORLABEL + mirrorcnt;
-                sector[s].ceilingpicnum = MIRRORLABEL + mirrorcnt;
-                sector[s].floorpicnum = MIRRORLABEL + mirrorcnt;
-                sector[s].floorstat |= 1;
-                mirror[mirrorcnt].mirrorwall = i;
-                mirror[mirrorcnt].mirrorsector = s;
+                wal.overpicnum = MIRRORLABEL + mirrorcnt;
+                wal.picnum = MIRRORLABEL + mirrorcnt;
+                sec->ceilingpicnum = MIRRORLABEL + mirrorcnt;
+                sec->floorpicnum = MIRRORLABEL + mirrorcnt;
+                sec->floorstat |= CSTAT_SECTOR_SKY;
+                mirror[mirrorcnt].mirrorWall = &wal;
+                mirror[mirrorcnt].mirrorSector = sec;
                 mirror[mirrorcnt].numspawnspots = 0;
                 mirror[mirrorcnt].ismagic = false;
-                do if (wall[i].lotag == TAG_WALL_MAGIC_MIRROR)
+                do if (wal.lotag == TAG_WALL_MAGIC_MIRROR)
                 {
                     int ii;
-                    SPRITEp sp;
 
                     Found_Cam = false;
 
-                    StatIterator it(STAT_ST1);
-                    while ((ii = it.NextIndex()) >= 0)
+                    SWStatIterator it(STAT_ST1);
+                    while (auto itActor = it.Next())
                     {
-                        sp = &sprite[ii];
                         // if correct type and matches
-                        if (sp->hitag == MIRROR_CAM && sp->lotag == wall[i].hitag)
+                        if (itActor->spr.hitag == MIRROR_CAM && itActor->spr.lotag == wal.hitag)
                         {
-                            mirror[mirrorcnt].camera = ii;
+                            mirror[mirrorcnt].cameraActor = itActor;
                             // Set up camera variables
-                            SP_TAG5(sp) = sp->ang;      // Set current angle to
+                            SP_TAG5(itActor) = itActor->spr.ang;      // Set current angle to
                             // sprite angle
                             Found_Cam = true;
                         }
                     }
 
                     it.Reset(STAT_SPAWN_SPOT);
-                    while ((ii = it.NextIndex()) >= 0)
+                    while (auto itActor = it.Next())
                     {
-                        sp = &sprite[ii];
-
                         // if correct type and matches
-                        if (sp->hitag == MIRROR_CAM && sp->lotag == wall[i].hitag)
+                        if (itActor->spr.hitag == MIRROR_CAM && itActor->spr.lotag == wal.hitag)
                         {
-                            mirror[mirrorcnt].camera = ii;
+                            mirror[mirrorcnt].cameraActor = itActor;
                             // Set up camera variables
-                            SP_TAG5(sp) = sp->ang;      // Set current angle to
+                            SP_TAG5(itActor) = itActor->spr.ang;      // Set current angle to
                             // sprite angle
                             Found_Cam = true;
                         }
@@ -378,25 +333,24 @@ void JS_InitMirrors(void)
 
                     if (!Found_Cam)
                     {
-                        Printf("Cound not find the camera view sprite for match %d\n", wall[i].hitag);
-                        Printf("Map Coordinates: x = %d, y = %d\n", wall[i].x, wall[i].y);
+                        Printf("Cound not find the camera view sprite for match %d\n", wal.hitag);
+                        Printf("Map Coordinates: x = %d, y = %d\n", wal.pos.X, wal.pos.Y);
                         break;
                     }
 
                     mirror[mirrorcnt].ismagic = true;
 
                     Found_Cam = false;
-                    if (TEST_BOOL1(&sprite[mirror[mirrorcnt].camera]))
+                    if (TEST_BOOL1(mirror[mirrorcnt].cameraActor))
                     {
-                        StatIterator it(STAT_DEFAULT);
-                        while ((SpriteNum = it.NextIndex()) >= 0)
+                        it.Reset(STAT_DEFAULT);
+                        while (auto itActor = it.Next())
                         {
-                            sp = &sprite[SpriteNum];
-                            if (sp->picnum >= CAMSPRITE && sp->picnum < CAMSPRITE + 8 &&
-                                sp->hitag == wall[i].hitag)
+                            if (itActor->spr.picnum >= CAMSPRITE && itActor->spr.picnum < CAMSPRITE + 8 &&
+                                itActor->spr.hitag == wal.hitag)
                             {
-                                mirror[mirrorcnt].campic = sp->picnum;
-                                mirror[mirrorcnt].camsprite = SpriteNum;
+                                mirror[mirrorcnt].campic = itActor->spr.picnum;
+                                mirror[mirrorcnt].camspriteActor = itActor;
 
                                 // JBF: commenting out this line results in the screen in $BULLET being visible
 								tileDelete(mirror[mirrorcnt].campic);
@@ -408,9 +362,9 @@ void JS_InitMirrors(void)
                         if (!Found_Cam)
                         {
                             Printf("Did not find drawtotile for camera number %d\n", mirrorcnt);
-                            Printf("wall[%d].hitag == %d\n", i, wall[i].hitag);
-                            Printf("Map Coordinates: x = %d, y = %d\n", wall[i].x, wall[i].y);
-                            RESET_BOOL1(&sprite[mirror[mirrorcnt].camera]);
+                            Printf("wall(%d).hitag == %d\n", wallnum(&wal), wal.hitag);
+                            Printf("Map Coordinates: x = %d, y = %d\n", wal.pos.X, wal.pos.Y);
+                            RESET_BOOL1(mirror[mirrorcnt].cameraActor);
                         }
                     }
 
@@ -428,32 +382,20 @@ void JS_InitMirrors(void)
                 // Set tics used to none
                 mirror[mirrorcnt].tics = 0;
 
-                if (mirror[mirrorcnt].ismagic)
-                {
-                    //DSPRINTF(ds, "mirror.mirrorwall %d", mirror[mirrorcnt].mirrorwall);
-                    MONO_PRINT(ds);
-                    //DSPRINTF(ds, "mirror.mirrorsector %d", mirror[mirrorcnt].mirrorsector);
-                    MONO_PRINT(ds);
-                    //DSPRINTF(ds, "mirror.camera %d", mirror[mirrorcnt].camera);
-                    MONO_PRINT(ds);
-                }
-
                 mirrorcnt++;
             }
             else
-                wall[i].overpicnum = sector[s].ceilingpicnum;
+                wal.overpicnum = sec->ceilingpicnum;
         }
     }
 
     // Invalidate textures in sector behind mirror
     for (i = 0; i < mirrorcnt; i++)
     {
-        startwall = sector[mirror[i].mirrorsector].wallptr;
-        endwall = startwall + sector[mirror[i].mirrorsector].wallnum;
-        for (j = startwall; j < endwall; j++)
+        for (auto& wal : wallsofsector(mirror[i].mirrorSector))
         {
-            wall[j].picnum = MIRROR;
-            wall[j].overpicnum = MIRROR;
+            wal.picnum = MIRROR;
+            wal.overpicnum = MIRROR;
         }
     }
 
@@ -463,24 +405,22 @@ void JS_InitMirrors(void)
 //  Draw a 3d screen to a specific tile
 /////////////////////////////////////////////////////
 void drawroomstotile(int daposx, int daposy, int daposz,
-                     binangle ang, fixedhoriz horiz, short dacursectnum, short tilenume, double smoothratio)
+                     binangle ang, fixedhoriz horiz, sectortype* dacursect, short tilenume, double smoothratio)
 {
-	TileFiles.MakeCanvas(tilenume, tileWidth(tilenume), tileHeight(tilenume));
-
     auto canvas = renderSetTarget(tilenume);
     if (!canvas) return;
 
     screen->RenderTextureView(canvas, [=](IntRect& rect)
         {
-            if (!testnewrenderer)
+            if (!vid_renderer)
             {
-                renderDrawRoomsQ16(daposx, daposy, daposz, ang.asq16(), horiz.asq16(), dacursectnum);
+                renderDrawRoomsQ16(daposx, daposy, daposz, ang.asq16(), horiz.asq16(), dacursect, false);
                 analyzesprites(pm_tsprite, pm_spritesortcnt, daposx, daposy, daposz, ang.asbuild());
                 renderDrawMasks();
             }
             else
             {
-                render_camtex(nullptr, { daposx, daposy, daposz }, dacursectnum, ang, horiz, buildang(0), tileGetTexture(tilenume), rect, smoothratio);
+                render_camtex(nullptr, { daposx, daposy, daposz }, dacursect, ang, horiz, buildang(0), tileGetTexture(tilenume), rect, smoothratio);
             }
         });
 
@@ -490,29 +430,25 @@ void drawroomstotile(int daposx, int daposy, int daposz,
 void
 JS_ProcessEchoSpot()
 {
-    int i;
-    SPRITEp tp;
     int j,dist;
-    PLAYERp pp = Player+screenpeek;
+    PLAYER* pp = Player+screenpeek;
     int16_t reverb;
     bool reverb_set = false;
 
     // Process echo sprites
-    StatIterator it(STAT_ECHO);
-    while ((i = it.NextIndex()) >= 0)
+    SWStatIterator it(STAT_ECHO);
+    while (auto actor = it.Next())
     {
         dist = 0x7fffffff;
 
-        tp = &sprite[i];
-
-        j = abs(tp->x - pp->posx);
-        j += abs(tp->y - pp->posy);
+        j = abs(actor->spr.pos.X - pp->pos.X);
+        j += abs(actor->spr.pos.Y - pp->pos.Y);
         if (j < dist)
             dist = j;
 
-        if (dist <= SP_TAG4(tp)) // tag4 = ang
+        if (dist <= SP_TAG4(actor)) // tag4 = ang
         {
-            reverb = SP_TAG2(tp);
+            reverb = SP_TAG2(actor);
             if (reverb > 200) reverb = 200;
             if (reverb < 100) reverb = 100;
 
@@ -520,7 +456,7 @@ JS_ProcessEchoSpot()
             reverb_set = true;
         }
     }
-    if (!TEST(pp->Flags, PF_DIVING) && !reverb_set && pp->Reverb <= 0)
+    if (!(pp->Flags & PF_DIVING) && !reverb_set && pp->Reverb <= 0)
         COVER_SetReverb(0);
 }
 
@@ -539,7 +475,7 @@ short camplayerview = 1;                // Don't show yourself!
 // Hack job alert!
 // Mirrors and cameras are maintained in the same data structure, but for hardware rendering they cannot be interleaved.
 // So this function replicates JS_DrawMirrors to only process the camera textures but not change any global state.
-void JS_DrawCameras(PLAYERp pp, int tx, int ty, int tz, double smoothratio)
+void JS_DrawCameras(PLAYER* pp, int tx, int ty, int tz, double smoothratio)
 {
     int j, cnt;
     int dist;
@@ -559,9 +495,6 @@ void JS_DrawCameras(PLAYERp pp, int tx, int ty, int tz, double smoothratio)
     }
     lastcamclock = camclock;
 
-    // WARNING!  Assuming (MIRRORLABEL&31) = 0 and MAXMIRRORS = 64 <-- JBF: wrong
-    longptr = (int*)&gotpic[MIRRORLABEL >> 3];
-    if (longptr && (longptr[0] || longptr[1]))
     {
         uint32_t oscilation_delta = camclock - oscilationclock;
         oscilation_delta -= oscilation_delta % 4;
@@ -571,81 +504,72 @@ void JS_DrawCameras(PLAYERp pp, int tx, int ty, int tz, double smoothratio)
         {
             if (!mirror[cnt].ismagic) continue; // these are definitely not camera textures.
 
-            //if (TEST_GOTPIC(cnt + MIRRORLABEL) || TEST_GOTPIC(cnt + CAMSPRITE))
-            if (TEST_GOTPIC(cnt + MIRRORLABEL) || ((unsigned)mirror[cnt].campic < MAXTILES && TEST_GOTPIC(mirror[cnt].campic)))
+            if (testgotpic(cnt + MIRRORLABEL) || ((unsigned)mirror[cnt].campic < MAXTILES && testgotpic(mirror[cnt].campic)))
             {
                 // Do not change any global state here!
-                bIsWallMirror = !!(TEST_GOTPIC(cnt + MIRRORLABEL));
+                bIsWallMirror = testgotpic(cnt + MIRRORLABEL);
                 dist = 0x7fffffff;
 
                 if (bIsWallMirror)
                 {
-                    j = abs(wall[mirror[cnt].mirrorwall].x - tx);
-                    j += abs(wall[mirror[cnt].mirrorwall].y - ty);
+                    j = abs(mirror[cnt].mirrorWall->pos.X - tx);
+                    j += abs(mirror[cnt].mirrorWall->pos.Y - ty);
                     if (j < dist)
                         dist = j;
                 }
                 else
                 {
-                    SPRITEp tp;
+                    DSWActor* camactor = mirror[cnt].camspriteActor;
 
-                    tp = &sprite[mirror[cnt].camsprite];
-
-                    j = abs(tp->x - tx);
-                    j += abs(tp->y - ty);
+                    j = abs(camactor->spr.pos.X - tx);
+                    j += abs(camactor->spr.pos.Y - ty);
                     if (j < dist)
                         dist = j;
                 }
 
 
-                SPRITEp sp = NULL;
-                int camhoriz;
                 short w;
                 int dx, dy, dz, tdx, tdy, tdz, midx, midy;
 
-
-                ASSERT(mirror[cnt].camera != -1);
-
-                sp = &sprite[mirror[cnt].camera];
-
-                ASSERT(sp);
+                DSWActor *camactor = mirror[cnt].cameraActor;
+                assert(camactor);
 
                 // Calculate the angle of the mirror wall
-                w = mirror[cnt].mirrorwall;
+                auto wal = mirror[cnt].mirrorWall;
 
                 // Get wall midpoint for offset in mirror view
-                midx = (wall[w].x + wall[wall[w].point2].x) / 2;
-                midy = (wall[w].y + wall[wall[w].point2].y) / 2;
+                midx = (wal->pos.X + wal->point2Wall()->pos.X) / 2;
+                midy = (wal->pos.Y + wal->point2Wall()->pos.Y) / 2;
 
                 // Finish finding offsets
                 tdx = abs(midx - tx);
                 tdy = abs(midy - ty);
 
                 if (midx >= tx)
-                    dx = sp->x - tdx;
+                    dx = camactor->spr.pos.X - tdx;
                 else
-                    dx = sp->x + tdx;
+                    dx = camactor->spr.pos.X + tdx;
 
                 if (midy >= ty)
-                    dy = sp->y - tdy;
+                    dy = camactor->spr.pos.Y - tdy;
                 else
-                    dy = sp->y + tdy;
+                    dy = camactor->spr.pos.Y + tdy;
 
-                tdz = abs(tz - sp->z);
-                if (tz >= sp->z)
-                    dz = sp->z + tdz;
+                tdz = abs(tz - camactor->spr.pos.Z);
+                if (tz >= camactor->spr.pos.Z)
+                    dz = camactor->spr.pos.Z + tdz;
                 else
-                    dz = sp->z - tdz;
+                    dz = camactor->spr.pos.Z - tdz;
 
 
                 // Is it a TV cam or a teleporter that shows destination?
                 // true = It's a TV cam
                 mirror[cnt].mstate = m_normal;
-                if (TEST_BOOL1(sp))
+                if (TEST_BOOL1(camactor))
                     mirror[cnt].mstate = m_viewon;
 
                 // Show teleport destination
-                // NOTE: Adding MAXSECTORS lets you draw a room, even if
+                // NOTE: Adding true lets you draw a room, even if
                 // you are outside of it!
                 if (mirror[cnt].mstate == m_viewon)
                 {
@@ -659,54 +583,48 @@ void JS_DrawCameras(PLAYERp pp, int tx, int ty, int tz, double smoothratio)
                     }
 
                     // BOOL2 = Oscilate camera
-                    if (TEST_BOOL2(sp) && MoveSkip2 == 0)
+                    if (TEST_BOOL2(camactor) && MoveSkip2 == 0)
                     {
-                        if (TEST_BOOL3(sp)) // If true add increment to
+                        if (TEST_BOOL3(camactor)) // If true add increment to
                         // angle else subtract
                         {
                             // Store current angle in TAG5
-                            SP_TAG5(sp) = NORM_ANGLE((SP_TAG5(sp) + oscilation_delta));
+                            SP_TAG5(camactor) = NORM_ANGLE((SP_TAG5(camactor) + oscilation_delta));
 
                             // TAG6 = Turn radius
-                            if (abs(getincangle(sp->ang, SP_TAG5(sp))) >= SP_TAG6(sp))
+                            if (abs(getincangle(camactor->spr.ang, SP_TAG5(camactor))) >= SP_TAG6(camactor))
                             {
-                                SP_TAG5(sp) = NORM_ANGLE((SP_TAG5(sp) - oscilation_delta));
-                                RESET_BOOL3(sp);    // Reverse turn
+                                SP_TAG5(camactor) = NORM_ANGLE((SP_TAG5(camactor) - oscilation_delta));
+                                RESET_BOOL3(camactor);    // Reverse turn
                                 // direction.
                             }
                         }
                         else
                         {
                             // Store current angle in TAG5
-                            SP_TAG5(sp) = NORM_ANGLE((SP_TAG5(sp) - oscilation_delta));
+                            SP_TAG5(camactor) = NORM_ANGLE((SP_TAG5(camactor) - oscilation_delta));
 
                             // TAG6 = Turn radius
-                            if (abs(getincangle(sp->ang, SP_TAG5(sp))) >= SP_TAG6(sp))
+                            if (abs(getincangle(camactor->spr.ang, SP_TAG5(camactor))) >= SP_TAG6(camactor))
                             {
-                                SP_TAG5(sp) = NORM_ANGLE((SP_TAG5(sp) + oscilation_delta));
-                                SET_BOOL3(sp);      // Reverse turn
+                                SP_TAG5(camactor) = NORM_ANGLE((SP_TAG5(camactor) + oscilation_delta));
+                                SET_BOOL3(camactor);      // Reverse turn
                                 // direction.
                             }
                         }
                     }
-                    else if (!TEST_BOOL2(sp))
+                    else if (!TEST_BOOL2(camactor))
                     {
-                        SP_TAG5(sp) = sp->ang;      // Copy sprite angle to
+                        SP_TAG5(camactor) = camactor->spr.ang;      // Copy sprite angle to
                         // tag5
                     }
 
-                    // See if there is a horizon value.  0 defaults to
-                    // 100!
-                    if (SP_TAG7(sp) != 0)
-                    {
-                        camhoriz = clamp(SP_TAG7(sp), gi->playerHorizMin(), gi->playerHorizMax());
-                    }
-                    else
-                        camhoriz = 0;     // Default
+                    // Set the horizon value.
+                    auto camhoriz = q16horiz(clamp(IntToFixed(SP_TAG7(camactor) - 100), gi->playerHorizMin(), gi->playerHorizMax()));
 
                     // If player is dead still then update at MoveSkip4
                     // rate.
-                    if (pp->posx == pp->oposx && pp->posy == pp->oposy && pp->posz == pp->oposz)
+                    if (pp->pos.X == pp->opos.X && pp->pos.Y == pp->opos.Y && pp->pos.Z == pp->opos.Z)
                         DoCam = true;
 
 
@@ -716,15 +634,15 @@ void JS_DrawCameras(PLAYERp pp, int tx, int ty, int tz, double smoothratio)
                     {
                         if (dist < MAXCAMDIST)
                         {
-                            PLAYERp cp = Player + camplayerview;
+                            PLAYER* cp = Player + camplayerview;
 
-                            if (TEST_BOOL11(sp) && numplayers > 1)
+                            if (TEST_BOOL11(camactor) && numplayers > 1)
                             {
-                                drawroomstotile(cp->posx, cp->posy, cp->posz, cp->angle.ang, cp->horizon.horiz, cp->cursectnum, mirror[cnt].campic, smoothratio);
+                                drawroomstotile(cp->pos.X, cp->pos.Y, cp->pos.Z, cp->angle.ang, cp->horizon.horiz, cp->cursector, mirror[cnt].campic, smoothratio);
                             }
                             else
                             {
-                                drawroomstotile(sp->x, sp->y, sp->z, buildang(SP_TAG5(sp)), buildhoriz(camhoriz), sp->sectnum, mirror[cnt].campic, smoothratio);
+                                drawroomstotile(camactor->spr.pos.X, camactor->spr.pos.Y, camactor->spr.pos.Z, buildang(SP_TAG5(camactor)), camhoriz, camactor->sector(), mirror[cnt].campic, smoothratio);
                             }
                         }
                     }
@@ -736,11 +654,11 @@ void JS_DrawCameras(PLAYERp pp, int tx, int ty, int tz, double smoothratio)
 
 // Workaround until the camera code can be refactored to process all camera textures that were visible last frame.
 // Need to stash the parameters for later use. This is only used to find the nearest camera.
-static PLAYERp cam_pp;
+static PLAYER* cam_pp;
 static int cam_tx, cam_ty, cam_tz;
 static int oldstat;
 
-void JS_CameraParms(PLAYERp pp, int tx, int ty, int tz)
+void JS_CameraParms(PLAYER* pp, int tx, int ty, int tz)
 {
     cam_pp = pp;
     cam_tx = tx;
@@ -753,19 +671,18 @@ void GameInterface::UpdateCameras(double smoothratio)
     JS_DrawCameras(cam_pp, cam_tx, cam_ty, cam_tz, smoothratio);
 }
 
-void GameInterface::EnterPortal(spritetype* viewer, int type)
+void GameInterface::EnterPortal(DCoreActor* viewer, int type)
 {
     if (type == PORTAL_WALL_MIRROR) display_mirror++;
 }
 
-void GameInterface::LeavePortal(spritetype* viewer, int type)
+void GameInterface::LeavePortal(DCoreActor* viewer, int type)
 {
     if (type == PORTAL_WALL_MIRROR) display_mirror--;
 }
 
 
-void
-DoAutoSize(tspriteptr_t tspr)
+void DoAutoSize(tspritetype* tspr)
 {
     if (!bAutoSize)
         return;
@@ -914,8 +831,7 @@ DoAutoSize(tspriteptr_t tspr)
 // Rotation angles for sprites
 short rotang = 0;
 
-void
-JAnalyzeSprites(tspriteptr_t tspr)
+void JAnalyzeSprites(tspritetype* tspr)
 {
     rotang += 4;
     if (rotang > 2047)
@@ -931,11 +847,11 @@ JAnalyzeSprites(tspriteptr_t tspr)
     //if (bVoxelsOn)
     if (r_voxels)
     {
-        if (aVoxelArray[tspr->picnum].Voxel >= 0 && !(spriteext[tspr->owner].flags & SPREXT_NOTMD))
+        if (aVoxelArray[tspr->picnum].Voxel >= 0 && !(tspr->ownerActor->sprext.renderflags & SPREXT_NOTMD))
         {
             // Turn on voxels
             tspr->picnum = aVoxelArray[tspr->picnum].Voxel;     // Get the voxel number
-            tspr->cstat |= 48;          // Set stat to voxelize sprite
+            tspr->cstat |= CSTAT_SPRITE_ALIGNMENT_SLAB;          // Set stat to voxelize sprite
         }
     }
     else
@@ -944,9 +860,9 @@ JAnalyzeSprites(tspriteptr_t tspr)
         {
         case 764: // Gun barrel
 
-            if (!r_voxels || (spriteext[tspr->owner].flags & SPREXT_NOTMD))
+            if (!r_voxels || (tspr->ownerActor->sprext.renderflags & SPREXT_NOTMD))
             {
-                tspr->cstat |= 16;
+                tspr->cstat |= CSTAT_SPRITE_ALIGNMENT_WALL;
                 break;
             }
 
@@ -954,7 +870,7 @@ JAnalyzeSprites(tspriteptr_t tspr)
             {
                 // Turn on voxels
                 tspr->picnum = aVoxelArray[tspr->picnum].Voxel;     // Get the voxel number
-                tspr->cstat |= 48;          // Set stat to voxelize sprite
+                tspr->cstat |= CSTAT_SPRITE_ALIGNMENT_SLAB;          // Set stat to voxelize sprite
             }
             break;
         }
@@ -963,11 +879,9 @@ JAnalyzeSprites(tspriteptr_t tspr)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
-void
-UnlockKeyLock(short key_num, short hit_sprite)
+void UnlockKeyLock(short key_num, DSWActor* hitActor)
 {
-    SPRITEp sp;
-    int SpriteNum = 0, color = 0;
+    int color = 0;
 
     // Get palette by looking at key number
     switch (key_num - 1)
@@ -998,36 +912,34 @@ UnlockKeyLock(short key_num, short hit_sprite)
         break;
     }
 
-    StatIterator it(STAT_DEFAULT);
-    while ((SpriteNum = it.NextIndex()) >= 0)
+    SWStatIterator it(STAT_DEFAULT);
+    while (auto itActor = it.Next())
     {
-        sp = &sprite[SpriteNum];
-
-        switch (sp->picnum)
+        switch (itActor->spr.picnum)
         {
         case SKEL_LOCKED:
-            if (sp->pal == color)
+            if (itActor->spr.pal == color)
             {
-                PlaySound(DIGI_UNLOCK, sp, v3df_doppler | v3df_dontpan);
-                if (SpriteNum == hit_sprite)
-                    sp->picnum = SKEL_UNLOCKED;
+                PlaySound(DIGI_UNLOCK, itActor, v3df_doppler | v3df_dontpan);
+                if (itActor == hitActor)
+                    itActor->spr.picnum = SKEL_UNLOCKED;
             }
             break;
         case RAMCARD_LOCKED:
-            if (sp->pal == color)
+            if (itActor->spr.pal == color)
             {
-                PlaySound(DIGI_CARDUNLOCK, sp, v3df_doppler | v3df_dontpan);
-                sp->picnum = RAMCARD_UNLOCKED;
+                PlaySound(DIGI_CARDUNLOCK, itActor, v3df_doppler | v3df_dontpan);
+                itActor->spr.picnum = RAMCARD_UNLOCKED;
             }
             break;
         case CARD_LOCKED:
-            if (sp->pal == color)
+            if (itActor->spr.pal == color)
             {
-                PlaySound(DIGI_RAMUNLOCK, sp, v3df_doppler | v3df_dontpan);
-                if (SpriteNum == hit_sprite)
-                    sp->picnum = CARD_UNLOCKED;
+                PlaySound(DIGI_RAMUNLOCK, itActor, v3df_doppler | v3df_dontpan);
+                if (itActor == hitActor)
+                    itActor->spr.picnum = CARD_UNLOCKED;
                 else
-                    sp->picnum = CARD_UNLOCKED+1;
+                    itActor->spr.picnum = CARD_UNLOCKED+1;
             }
             break;
         }

@@ -23,7 +23,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #include "ns.h"	// Must come before everything else!
 
-#include "compat.h"
 #include "build.h"
 
 #include "blood.h"
@@ -77,198 +76,191 @@ void BurnSeqCallback(int, DBloodActor*)
 
 static void burnThinkSearch(DBloodActor* actor)
 {
-    auto pXSprite = &actor->x();
-    auto pSprite = &actor->s();
-    aiChooseDirection(pSprite, pXSprite, pXSprite->goalAng);
-    aiThinkTarget(actor);
+	aiChooseDirection(actor, actor->xspr.goalAng);
+	aiThinkTarget(actor);
 }
 
 static void burnThinkGoto(DBloodActor* actor)
 {
-    auto pXSprite = &actor->x();
-    auto pSprite = &actor->s();
-    assert(pSprite->type >= kDudeBase && pSprite->type < kDudeMax);
-    DUDEINFO *pDudeInfo = getDudeInfo(pSprite->type);
-    int dx = pXSprite->targetX-pSprite->x;
-    int dy = pXSprite->targetY-pSprite->y;
-    int nAngle = getangle(dx, dy);
-    int nDist = approxDist(dx, dy);
-    aiChooseDirection(pSprite, pXSprite, nAngle);
-    if (nDist < 512 && abs(pSprite->ang - nAngle) < pDudeInfo->periphery)
-    {
-        switch (pSprite->type)
-        {
-        case kDudeBurningCultist:
-            aiNewState(actor, &cultistBurnSearch);
-            break;
-        case kDudeBurningZombieAxe:
-            aiNewState(actor, &zombieABurnSearch);
-            break;
-        case kDudeBurningZombieButcher:
-            aiNewState(actor, &zombieFBurnSearch);
-            break;
-        case kDudeBurningInnocent:
-            aiNewState(actor, &innocentBurnSearch);
-            break;
-        case kDudeBurningBeast:
-            aiNewState(actor, &beastBurnSearch);
-            break;
-        case kDudeBurningTinyCaleb:
-            aiNewState(actor, &tinycalebBurnSearch);
-            break;
-        #ifdef NOONE_EXTENSIONS
-        case kDudeModernCustomBurning:
-            aiNewState(actor, &genDudeBurnSearch);
-            break;
-        #endif
-        }
-    }
-    aiThinkTarget(actor);
+	assert(actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax);
+	DUDEINFO* pDudeInfo = getDudeInfo(actor->spr.type);
+	int dx = actor->xspr.TargetPos.X - actor->spr.pos.X;
+	int dy = actor->xspr.TargetPos.Y - actor->spr.pos.Y;
+	int nAngle = getangle(dx, dy);
+	int nDist = approxDist(dx, dy);
+	aiChooseDirection(actor, nAngle);
+	if (nDist < 512 && abs(actor->spr.ang - nAngle) < pDudeInfo->periphery)
+	{
+		switch (actor->spr.type)
+		{
+		case kDudeBurningCultist:
+			aiNewState(actor, &cultistBurnSearch);
+			break;
+		case kDudeBurningZombieAxe:
+			aiNewState(actor, &zombieABurnSearch);
+			break;
+		case kDudeBurningZombieButcher:
+			aiNewState(actor, &zombieFBurnSearch);
+			break;
+		case kDudeBurningInnocent:
+			aiNewState(actor, &innocentBurnSearch);
+			break;
+		case kDudeBurningBeast:
+			aiNewState(actor, &beastBurnSearch);
+			break;
+		case kDudeBurningTinyCaleb:
+			aiNewState(actor, &tinycalebBurnSearch);
+			break;
+#ifdef NOONE_EXTENSIONS
+		case kDudeModernCustomBurning:
+			aiNewState(actor, &genDudeBurnSearch);
+			break;
+#endif
+		}
+	}
+	aiThinkTarget(actor);
 }
 
 static void burnThinkChase(DBloodActor* actor)
 {
-    auto pXSprite = &actor->x();
-    auto pSprite = &actor->s();
-    if (pXSprite->target == -1)
-    {
-        switch (pSprite->type)
-        {
-        case kDudeBurningCultist:
-            aiNewState(actor, &cultistBurnGoto);
-            break;
-        case kDudeBurningZombieAxe:
-            aiNewState(actor, &zombieABurnGoto);
-            break;
-        case kDudeBurningZombieButcher:
-            aiNewState(actor, &zombieFBurnGoto);
-            break;
-        case kDudeBurningInnocent:
-            aiNewState(actor, &innocentBurnGoto);
-            break;
-        case kDudeBurningBeast:
-            aiNewState(actor, &beastBurnGoto);
-            break;
-        case kDudeBurningTinyCaleb:
-            aiNewState(actor, &tinycalebBurnGoto);
-            break;
-        #ifdef NOONE_EXTENSIONS
-        case kDudeModernCustomBurning:
-            aiNewState(actor, &genDudeBurnGoto);
-            break;
-        #endif
-        }
-        return;
-    }
-    assert(pSprite->type >= kDudeBase && pSprite->type < kDudeMax);
-    DUDEINFO *pDudeInfo = getDudeInfo(pSprite->type);
-    assert(pXSprite->target >= 0 && pXSprite->target < kMaxSprites);
-    spritetype *pTarget = &sprite[pXSprite->target];
-    XSPRITE *pXTarget = &xsprite[pTarget->extra];
-    int dx = pTarget->x-pSprite->x;
-    int dy = pTarget->y-pSprite->y;
-    aiChooseDirection(pSprite, pXSprite, getangle(dx, dy));
-    if (pXTarget->health == 0)
-    {
-        switch (pSprite->type)
-        {
-        case kDudeBurningCultist:
-            aiNewState(actor, &cultistBurnSearch);
-            break;
-        case kDudeBurningZombieAxe:
-            aiNewState(actor, &zombieABurnSearch);
-            break;
-        case kDudeBurningZombieButcher:
-            aiNewState(actor, &zombieFBurnSearch);
-            break;
-        case kDudeBurningInnocent:
-            aiNewState(actor, &innocentBurnSearch);
-            break;
-        case kDudeBurningBeast:
-            aiNewState(actor, &beastBurnSearch);
-            break;
-        case kDudeBurningTinyCaleb:
-            aiNewState(actor, &tinycalebBurnSearch);
-            break;
-        #ifdef NOONE_EXTENSIONS
-        case kDudeModernCustomBurning:
-            aiNewState(actor, &genDudeBurnSearch);
-            break;
-        #endif
-        }
-        return;
-    }
-    int nDist = approxDist(dx, dy);
-    if (nDist <= pDudeInfo->seeDist)
-    {
-        int nDeltaAngle = ((getangle(dx,dy)+1024-pSprite->ang)&2047)-1024;
-        int height = (pDudeInfo->eyeHeight*pSprite->yrepeat)<<2;
-        if (cansee(pTarget->x, pTarget->y, pTarget->z, pTarget->sectnum, pSprite->x, pSprite->y, pSprite->z - height, pSprite->sectnum))
-        {
-            if (nDist < pDudeInfo->seeDist && abs(nDeltaAngle) <= pDudeInfo->periphery)
-            {
-                aiSetTarget(pXSprite, pXSprite->target);
-                if (nDist < 0x333 && abs(nDeltaAngle) < 85)
-                {
-                    switch (pSprite->type)
-                    {
-                    case kDudeBurningCultist:
-                        aiNewState(actor, &cultistBurnAttack);
-                        break;
-                    case kDudeBurningZombieAxe:
-                        aiNewState(actor, &zombieABurnAttack);
-                        break;
-                    case kDudeBurningZombieButcher:
-                        aiNewState(actor, &zombieFBurnAttack);
-                        break;
-                    case kDudeBurningInnocent:
-                        aiNewState(actor, &innocentBurnAttack);
-                        break;
-                    case kDudeBurningBeast:
-                        aiNewState(actor, &beastBurnAttack);
-                        break;
-                    case kDudeBurningTinyCaleb:
-                        aiNewState(actor, &tinycalebBurnAttack);
-                        break;
-                    #ifdef NOONE_EXTENSIONS
-                    case kDudeModernCustomBurning:
-                        aiNewState(actor, &genDudeBurnSearch);
-                        break;
-                    #endif
-                    }
-                }
-                return;
-            }
-        }
-    }
-    
-    switch (pSprite->type)
-    {
-    case kDudeBurningCultist:
-        aiNewState(actor, &cultistBurnGoto);
-        break;
-    case kDudeBurningZombieAxe:
-        aiNewState(actor, &zombieABurnGoto);
-        break;
-    case 242:
-        aiNewState(actor, &zombieFBurnGoto);
-        break;
-    case kDudeBurningInnocent:
-        aiNewState(actor, &innocentBurnGoto);
-        break;
-    case kDudeBurningBeast:
-        aiNewState(actor, &beastBurnGoto);
-        break;
-    case kDudeBurningTinyCaleb:
-        aiNewState(actor, &tinycalebBurnGoto);
-        break;
-    #ifdef NOONE_EXTENSIONS
-    case kDudeModernCustomBurning:
-        aiNewState(actor, &genDudeBurnSearch);
-        break;
-    #endif
-    }
-    pXSprite->target = -1;
+	if (actor->GetTarget() == nullptr)
+	{
+		switch (actor->spr.type)
+		{
+		case kDudeBurningCultist:
+			aiNewState(actor, &cultistBurnGoto);
+			break;
+		case kDudeBurningZombieAxe:
+			aiNewState(actor, &zombieABurnGoto);
+			break;
+		case kDudeBurningZombieButcher:
+			aiNewState(actor, &zombieFBurnGoto);
+			break;
+		case kDudeBurningInnocent:
+			aiNewState(actor, &innocentBurnGoto);
+			break;
+		case kDudeBurningBeast:
+			aiNewState(actor, &beastBurnGoto);
+			break;
+		case kDudeBurningTinyCaleb:
+			aiNewState(actor, &tinycalebBurnGoto);
+			break;
+#ifdef NOONE_EXTENSIONS
+		case kDudeModernCustomBurning:
+			aiNewState(actor, &genDudeBurnGoto);
+			break;
+#endif
+		}
+		return;
+	}
+	assert(actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax);
+	DUDEINFO* pDudeInfo = getDudeInfo(actor->spr.type);
+	auto target = actor->GetTarget();
+
+	int dx = target->spr.pos.X - actor->spr.pos.X;
+	int dy = target->spr.pos.Y - actor->spr.pos.Y;
+	aiChooseDirection(actor, getangle(dx, dy));
+	if (target->xspr.health == 0)
+	{
+		switch (actor->spr.type)
+		{
+		case kDudeBurningCultist:
+			aiNewState(actor, &cultistBurnSearch);
+			break;
+		case kDudeBurningZombieAxe:
+			aiNewState(actor, &zombieABurnSearch);
+			break;
+		case kDudeBurningZombieButcher:
+			aiNewState(actor, &zombieFBurnSearch);
+			break;
+		case kDudeBurningInnocent:
+			aiNewState(actor, &innocentBurnSearch);
+			break;
+		case kDudeBurningBeast:
+			aiNewState(actor, &beastBurnSearch);
+			break;
+		case kDudeBurningTinyCaleb:
+			aiNewState(actor, &tinycalebBurnSearch);
+			break;
+#ifdef NOONE_EXTENSIONS
+		case kDudeModernCustomBurning:
+			aiNewState(actor, &genDudeBurnSearch);
+			break;
+#endif
+		}
+		return;
+	}
+	int nDist = approxDist(dx, dy);
+	if (nDist <= pDudeInfo->seeDist)
+	{
+		int nDeltaAngle = ((getangle(dx, dy) + 1024 - actor->spr.ang) & 2047) - 1024;
+		int height = (pDudeInfo->eyeHeight * actor->spr.yrepeat) << 2;
+		if (cansee(target->spr.pos.X, target->spr.pos.Y, target->spr.pos.Z, target->sector(), actor->spr.pos.X, actor->spr.pos.Y, actor->spr.pos.Z - height, actor->sector()))
+		{
+			if (nDist < pDudeInfo->seeDist && abs(nDeltaAngle) <= pDudeInfo->periphery)
+			{
+				aiSetTarget(actor, actor->GetTarget());
+				if (nDist < 0x333 && abs(nDeltaAngle) < 85)
+				{
+					switch (actor->spr.type)
+					{
+					case kDudeBurningCultist:
+						aiNewState(actor, &cultistBurnAttack);
+						break;
+					case kDudeBurningZombieAxe:
+						aiNewState(actor, &zombieABurnAttack);
+						break;
+					case kDudeBurningZombieButcher:
+						aiNewState(actor, &zombieFBurnAttack);
+						break;
+					case kDudeBurningInnocent:
+						aiNewState(actor, &innocentBurnAttack);
+						break;
+					case kDudeBurningBeast:
+						aiNewState(actor, &beastBurnAttack);
+						break;
+					case kDudeBurningTinyCaleb:
+						aiNewState(actor, &tinycalebBurnAttack);
+						break;
+#ifdef NOONE_EXTENSIONS
+					case kDudeModernCustomBurning:
+						aiNewState(actor, &genDudeBurnSearch);
+						break;
+#endif
+					}
+				}
+				return;
+			}
+		}
+	}
+
+	switch (actor->spr.type)
+	{
+	case kDudeBurningCultist:
+		aiNewState(actor, &cultistBurnGoto);
+		break;
+	case kDudeBurningZombieAxe:
+		aiNewState(actor, &zombieABurnGoto);
+		break;
+	case 242:
+		aiNewState(actor, &zombieFBurnGoto);
+		break;
+	case kDudeBurningInnocent:
+		aiNewState(actor, &innocentBurnGoto);
+		break;
+	case kDudeBurningBeast:
+		aiNewState(actor, &beastBurnGoto);
+		break;
+	case kDudeBurningTinyCaleb:
+		aiNewState(actor, &tinycalebBurnGoto);
+		break;
+#ifdef NOONE_EXTENSIONS
+	case kDudeModernCustomBurning:
+		aiNewState(actor, &genDudeBurnSearch);
+		break;
+#endif
+	}
+	actor->SetTarget(nullptr);
 }
 
 END_BLD_NS

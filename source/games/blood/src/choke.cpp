@@ -24,11 +24,16 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "ns.h"	// Must come before everything else!
 
 #include "build.h"
-#include "compat.h"
 #include "blood.h"
 #include "choke.h"
 
 BEGIN_BLD_NS
+
+//---------------------------------------------------------------------------
+//
+//
+//
+//---------------------------------------------------------------------------
 
 void CChoke::init(int a1, void(*a2)(PLAYER*))
 {
@@ -38,13 +43,18 @@ void CChoke::init(int a1, void(*a2)(PLAYER*))
 		qav = getQAV(a1);
 		if (!qav)
 			I_Error("Could not load QAV %d\n", a1);
-		qav->nSprite = -1;
 		qav->x = x;
 		qav->y = y;
 		duration = qav->duration;
 		time = 0;
 	}
 }
+
+//---------------------------------------------------------------------------
+//
+//
+//
+//---------------------------------------------------------------------------
 
 void CChoke::animateChoke(int x, int y, int smoothratio)
 {
@@ -65,6 +75,12 @@ void CChoke::animateChoke(int x, int y, int smoothratio)
 	qav->Draw(vdi, 10, 0, 0, true);
 }
 
+
+//---------------------------------------------------------------------------
+//
+//
+//
+//---------------------------------------------------------------------------
 
 void chokeCallback(PLAYER* pPlayer)
 {

@@ -25,12 +25,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "names.h"
 #include <string.h>
 #include <assert.h>
-#ifndef __WATCOMC__
-//#include <cmath>
-#else
-//#include <math.h>
-#include <stdlib.h>
-#endif
 
 BEGIN_PS_NS
 
@@ -40,28 +34,39 @@ enum { kMaxBullets		= 500 };
 // 32 bytes
 struct Bullet
 {
-    short nSeq;
-    short nFrame;
-    short nSprite;
-    short field_6;
-    short field_8;
-    short nType;
-    short field_C;
-    short field_E;
+    TObjPtr<DExhumedActor*> pActor;
+    TObjPtr<DExhumedActor*> pEnemy;
+
+    int16_t nSeq;
+    int16_t nFrame;
+    int16_t nRunRec;
+    int16_t nRunRec2;
+    int16_t nType;
+    int16_t nPitch;
+    int16_t field_E;
     uint16_t field_10;
     uint8_t field_12;
-    uint8_t field_13;
+    uint8_t nDoubleDamage;
     int x;
     int y;
     int z;
-    int enemy;
 };
 
 FreeListArray<Bullet, kMaxBullets> BulletList;
 int lasthitz, lasthitx, lasthity;
-short lasthitsect, lasthitsprite, lasthitwall;
+sectortype* lasthitsect;
 
-short nRadialBullet = 0;
+size_t MarkBullets()
+{
+    for (int i = 0; i < kMaxBullets; i++)
+    {
+        GC::Mark(BulletList[i].pActor);
+        GC::Mark(BulletList[i].pEnemy);
+    }
+    return 2 * kMaxBullets;
+}
+
+int nRadialBullet = 0;
 
 FSerializer& Serialize(FSerializer& arc, const char* keyname, Bullet& w, Bullet* def)
 {
@@ -75,19 +80,19 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, Bullet& w, Bullet*
     {
         arc("seq", w.nSeq, def->nSeq)
             ("frame", w.nFrame, def->nFrame)
-            ("sprite", w.nSprite, def->nSprite)
+            ("sprite", w.pActor, def->pActor)
             ("type", w.nType, def->nType)
             ("x", w.x, def->x)
             ("y", w.y, def->y)
             ("z", w.z, def->z)
-            ("at6", w.field_6, def->field_6)
-            ("at8", w.field_8, def->field_8)
-            ("atc", w.field_C, def->field_C)
+            ("at6", w.nRunRec, def->nRunRec)
+            ("at8", w.nRunRec2, def->nRunRec2)
+            ("atc", w.nPitch, def->nPitch)
             ("ate", w.field_E, def->field_E)
             ("at10", w.field_10, def->field_10)
             ("at12", w.field_12, def->field_12)
-            ("at13", w.field_13, def->field_13)
-            ("enemy", w.enemy, def->enemy)
+            ("at13", w.nDoubleDamage, def->nDoubleDamage)
+            ("enemy", w.pEnemy, def->pEnemy)
             .EndObject();
     }
     return arc;
@@ -102,8 +107,6 @@ void SerializeBullet(FSerializer& arc)
             ("lasthity", lasthity)
             ("lasthitz", lasthitz)
             ("lasthitsect", lasthitsect)
-            ("lasthitspr", lasthitsprite)
-            ("lasthitwall", lasthitwall)
             ("radialbullet", nRadialBullet)
             .EndObject();
     }
@@ -133,54 +136,57 @@ bulletInfo BulletInfo[] = {
 void InitBullets()
 {
     BulletList.Clear();
+    lasthitsect = nullptr;
 }
 
 int GrabBullet()
 {
     int grabbed = BulletList.Get();
     if (grabbed < 0) return -1;
-    BulletList[grabbed].enemy = -1;
+    BulletList[grabbed].pEnemy = nullptr;
     return grabbed;
 }
 
-void DestroyBullet(short nBullet)
+void DestroyBullet(int nBullet)
 {
-    short nSprite = BulletList[nBullet].nSprite;
+    DExhumedActor* pActor = BulletList[nBullet].pActor;
 
-    runlist_DoSubRunRec(BulletList[nBullet].field_6);
-    runlist_DoSubRunRec(sprite[nSprite].lotag - 1);
-    runlist_SubRunRec(BulletList[nBullet].field_8);
+    runlist_DoSubRunRec(BulletList[nBullet].nRunRec);
+    runlist_DoSubRunRec(pActor->spr.lotag - 1);
+    runlist_SubRunRec(BulletList[nBullet].nRunRec2);
 
-    StopSpriteSound(nSprite);
+    StopActorSound(pActor);
 
-    mydeletesprite(nSprite);
+    DeleteActor(pActor);
     BulletList.Release(nBullet);
 }
 
-void IgniteSprite(int nSprite)
+void IgniteSprite(DExhumedActor* pActor)
 {
-    sprite[nSprite].hitag += 2;
+    pActor->spr.hitag += 2;
 
-    int nAnim = BuildAnim(-1, 38, 0, sprite[nSprite].x, sprite[nSprite].y, sprite[nSprite].z, sprite[nSprite].sectnum, 40, 20);
-    short nAnimSprite = GetAnimSprite(nAnim);
+    auto pAnimActor = BuildAnim(nullptr, 38, 0, pActor->spr.pos.X, pActor->spr.pos.Y, pActor->spr.pos.Z, pActor->sector(), 40, 20);
 
-    sprite[nAnimSprite].hitag = nSprite;
-    changespritestat(nAnimSprite, kStatIgnited);
+    if (pAnimActor)
+    {
+        pAnimActor->pTarget = pActor;
+        ChangeActorStat(pAnimActor, kStatIgnited);
 
-    short yRepeat = (tileHeight(sprite[nAnimSprite].picnum) * 32) / nFlameHeight;
-    if (yRepeat < 1)
-        yRepeat = 1;
+        int yRepeat = (tileHeight(pAnimActor->spr.picnum) * 32) / nFlameHeight;
+        if (yRepeat < 1)
+            yRepeat = 1;
 
-    sprite[nAnimSprite].yrepeat = (uint8_t)yRepeat;
+        pAnimActor->spr.yrepeat = (uint8_t)yRepeat;
+    }
 }
 
-void BulletHitsSprite(Bullet *pBullet, short nBulletSprite, short nHitSprite, int x, int y, int z, int nSector)
+void BulletHitsSprite(Bullet *pBullet, DExhumedActor* pBulletActor, DExhumedActor* pHitActor, int x, int y, int z, sectortype* pSector)
 {
-    assert(nSector >= 0 && nSector < kMaxSectors);
+    assert(pSector != nullptr);
 
     bulletInfo *pBulletInfo = &BulletInfo[pBullet->nType];
 
-    short nStat = sprite[nHitSprite].statnum;
+    int nStat = pHitActor->spr.statnum;
 
     switch (pBullet->nType)
     {
@@ -190,14 +196,14 @@ void BulletHitsSprite(Bullet *pBullet, short nBulletSprite, short nHitSprite, in
                 return;
             }
 
-            sprite[nHitSprite].hitag++;
+            pHitActor->spr.hitag++;
 
-            if (sprite[nHitSprite].hitag == 15) {
-                IgniteSprite(nHitSprite);
+            if (pHitActor->spr.hitag == 15) {
+                IgniteSprite(pHitActor);
             }
 
             if (!RandomSize(2)) {
-                BuildAnim(-1, pBulletInfo->field_C, 0, x, y, z, nSector, 40, pBulletInfo->nFlags);
+                BuildAnim(nullptr, pBulletInfo->field_C, 0, x, y, z, pSector, 40, pBulletInfo->nFlags);
             }
 
             return;
@@ -208,7 +214,7 @@ void BulletHitsSprite(Bullet *pBullet, short nBulletSprite, short nHitSprite, in
                 return;
             }
             // else - fall through to below cases
-            fallthrough__;
+            [[fallthrough]];
         }
         case 1:
         case 2:
@@ -224,30 +230,28 @@ void BulletHitsSprite(Bullet *pBullet, short nBulletSprite, short nHitSprite, in
                 break;
             }
 
-            short nSprite = pBullet->nSprite;
-            spritetype *pSprite = &sprite[nSprite];
-            spritetype *pHitSprite = &sprite[nHitSprite];
+            DExhumedActor* pActor = pBullet->pActor;
 
             if (nStat == kStatAnubisDrum)
             {
-                short nAngle = (pSprite->ang + 256) - RandomSize(9);
+                int nAngle = (pActor->spr.ang + 256) - RandomSize(9);
 
-                pHitSprite->xvel = bcos(nAngle, 1);
-                pHitSprite->yvel = bsin(nAngle, 1);
-                pHitSprite->zvel = (-(RandomSize(3) + 1)) << 8;
+                pHitActor->spr.xvel = bcos(nAngle, 1);
+                pHitActor->spr.yvel = bsin(nAngle, 1);
+                pHitActor->spr.zvel = (-(RandomSize(3) + 1)) << 8;
             }
             else
             {
-                int xVel = pHitSprite->xvel;
-                int yVel = pHitSprite->yvel;
+                int xVel = pHitActor->spr.xvel;
+                int yVel = pHitActor->spr.yvel;
 
-                pHitSprite->xvel = bcos(pSprite->ang, -2);
-                pHitSprite->yvel = bsin(pSprite->ang, -2);
+                pHitActor->spr.xvel = bcos(pActor->spr.ang, -2);
+                pHitActor->spr.yvel = bsin(pActor->spr.ang, -2);
 
-                MoveCreature(nHitSprite);
+                MoveCreature(pHitActor);
 
-                pHitSprite->xvel = xVel;
-                pHitSprite->yvel = yVel;
+                pHitActor->spr.xvel = xVel;
+                pHitActor->spr.yvel = yVel;
             }
 
             break;
@@ -258,17 +262,17 @@ void BulletHitsSprite(Bullet *pBullet, short nBulletSprite, short nHitSprite, in
     }
 
     // BHS_switchBreak:
-    short nDamage = pBulletInfo->nDamage;
+    int nDamage = pBulletInfo->nDamage;
 
-    if (pBullet->field_13 > 1) {
+    if (pBullet->nDoubleDamage > 1) {
         nDamage *= 2;
     }
 
-    runlist_DamageEnemy(nHitSprite, nBulletSprite, nDamage);
+    runlist_DamageEnemy(pHitActor, pBulletActor, nDamage);
 
     if (nStat <= 90 || nStat >= 199)
     {
-        BuildAnim(-1, pBulletInfo->field_C, 0, x, y, z, nSector, 40, pBulletInfo->nFlags);
+        BuildAnim(nullptr, pBulletInfo->field_C, 0, x, y, z, pSector, 40, pBulletInfo->nFlags);
         return;
     }
 
@@ -280,57 +284,57 @@ void BulletHitsSprite(Bullet *pBullet, short nBulletSprite, short nHitSprite, in
         case 102:
         case kStatExplodeTrigger:
         case kStatExplodeTarget:
-            BuildAnim(-1, 12, 0, x, y, z, nSector, 40, 0);
+            BuildAnim(nullptr, 12, 0, x, y, z, pSector, 40, 0);
             break;
         default:
-            BuildAnim(-1, 39, 0, x, y, z, nSector, 40, 0);
+            BuildAnim(nullptr, 39, 0, x, y, z, pSector, 40, 0);
             if (pBullet->nType > 2)
             {
-                BuildAnim(-1, pBulletInfo->field_C, 0, x, y, z, nSector, 40, pBulletInfo->nFlags);
+                BuildAnim(nullptr, pBulletInfo->field_C, 0, x, y, z, pSector, 40, pBulletInfo->nFlags);
             }
             break;
     }
 }
 
 
-void BackUpBullet(int *x, int *y, short nAngle)
+void BackUpBullet(int *x, int *y, int nAngle)
 {
     *x -= bcos(nAngle, -11);
     *y -= bsin(nAngle, -11);
 }
 
-int MoveBullet(short nBullet)
+int MoveBullet(int nBullet)
 {
-    short hitsect = -1;
-    short hitwall = -1;
-    short hitsprite = -1;
+    DExhumedActor* hitactor = nullptr;
+    sectortype* pHitSect = nullptr;
+    walltype* pHitWall = nullptr;
 
     Bullet *pBullet = &BulletList[nBullet];
-    short nType = pBullet->nType;
+    int nType = pBullet->nType;
     bulletInfo *pBulletInfo = &BulletInfo[nType];
 
-    short nSprite = BulletList[nBullet].nSprite;
-    spritetype *pSprite = &sprite[nSprite];
+    DExhumedActor* pActor = BulletList[nBullet].pActor;
 
-    int x = pSprite->x;
-    int y = pSprite->y;
-    int z = pSprite->z; // ebx
-    short nSectFlag = SectFlag[pSprite->sectnum];
+    int x = pActor->spr.pos.X;
+    int y = pActor->spr.pos.Y;
+    int z = pActor->spr.pos.Z; // ebx
+    int nSectFlag = pActor->sector()->Flag;
 
     int x2, y2, z2;
 
-    int nVal;
+    int nVal = 0;
+    Collision coll;
 
     if (pBullet->field_10 < 30000)
     {
-        short nEnemySprite = BulletList[nBullet].enemy;
-        if (nEnemySprite > -1)
+        DExhumedActor* pEnemyActor = BulletList[nBullet].pEnemy;
+        if (pEnemyActor)
         {
-            if (!(sprite[nEnemySprite].cstat & 0x101))
-                BulletList[nBullet].enemy = -1;
+            if (!(pEnemyActor->spr.cstat & CSTAT_SPRITE_BLOCK_ALL))
+                BulletList[nBullet].pEnemy = nullptr;
             else
             {
-                nVal = AngleChase(nSprite, nEnemySprite, pBullet->field_10, 0, 16);
+                coll = AngleChase(pActor, pEnemyActor, pBullet->field_10, 0, 16);
                 goto MOVEEND;
             }
         }
@@ -338,63 +342,66 @@ int MoveBullet(short nBullet)
         {
             if (pBullet->field_E < 8)
             {
-                pSprite->xrepeat -= 1;
-                pSprite->yrepeat += 8;
+                pActor->spr.xrepeat -= 1;
+                pActor->spr.yrepeat += 8;
 
                 pBullet->z -= 200;
 
-                if (pSprite->shade < 90) {
-                    pSprite->shade += 35;
+                if (pActor->spr.shade < 90) {
+                    pActor->spr.shade += 35;
                 }
 
                 if (pBullet->field_E == 3)
                 {
                     pBullet->nSeq = 45;
                     pBullet->nFrame = 0;
-                    pSprite->xrepeat = 40;
-                    pSprite->yrepeat = 40;
-                    pSprite->shade = 0;
-                    pSprite->z += 512;
+                    pActor->spr.xrepeat = 40;
+                    pActor->spr.yrepeat = 40;
+                    pActor->spr.shade = 0;
+                    pActor->spr.pos.Z += 512;
                 }
             }
             else
             {
-                pSprite->xrepeat += 4;
-                pSprite->yrepeat += 4;
+                pActor->spr.xrepeat += 4;
+                pActor->spr.yrepeat += 4;
             }
         }
 
-        nVal = movesprite(nSprite, pBullet->x, pBullet->y, pBullet->z, pSprite->clipdist >> 1, pSprite->clipdist >> 1, CLIPMASK1);
+        coll = movesprite(pActor, pBullet->x, pBullet->y, pBullet->z, pActor->spr.clipdist >> 1, pActor->spr.clipdist >> 1, CLIPMASK1);
 
 MOVEEND:
-        if (nVal)
+        if (coll.type || coll.exbits)
         {
-            x2 = pSprite->x;
-            y2 = pSprite->y;
-            z2 = pSprite->z;
-            hitsect = pSprite->sectnum;
+            nVal = 1;
+            x2 = pActor->spr.pos.X;
+            y2 = pActor->spr.pos.Y;
+            z2 = pActor->spr.pos.Z;
+            pHitSect = pActor->sector();
 
-            if (nVal & 0x30000)
+            switch (coll.type)
             {
-                hitwall = nVal & 0x3FFF;
+            case kHitWall:
+                pHitWall = coll.hitWall;
                 goto HITWALL;
-            }
-            else
-            {
-                switch (nVal & 0xc000)
+            case kHitSprite:
+                if (!coll.exbits)
                 {
-                case 0x8000:
-                    hitwall = nVal & 0x3FFF;
-                    goto HITWALL;
-                case 0xc000:
-                    hitsprite = nVal & 0x3FFF;
+                    hitactor = coll.actor();
                     goto HITSPRITE;
                 }
+            default:
+                if (coll.exbits)
+                    goto HITSECT;
+                break;
+
             }
         }
 
-        // sprite[nSprite].sectnum may have changed since we set nSectFlag ?
-        short nFlagVal = nSectFlag ^ SectFlag[pSprite->sectnum];
+        nVal = coll.type || coll.exbits? 1:0;
+
+        // pSprite's sector may have changed since we set nSectFlag ?
+        int nFlagVal = nSectFlag ^ pActor->sector()->Flag;
         if (nFlagVal & kSectUnderwater)
         {
             DestroyBullet(nBullet);
@@ -403,10 +410,10 @@ MOVEEND:
 
         if (nVal == 0 && nType != 15 && nType != 3)
         {
-            AddFlash(sprite[nSprite].sectnum, sprite[nSprite].x, sprite[nSprite].y, sprite[nSprite].z, 0);
+            AddFlash(pActor->sector(), pActor->spr.pos.X, pActor->spr.pos.Y, pActor->spr.pos.Z, 0);
 
-            if (sprite[nSprite].pal != 5) {
-                sprite[nSprite].pal = 1;
+            if (pActor->spr.pal != 5) {
+                pActor->spr.pal = 1;
             }
         }
     }
@@ -414,45 +421,43 @@ MOVEEND:
     {
         nVal = 1;
 
-        if (BulletList[nBullet].enemy > -1)
+        if (BulletList[nBullet].pEnemy)
         {
-            hitsprite = BulletList[nBullet].enemy;
-            x2 = sprite[hitsprite].x;
-            y2 = sprite[hitsprite].y;
-            z2 = sprite[hitsprite].z - (GetSpriteHeight(hitsprite) >> 1);
-            hitsect = sprite[hitsprite].sectnum;
+            hitactor = BulletList[nBullet].pEnemy;
+            x2 = hitactor->spr.pos.X;
+            y2 = hitactor->spr.pos.Y;
+            z2 = hitactor->spr.pos.Z - (GetActorHeight(hitactor) >> 1);
+            pHitSect = hitactor->sector();
         }
         else
         {
             vec3_t startPos = { x, y, z };
-            hitdata_t hitData;
+            HitInfo hit{};
             int dz;
             if (bVanilla)
-                dz = -bsin(pBullet->field_C, 3);
+                dz = -bsin(pBullet->nPitch, 3);
             else
-                dz = -pBullet->field_C * 512;
-            hitscan(&startPos, pSprite->sectnum, bcos(pSprite->ang), bsin(pSprite->ang), dz, &hitData, CLIPMASK1);
-            x2 = hitData.pos.x;
-            y2 = hitData.pos.y;
-            z2 = hitData.pos.z;
-            hitsprite = hitData.sprite;
-            hitsect = hitData.sect;
-            hitwall = hitData.wall;
+                dz = -pBullet->nPitch * 512;
+            hitscan(startPos, pActor->sector(), { bcos(pActor->spr.ang), bsin(pActor->spr.ang), dz }, hit, CLIPMASK1);
+            x2 = hit.hitpos.X;
+            y2 = hit.hitpos.Y;
+            z2 = hit.hitpos.Z;
+            hitactor = hit.actor();
+            pHitSect = hit.hitSector;
+            pHitWall = hit.hitWall;
         }
 
         lasthitx = x2;
         lasthity = y2;
         lasthitz = z2;
-        lasthitsect = hitsect;
-        lasthitwall = hitwall;
-        lasthitsprite = hitsprite;
+        lasthitsect = pHitSect;
 
-        if (hitsprite > -1)
+        if (hitactor)
         {
 HITSPRITE:
-            if (pSprite->pal == 5 && sprite[hitsprite].statnum == 100)
+            if (pActor->spr.pal == 5 && hitactor->spr.statnum == 100)
             {
-                short nPlayer = GetPlayerFromSprite(hitsprite);
+                int nPlayer = GetPlayerFromActor(hitactor);
                 if (!PlayerList[nPlayer].bIsMummified)
                 {
                     PlayerList[nPlayer].bIsMummified = true;
@@ -461,50 +466,49 @@ HITSPRITE:
             }
             else
             {
-                BulletHitsSprite(pBullet, pSprite->owner, hitsprite, x2, y2, z2, hitsect);
+                BulletHitsSprite(pBullet, pActor->pTarget, hitactor, x2, y2, z2, pHitSect);
             }
         }
-        else if (hitwall > -1)
+        else if (pHitWall != nullptr)
         {
-HITWALL:
-            if (wall[hitwall].picnum == kEnergy1)
+        HITWALL:
+            if (pHitWall->picnum == kEnergy1)
             {
-                short nSector = wall[hitwall].nextsector;
-                if (nSector > -1)
+                if (pHitWall->twoSided())
                 {
-                    short nDamage = BulletInfo[pBullet->nType].nDamage;
-                    if (pBullet->field_13 > 1) {
+                    int nDamage = BulletInfo[pBullet->nType].nDamage;
+                    if (pBullet->nDoubleDamage > 1) {
                         nDamage *= 2;
                     }
 
-                    short nNormal = GetWallNormal(hitwall) & kAngleMask;
-
-                    runlist_DamageEnemy(sector[nSector].extra, nNormal, nDamage);
+                    DExhumedActor* eb = EnergyBlocks[pHitWall->nextSector()->extra];
+                    if (eb) runlist_DamageEnemy(eb, pActor, nDamage);
                 }
             }
         }
 
-        if (hitsect > -1) // NOTE: hitsect can be -1. this check wasn't in original code. TODO: demo compatiblity?
+    HITSECT:
+        if (pHitSect != nullptr) // NOTE: hitsect can be -1. this check wasn't in original code. TODO: demo compatiblity?
         {
-            if (hitsprite < 0 && hitwall < 0)
+            if (hitactor == nullptr && pHitWall == nullptr)
             {
-                if ((SectBelow[hitsect] >= 0 && (SectFlag[SectBelow[hitsect]] & kSectUnderwater)) || SectDepth[hitsect])
+                if ((pHitSect->pBelow != nullptr && (pHitSect->pBelow->Flag & kSectUnderwater)) || pHitSect->Depth)
                 {
-                    pSprite->x = x2;
-                    pSprite->y = y2;
-                    pSprite->z = z2;
-                    BuildSplash(nSprite, hitsect);
+                    pActor->spr.pos.X = x2;
+                    pActor->spr.pos.Y = y2;
+                    pActor->spr.pos.Z = z2;
+                    BuildSplash(pActor, pHitSect);
                 }
                 else
                 {
-                    BuildAnim(-1, pBulletInfo->field_C, 0, x2, y2, z2, hitsect, 40, pBulletInfo->nFlags);
+                    BuildAnim(nullptr, pBulletInfo->field_C, 0, x2, y2, z2, pHitSect, 40, pBulletInfo->nFlags);
                 }
             }
             else
             {
-                if (hitwall >= 0)
+                if (pHitWall != nullptr)
                 {
-                    BackUpBullet(&x2, &y2, pSprite->ang);
+                    BackUpBullet(&x2, &y2, pActor->spr.ang);
 
                     if (nType != 3 || RandomSize(2) == 0)
                     {
@@ -515,27 +519,27 @@ HITWALL:
                         }
 
                         // draws bullet puff on walls when they're shot
-                        BuildAnim(-1, pBulletInfo->field_C, 0, x2, y2, z2 + zOffset + -4096, hitsect, 40, pBulletInfo->nFlags);
+                        BuildAnim(nullptr, pBulletInfo->field_C, 0, x2, y2, z2 + zOffset + -4096, pHitSect, 40, pBulletInfo->nFlags);
                     }
                 }
                 else
                 {
-                    pSprite->x = x2;
-                    pSprite->y = y2;
-                    pSprite->z = z2;
+                    pActor->spr.pos.X = x2;
+                    pActor->spr.pos.Y = y2;
+                    pActor->spr.pos.Z = z2;
 
-                    mychangespritesect(nSprite, hitsect);
+                    ChangeActorSect(pActor, pHitSect);
                 }
 
                 if (BulletInfo[nType].nRadius)
                 {
                     nRadialBullet = nType;
 
-                    runlist_RadialDamageEnemy(nSprite, pBulletInfo->nDamage, pBulletInfo->nRadius);
+                    runlist_RadialDamageEnemy(pActor, pBulletInfo->nDamage, pBulletInfo->nRadius);
 
                     nRadialBullet = -1;
 
-                    AddFlash(pSprite->sectnum, pSprite->x, pSprite->y, pSprite->z, 128);
+                    AddFlash(pActor->sector(), pActor->spr.pos.X, pActor->spr.pos.Y, pActor->spr.pos.Z, 128);
                 }
             }
         }
@@ -546,116 +550,108 @@ HITWALL:
     return nVal;
 }
 
-void SetBulletEnemy(short nBullet, short nEnemy)
+void SetBulletEnemy(int nBullet, DExhumedActor* pEnemy)
 {
     if (nBullet >= 0) {
-        BulletList[nBullet].enemy = nEnemy;
+        BulletList[nBullet].pEnemy = pEnemy;
     }
 }
 
-int BuildBullet(short nSprite, int nType, int, int, int val1, int nAngle, int val2, int val3)
+DExhumedActor* BuildBullet(DExhumedActor* pActor, int nType, int nZOffset, int nAngle, DExhumedActor* pTarget, int nDoubleDamage)
 {
     Bullet sBullet;
     bulletInfo *pBulletInfo = &BulletInfo[nType];
+    int nPitch = 0;
 
     if (pBulletInfo->field_4 > 30000)
     {
-        if (val2 >= 10000)
+        if (pTarget)
         {
-            val2 -= 10000;
-
-            short nTargetSprite = val2;
-            spritetype *pTargetSprite = &sprite[nTargetSprite];
-
-//			assert(sprite[nTargetSprite].sectnum <= kMaxSectors);
-
-            if (pTargetSprite->cstat & 0x101)
+            if (pTarget->spr.cstat & CSTAT_SPRITE_BLOCK_ALL)
             {
                 sBullet.nType = nType;
-                sBullet.field_13 = val3;
+                sBullet.nDoubleDamage = nDoubleDamage;
 
-                sBullet.nSprite = insertsprite(sprite[nSprite].sectnum, 200);
-                sprite[sBullet.nSprite].ang = nAngle;
+                sBullet.pActor = insertActor(pActor->sector(), 200);
+                sBullet.pActor->spr.ang = nAngle;
 
-                int nHeight = GetSpriteHeight(nTargetSprite);
+                int nHeight = GetActorHeight(pTarget);
 
-                assert(sprite[nTargetSprite].sectnum >= 0 && sprite[nTargetSprite].sectnum < kMaxSectors);
+				assert(pTarget->sector());
 
-                BulletHitsSprite(&sBullet, nSprite, nTargetSprite, pTargetSprite->x, pTargetSprite->y, pTargetSprite->z - (nHeight >> 1), pTargetSprite->sectnum);
-                mydeletesprite(sBullet.nSprite);
-                return -1;
+                BulletHitsSprite(&sBullet, pActor, pTarget, pTarget->spr.pos.X, pTarget->spr.pos.Y, pTarget->spr.pos.Z - (nHeight >> 1), pTarget->sector());
+                DeleteActor(sBullet.pActor);
+                return nullptr;
             }
             else
             {
-                val2 = 0;
+                nPitch = 0;
             }
         }
     }
 
     int nBullet = GrabBullet();
     if (nBullet < 0) {
-        return -1;
+        return nullptr;
     }
 
-    short nSector;
+    sectortype* pSector;
 
-    if (sprite[nSprite].statnum == 100)
+    if (pActor->spr.statnum == 100)
     {
-        nSector = nPlayerViewSect[GetPlayerFromSprite(nSprite)];
+        pSector = PlayerList[GetPlayerFromActor(pActor)].pPlayerViewSect;
     }
     else
     {
-        nSector = sprite[nSprite].sectnum;
+        pSector = pActor->sector();
     }
 
-    short nBulletSprite = insertsprite(nSector, 200);
-    int nHeight = GetSpriteHeight(nSprite);
+    auto pBulletActor = insertActor(pSector, 200);
+	int nHeight = GetActorHeight(pActor);
     nHeight = nHeight - (nHeight >> 2);
 
-    if (val1 == -1) {
-        val1 = -nHeight;
+    if (nZOffset == -1) {
+        nZOffset = -nHeight;
     }
 
-    sprite[nBulletSprite].x = sprite[nSprite].x;
-    sprite[nBulletSprite].y = sprite[nSprite].y;
-    sprite[nBulletSprite].z = sprite[nSprite].z;
-
-    // why is this done here???
-    assert(nBulletSprite >= 0 && nBulletSprite < kMaxSprites);
+    pBulletActor->spr.pos.X = pActor->spr.pos.X;
+    pBulletActor->spr.pos.Y = pActor->spr.pos.Y;
+    pBulletActor->spr.pos.Z = pActor->spr.pos.Z;
 
     Bullet *pBullet = &BulletList[nBullet];
 
-    pBullet->enemy = -1;
+    pBullet->pEnemy = nullptr;
 
-    sprite[nBulletSprite].cstat = 0;
-    sprite[nBulletSprite].shade = -64;
+    pBulletActor->spr.cstat = 0;
+    pBulletActor->spr.shade = -64;
 
     if (pBulletInfo->nFlags & 4) {
-        sprite[nBulletSprite].pal = 4;
+        pBulletActor->spr.pal = 4;
     }
     else {
-        sprite[nBulletSprite].pal = 0;
+        pBulletActor->spr.pal = 0;
     }
 
-    sprite[nBulletSprite].clipdist = 25;
+    pBulletActor->spr.clipdist = 25;
 
-    short nRepeat = pBulletInfo->xyRepeat;
+    int nRepeat = pBulletInfo->xyRepeat;
     if (nRepeat < 0) {
         nRepeat = 30;
     }
 
-    sprite[nBulletSprite].xrepeat = nRepeat;
-    sprite[nBulletSprite].yrepeat = nRepeat;
-    sprite[nBulletSprite].xoffset = 0;
-    sprite[nBulletSprite].yoffset = 0;
-    sprite[nBulletSprite].ang = nAngle;
-    sprite[nBulletSprite].xvel = 0;
-    sprite[nBulletSprite].yvel = 0;
-    sprite[nBulletSprite].zvel = 0;
-    sprite[nBulletSprite].owner = nSprite;
-    sprite[nBulletSprite].lotag = runlist_HeadRun() + 1;
-    sprite[nBulletSprite].extra = -1;
-    sprite[nBulletSprite].hitag = 0;
+    pBulletActor->spr.xrepeat = (uint8_t)nRepeat;
+    pBulletActor->spr.yrepeat = (uint8_t)nRepeat;
+    pBulletActor->spr.xoffset = 0;
+    pBulletActor->spr.yoffset = 0;
+    pBulletActor->spr.ang = nAngle;
+    pBulletActor->spr.xvel = 0;
+    pBulletActor->spr.yvel = 0;
+    pBulletActor->spr.zvel = 0;
+    pBulletActor->spr.lotag = runlist_HeadRun() + 1;
+    pBulletActor->spr.extra = -1;
+    pBulletActor->spr.hitag = 0;
+    pBulletActor->pTarget = pActor;
+    pBulletActor->nPhase = nBullet;
 
 //	GrabTimeSlot(3);
 
@@ -663,7 +659,7 @@ int BuildBullet(short nSprite, int nType, int, int, int val1, int nAngle, int va
     pBullet->field_E = pBulletInfo->field_2;
     pBullet->nFrame  = 0;
 
-    short nSeq;
+    int nSeq;
 
     if (pBulletInfo->field_8 != -1)
     {
@@ -678,56 +674,52 @@ int BuildBullet(short nSprite, int nType, int, int, int val1, int nAngle, int va
 
     pBullet->nSeq = nSeq;
 
-    sprite[nBulletSprite].picnum = seq_GetSeqPicnum(nSeq, 0, 0);
+    pBulletActor->spr.picnum = seq_GetSeqPicnum(nSeq, 0, 0);
 
     if (nSeq == kSeqBullet) {
-        sprite[nBulletSprite].cstat |= 0x8000;
+        pBulletActor->spr.cstat |= CSTAT_SPRITE_INVISIBLE;
     }
 
-    pBullet->field_C = val2;
+    pBullet->nPitch = nPitch;
     pBullet->nType = nType;
-    pBullet->nSprite = nBulletSprite;
-    pBullet->field_6 = runlist_AddRunRec(sprite[nBulletSprite].lotag - 1, nBullet | 0xB0000);
-    pBullet->field_8 = runlist_AddRunRec(NewRun, nBullet | 0xB0000);
-    pBullet->field_13 = val3;
-    sprite[nBulletSprite].z += val1;
-    sprite[nBulletSprite].backuppos();
+    pBullet->pActor = pBulletActor;
+    pBullet->nRunRec = runlist_AddRunRec(pBulletActor->spr.lotag - 1, nBullet, 0xB0000);
+    pBullet->nRunRec2 = runlist_AddRunRec(NewRun, nBullet, 0xB0000);
+    pBullet->nDoubleDamage = nDoubleDamage;
+    pBulletActor->spr.pos.Z += nZOffset;
+    pBulletActor->backuppos();
 
-    int var_18;
+    int var_18 = 0;
 
-    nSector = sprite[nBulletSprite].sectnum;
+    pSector = pBulletActor->sector();
 
-    while (sprite[nBulletSprite].z < sector[nSector].ceilingz)
+    while (pBulletActor->spr.pos.Z < pSector->ceilingz)
     {
-        if (SectAbove[nSector] == -1)
+        if (pSector->pAbove == nullptr)
         {
-            sprite[nBulletSprite].z = sector[nSector].ceilingz;
+            pBulletActor->spr.pos.Z = pSector->ceilingz;
             break;
         }
 
-        nSector = SectAbove[nSector];
-        mychangespritesect(nBulletSprite, nSector);
+        pSector = pSector->pAbove;
+        ChangeActorSect(pBulletActor, pSector);
     }
 
-    if (val2 < 10000)
+    if (pTarget == nullptr)
     {
-        var_18 = (-bsin(val2) * pBulletInfo->field_4) >> 11;
+        var_18 = (-bsin(nPitch) * pBulletInfo->field_4) >> 11;
     }
     else
     {
-        val2 -= 10000;
-
-        short nTargetSprite = val2;
-
         if ((unsigned int)pBulletInfo->field_4 > 30000)
         {
-            BulletList[nBullet].enemy = nTargetSprite;
+            BulletList[nBullet].pEnemy = pTarget;
         }
         else
         {
-            nHeight = GetSpriteHeight(nTargetSprite);
+            nHeight = GetActorHeight(pTarget);
 
-            if (sprite[nTargetSprite].statnum == 100)
+            if (pTarget->spr.statnum == 100)
             {
                 nHeight -= nHeight >> 2;
             }
@@ -736,47 +728,47 @@ int BuildBullet(short nSprite, int nType, int, int, int val1, int nAngle, int va
                 nHeight -= nHeight >> 1;
             }
 
-            int var_20 = sprite[nTargetSprite].z - nHeight;
+            int var_20 = pTarget->spr.pos.Z - nHeight;
 
             int x, y;
 
-            if (nSprite != -1 && sprite[nSprite].statnum != 100)
+            if (pActor != nullptr && pActor->spr.statnum != 100)
             {
-                x = sprite[nTargetSprite].x;
-                y = sprite[nTargetSprite].y;
+                x = pTarget->spr.pos.X;
+                y = pTarget->spr.pos.Y;
 
-                if (sprite[nTargetSprite].statnum != 100)
+                if (pTarget->spr.statnum != 100)
                 {
-                    x += (sprite[nTargetSprite].xvel * 20) >> 6;
-                    y += (sprite[nTargetSprite].yvel * 20) >> 6;
+                    x += (pTarget->spr.xvel * 20) >> 6;
+                    y += (pTarget->spr.yvel * 20) >> 6;
                 }
                 else
                 {
-                    int nPlayer = GetPlayerFromSprite(nTargetSprite);
+                    int nPlayer = GetPlayerFromActor(pTarget);
                     if (nPlayer > -1)
                     {
-                        x += nPlayerDX[nPlayer] * 15;
-                        y += nPlayerDY[nPlayer] * 15;
+                        x += PlayerList[nPlayer].nPlayerD.X * 15;
+                        y += PlayerList[nPlayer].nPlayerD.Y * 15;
                     }
                 }
 
-                x -= sprite[nBulletSprite].x;
-                y -= sprite[nBulletSprite].y;
+                x -= pBulletActor->spr.pos.X;
+                y -= pBulletActor->spr.pos.Y;
 
                 nAngle = GetMyAngle(x, y);
-                sprite[nSprite].ang = nAngle;
+                pActor->spr.ang = nAngle;
             }
             else
             {
                 // loc_2ABA3:
-                x = sprite[nTargetSprite].x - sprite[nBulletSprite].x;
-                y = sprite[nTargetSprite].y - sprite[nBulletSprite].y;
+                x = pTarget->spr.pos.X - pBulletActor->spr.pos.X;
+                y = pTarget->spr.pos.Y - pBulletActor->spr.pos.Y;
             }
 
             int nSqrt = lsqrt(y*y + x*x);
             if ((unsigned int)nSqrt > 0)
             {
-                var_18 = ((var_20 - sprite[nBulletSprite].z) * pBulletInfo->field_4) / nSqrt;
+                var_18 = ((var_20 - pBulletActor->spr.pos.Z) * pBulletInfo->field_4) / nSqrt;
             }
             else
             {
@@ -786,13 +778,14 @@ int BuildBullet(short nSprite, int nType, int, int, int val1, int nAngle, int va
     }
 
     pBullet->z = 0;
-    pBullet->x = (sprite[nSprite].clipdist << 2) * bcos(nAngle);
-    pBullet->y = (sprite[nSprite].clipdist << 2) * bsin(nAngle);
-    BulletList[nBullet].enemy = -1;
+    pBullet->x = (pActor->spr.clipdist << 2) * bcos(nAngle);
+    pBullet->y = (pActor->spr.clipdist << 2) * bsin(nAngle);
+    BulletList[nBullet].pEnemy = nullptr;
+
 
     if (MoveBullet(nBullet))
     {
-        nBulletSprite = -1;
+        pBulletActor = nullptr;
     }
     else
     {
@@ -802,80 +795,66 @@ int BuildBullet(short nSprite, int nType, int, int, int val1, int nAngle, int va
         pBullet->z = var_18 >> 3;
     }
 
-    return nBulletSprite | IntToFixed(nBullet);
+    return pBulletActor;
 }
 
-void FuncBullet(int a, int, int nRun)
+void AIBullet::Tick(RunListEvent* ev)
 {
-    short nBullet = RunData[nRun].nVal;
+    int nBullet = RunData[ev->nRun].nObjIndex;
     assert(nBullet >= 0 && nBullet < kMaxBullets);
 
-    short nSeq = SeqOffsets[BulletList[nBullet].nSeq];
-    short nSprite = BulletList[nBullet].nSprite;
+    int nSeq = SeqOffsets[BulletList[nBullet].nSeq];
+    DExhumedActor* pActor = BulletList[nBullet].pActor;
 
-    int nMessage = a & kMessageMask;
+    int nFlag = FrameFlag[SeqBase[nSeq] + BulletList[nBullet].nFrame];
 
-    switch (nMessage)
+    seq_MoveSequence(pActor, nSeq, BulletList[nBullet].nFrame);
+
+    if (nFlag & 0x80)
     {
-        case 0x20000:
+        BuildAnim(nullptr, 45, 0, pActor->spr.pos.X, pActor->spr.pos.Y, pActor->spr.pos.Z, pActor->sector(), pActor->spr.xrepeat, 0);
+    }
+
+    BulletList[nBullet].nFrame++;
+    if (BulletList[nBullet].nFrame >= SeqSize[nSeq])
+    {
+        if (!BulletList[nBullet].field_12)
         {
-            short nFlag = FrameFlag[SeqBase[nSeq] + BulletList[nBullet].nFrame];
-
-            seq_MoveSequence(nSprite, nSeq, BulletList[nBullet].nFrame);
-
-            if (nFlag & 0x80)
-            {
-                BuildAnim(-1, 45, 0, sprite[nSprite].x, sprite[nSprite].y, sprite[nSprite].z, sprite[nSprite].sectnum, sprite[nSprite].xrepeat, 0);
-            }
-
-            BulletList[nBullet].nFrame++;
-            if (BulletList[nBullet].nFrame >= SeqSize[nSeq])
-            {
-                if (!BulletList[nBullet].field_12)
-                {
-                    BulletList[nBullet].nSeq = BulletInfo[BulletList[nBullet].nType].nSeq;
-                    BulletList[nBullet].field_12++;
-                }
-
-                BulletList[nBullet].nFrame = 0;
-            }
-
-            if (BulletList[nBullet].field_E != -1 && --BulletList[nBullet].field_E == 0)
-            {
-                DestroyBullet(nBullet);
-            }
-            else
-            {
-                MoveBullet(nBullet);
-            }
-            break;
+            BulletList[nBullet].nSeq = BulletInfo[BulletList[nBullet].nType].nSeq;
+            BulletList[nBullet].field_12++;
         }
 
-        case 0x90000:
-        {
-            short nSprite2 = a & 0xFFFF;
-            mytsprite[nSprite2].statnum = 1000;
+        BulletList[nBullet].nFrame = 0;
+    }
 
-            if (BulletList[nBullet].nType == 15)
-            {
-                seq_PlotArrowSequence(nSprite2, nSeq, BulletList[nBullet].nFrame);
-            }
-            else
-            {
-                seq_PlotSequence(nSprite2, nSeq, BulletList[nBullet].nFrame, 0);
-                mytsprite[nSprite2].owner = -1;
-            }
-            break;
-        }
-
-        case 0xA0000:
-            break;
-
-        default:
-        {
-            Printf("unknown msg %d for bullet\n", nMessage);
-            return;
-        }
+    if (BulletList[nBullet].field_E != -1 && --BulletList[nBullet].field_E == 0)
+    {
+        DestroyBullet(nBullet);
+    }
+    else
+    {
+        MoveBullet(nBullet);
     }
 }
+
+void AIBullet::Draw(RunListEvent* ev)
+{
+    int nBullet = RunData[ev->nRun].nObjIndex;
+    assert(nBullet >= 0 && nBullet < kMaxBullets);
+
+    int nSeq = SeqOffsets[BulletList[nBullet].nSeq];
+
+    ev->pTSprite->statnum = 1000;
+
+    if (BulletList[nBullet].nType == 15)
+    {
+        seq_PlotArrowSequence(ev->nParam, nSeq, BulletList[nBullet].nFrame);
+    }
+    else
+    {
+        seq_PlotSequence(ev->nParam, nSeq, BulletList[nBullet].nFrame, 0);
+        ev->pTSprite->ownerActor = nullptr;
+    }
+}
+
 END_PS_NS

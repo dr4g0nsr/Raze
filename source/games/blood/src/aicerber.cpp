@@ -23,17 +23,16 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #include "ns.h"	// Must come before everything else!
 
-#include "compat.h"
 #include "build.h"
 
 #include "blood.h"
 
 BEGIN_BLD_NS
 
-static void cerberusThinkSearch(DBloodActor *actor);
-static void cerberusThinkTarget(DBloodActor *actor);
-static void cerberusThinkGoto(DBloodActor *actor);
-static void cerberusThinkChase(DBloodActor *actor);
+static void cerberusThinkSearch(DBloodActor* actor);
+static void cerberusThinkTarget(DBloodActor* actor);
+static void cerberusThinkGoto(DBloodActor* actor);
+static void cerberusThinkChase(DBloodActor* actor);
 
 
 AISTATE cerberusIdle = { kAiStateIdle, 0, -1, 0, NULL, NULL, cerberusThinkTarget, NULL };
@@ -58,439 +57,403 @@ AISTATE cerberus1398AC = { kAiStateOther, 7, -1, 120, NULL, aiMoveTurn, NULL, &c
 
 void cerberusBiteSeqCallback(int, DBloodActor* actor)
 {
-    XSPRITE* pXSprite = &actor->x();
-    spritetype *pSprite = &actor->s();
-    int dx = CosScale16(pSprite->ang);
-    int dy = SinScale16(pSprite->ang);
-    ///assert(pSprite->type >= kDudeBase && pSprite->type < kDudeMax);
-    if (!(pSprite->type >= kDudeBase && pSprite->type < kDudeMax)) {
-        Printf(PRINT_HIGH, "pSprite->type >= kDudeBase && pSprite->type < kDudeMax");
-        return;
-    }
-    ///assert(pXSprite->target >= 0 && pXSprite->target < kMaxSprites);
-    if (!(pXSprite->target >= 0 && pXSprite->target < kMaxSprites)) {
-        Printf(PRINT_HIGH, "pXSprite->target >= 0 && pXSprite->target < kMaxSprites");
-        return;
-    }
-    spritetype *pTarget = &sprite[pXSprite->target];
-    int dz = pTarget->z-pSprite->z;
-    actFireVector(pSprite, 350, -100, dx, dy, dz, VECTOR_TYPE_14);
-    actFireVector(pSprite, -350, 0, dx, dy, dz, VECTOR_TYPE_14);
-    actFireVector(pSprite, 0, 0, dx, dy, dz, VECTOR_TYPE_14);
+	int dx = bcos(actor->spr.ang);
+	int dy = bsin(actor->spr.ang);
+	if (!(actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax)) {
+		Printf(PRINT_HIGH, "actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax");
+		return;
+	}
+	if (!actor->ValidateTarget(__FUNCTION__)) return;
+	auto target = actor->GetTarget();
+	int dz = target->spr.pos.Z - actor->spr.pos.Z;
+	actFireVector(actor, 350, -100, dx, dy, dz, kVectorCerberusHack);
+	actFireVector(actor, -350, 0, dx, dy, dz, kVectorCerberusHack);
+	actFireVector(actor, 0, 0, dx, dy, dz, kVectorCerberusHack);
 }
 
 void cerberusBurnSeqCallback(int, DBloodActor* actor)
 {
-    XSPRITE* pXSprite = &actor->x();
-    spritetype* pSprite = &actor->s();
-    DUDEINFO *pDudeInfo = getDudeInfo(pSprite->type);
-    int height = pDudeInfo->eyeHeight*pSprite->yrepeat;
-    ///assert(pXSprite->target >= 0 && pXSprite->target < kMaxSprites);
-    if (!(pXSprite->target >= 0 && pXSprite->target < kMaxSprites)) {
-        Printf(PRINT_HIGH, "pXSprite->target >= 0 && pXSprite->target < kMaxSprites");
-        return;
-    }
-    int x = pSprite->x;
-    int y = pSprite->y;
-    int z = height; // ???
-    TARGETTRACK tt1 = { 0x10000, 0x10000, 0x100, 0x55, 0x1aaaaa };
-    Aim aim;
-    aim.dx = CosScale16(pSprite->ang);
-    aim.dy = SinScale16(pSprite->ang);
-    aim.dz = actor->dudeSlope;
-    int nClosest = 0x7fffffff;
-    int nSprite2;
-    StatIterator it(kStatDude);
-    while ((nSprite2 = it.NextIndex()) >= 0)
-    {
-        spritetype *pSprite2 = &sprite[nSprite2];
-        if (pSprite == pSprite2 || !(pSprite2->flags&8))
-            continue;
-        int x2 = pSprite2->x;
-        int y2 = pSprite2->y;
-        int z2 = pSprite2->z;
-        int nDist = approxDist(x2-x, y2-y);
-        if (nDist == 0 || nDist > 0x2800)
-            continue;
-        if (tt1.at10)
-        {
-            int t = DivScale(nDist, tt1.at10, 12);
-            x2 += (xvel[nSprite2]*t)>>12;
-            y2 += (yvel[nSprite2]*t)>>12;
-            z2 += (zvel[nSprite2]*t)>>8;
-        }
-        int tx = x+MulScale(Cos(pSprite->ang), nDist, 30);
-        int ty = y+MulScale(Sin(pSprite->ang), nDist, 30);
-        int tz = z+MulScale(actor->dudeSlope, nDist, 10);
-        int tsr = MulScale(9460, nDist, 10);
-        int top, bottom;
-        GetSpriteExtents(pSprite2, &top, &bottom);
-        if (tz-tsr > bottom || tz+tsr < top)
-            continue;
-        int dx = (tx-x2)>>4;
-        int dy = (ty-y2)>>4;
-        int dz = (tz-z2)>>8;
-        int nDist2 = ksqrt(dx*dx+dy*dy+dz*dz);
-        if (nDist2 < nClosest)
-        {
-            int nAngle = getangle(x2-x, y2-y);
-            int nDeltaAngle = ((nAngle-pSprite->ang+1024)&2047)-1024;
-            if (abs(nDeltaAngle) <= tt1.at8)
-            {
-                int tz = pSprite2->z-pSprite->z;
-                if (cansee(x, y, z, pSprite->sectnum, x2, y2, z2, pSprite2->sectnum))
-                {
-                    nClosest = nDist2;
-                    aim.dx = CosScale16(nAngle);
-                    aim.dy = SinScale16(nAngle);
-                    aim.dz = DivScale(tz, nDist, 10);
-                }
-                else
-                    aim.dz = tz;
-            }
-        }
-    }
-    switch (pSprite->type) {
-        case kDudeCerberusTwoHead:
-            actFireMissile(pSprite, -350, 0, aim.dx, aim.dy, aim.dz, kMissileFireballCerberus);
-            actFireMissile(pSprite, 350, -100, aim.dx, aim.dy, aim.dz, kMissileFireballCerberus);
-            break;
-        case kDudeCerberusOneHead:
-            actFireMissile(pSprite, 350, -100, aim.dx, aim.dy, aim.dz, kMissileFireballCerberus);
-            break;
-    }
+	DUDEINFO* pDudeInfo = getDudeInfo(actor->spr.type);
+	int height = pDudeInfo->eyeHeight * actor->spr.yrepeat;
+	if (!actor->ValidateTarget(__FUNCTION__)) return;
+
+	int x = actor->spr.pos.X;
+	int y = actor->spr.pos.Y;
+	int z = height; // ???
+	TARGETTRACK tt1 = { 0x10000, 0x10000, 0x100, 0x55, 0x1aaaaa };
+	Aim aim;
+	aim.dx = bcos(actor->spr.ang);
+	aim.dy = bsin(actor->spr.ang);
+	aim.dz = actor->dudeSlope;
+	int nClosest = 0x7fffffff;
+	BloodStatIterator it(kStatDude);
+	while (auto actor2 = it.Next())
+	{
+		if (actor == actor2 || !(actor2->spr.flags & 8))
+			continue;
+		int x2 = actor2->spr.pos.X;
+		int y2 = actor2->spr.pos.Y;
+		int z2 = actor2->spr.pos.Z;
+		int nDist = approxDist(x2 - x, y2 - y);
+		if (nDist == 0 || nDist > 0x2800)
+			continue;
+		if (tt1.at10)
+		{
+			int t = DivScale(nDist, tt1.at10, 12);
+			x2 += (actor2->vel.X * t) >> 12;
+			y2 += (actor2->vel.Y * t) >> 12;
+			z2 += (actor2->vel.Z * t) >> 8;
+		}
+		int tx = x + MulScale(Cos(actor->spr.ang), nDist, 30);
+		int ty = y + MulScale(Sin(actor->spr.ang), nDist, 30);
+		int tz = z + MulScale(actor->dudeSlope, nDist, 10);
+		int tsr = MulScale(9460, nDist, 10);
+		int top, bottom;
+		GetActorExtents(actor2, &top, &bottom);
+		if (tz - tsr > bottom || tz + tsr < top)
+			continue;
+		int dx = (tx - x2) >> 4;
+		int dy = (ty - y2) >> 4;
+		int dz = (tz - z2) >> 8;
+		int nDist2 = ksqrt(dx * dx + dy * dy + dz * dz);
+		if (nDist2 < nClosest)
+		{
+			int nAngle = getangle(x2 - x, y2 - y);
+			int nDeltaAngle = ((nAngle - actor->spr.ang + 1024) & 2047) - 1024;
+			if (abs(nDeltaAngle) <= tt1.at8)
+			{
+				int tz1 = actor2->spr.pos.Z - actor->spr.pos.Z;
+				if (cansee(x, y, z, actor->sector(), x2, y2, z2, actor2->sector()))
+				{
+					nClosest = nDist2;
+					aim.dx = bcos(nAngle);
+					aim.dy = bsin(nAngle);
+					aim.dz = DivScale(tz1, nDist, 10);
+				}
+				else
+					aim.dz = tz1;
+			}
+		}
+	}
+	switch (actor->spr.type) {
+	case kDudeCerberusTwoHead:
+		actFireMissile(actor, -350, 0, aim.dx, aim.dy, aim.dz, kMissileFireballCerberus);
+		actFireMissile(actor, 350, -100, aim.dx, aim.dy, aim.dz, kMissileFireballCerberus);
+		break;
+	case kDudeCerberusOneHead:
+		actFireMissile(actor, 350, -100, aim.dx, aim.dy, aim.dz, kMissileFireballCerberus);
+		break;
+	}
 }
 
 void cerberusBurnSeqCallback2(int, DBloodActor* actor)
 {
-    XSPRITE* pXSprite = &actor->x();
-    spritetype* pSprite = &actor->s();
-    ///assert(pXSprite->target >= 0 && pXSprite->target < kMaxSprites);
-    if (!(pXSprite->target >= 0 && pXSprite->target < kMaxSprites)) {
-        Printf(PRINT_HIGH, "pXSprite->target >= 0 && pXSprite->target < kMaxSprites");
-        return;
-    }
-    DUDEINFO *pDudeInfo = getDudeInfo(pSprite->type);
-    int height = pDudeInfo->eyeHeight*pSprite->yrepeat;
-    
-    int x = pSprite->x;
-    int y = pSprite->y;
-    int z = height; // ???
-    TARGETTRACK tt1 = { 0x10000, 0x10000, 0x100, 0x55, 0x1aaaaa };
-    Aim aim;
-    int ax, ay, az;
-    aim.dx = ax = CosScale16(pSprite->ang);
-    aim.dy = ay = SinScale16(pSprite->ang);
-    aim.dz = actor->dudeSlope;
-    az = 0;
-    int nClosest = 0x7fffffff;
-    int nSprite2;
-    StatIterator it(kStatDude);
-    while ((nSprite2 = it.NextIndex()) >= 0)
-    {
-        spritetype *pSprite2 = &sprite[nSprite2];
-        if (pSprite == pSprite2 || !(pSprite2->flags&8))
-            continue;
-        int x2 = pSprite2->x;
-        int y2 = pSprite2->y;
-        int z2 = pSprite2->z;
-        int nDist = approxDist(x2-x, y2-y);
-        if (nDist == 0 || nDist > 0x2800)
-            continue;
-        if (tt1.at10)
-        {
-            int t = DivScale(nDist, tt1.at10, 12);
-            x2 += (xvel[nSprite2]*t)>>12;
-            y2 += (yvel[nSprite2]*t)>>12;
-            z2 += (zvel[nSprite2]*t)>>8;
-        }
-        int tx = x+MulScale(Cos(pSprite->ang), nDist, 30);
-        int ty = y+MulScale(Sin(pSprite->ang), nDist, 30);
-        int tz = z+MulScale(actor->dudeSlope, nDist, 10);
-        int tsr = MulScale(9460, nDist, 10);
-        int top, bottom;
-        GetSpriteExtents(pSprite2, &top, &bottom);
-        if (tz-tsr > bottom || tz+tsr < top)
-            continue;
-        int dx = (tx-x2)>>4;
-        int dy = (ty-y2)>>4;
-        int dz = (tz-z2)>>8;
-        int nDist2 = ksqrt(dx*dx+dy*dy+dz*dz);
-        if (nDist2 < nClosest)
-        {
-            int nAngle = getangle(x2-x, y2-y);
-            int nDeltaAngle = ((nAngle-pSprite->ang+1024)&2047)-1024;
-            if (abs(nDeltaAngle) <= tt1.at8)
-            {
-                DUDEINFO *pDudeInfo2 = getDudeInfo(pSprite2->type);
-                int height = (pDudeInfo2->aimHeight*pSprite2->yrepeat)<<2;
-                int tz = (z2-height)-z;
-                if (cansee(x, y, z, pSprite->sectnum, x2, y2, z2, pSprite2->sectnum))
-                {
-                    nClosest = nDist2;
-                    aim.dx = CosScale16(nAngle);
-                    aim.dy = SinScale16(nAngle);
-                    aim.dz = DivScale(tz, nDist, 10);
-                }
-                else
-                    aim.dz = tz;
-            }
-        }
-    }
-    switch (pSprite->type) {
-        case kDudeCerberusTwoHead:
-            actFireMissile(pSprite, 350, -100, aim.dx, aim.dy, -aim.dz, kMissileFlameHound);
-            actFireMissile(pSprite, -350, 0, ax, ay, az, kMissileFlameHound);
-            break;
-        case kDudeCerberusOneHead:
-            actFireMissile(pSprite, 350, -100, aim.dx, aim.dy, -aim.dz, kMissileFlameHound);
-            break;
-    }
+	if (!actor->ValidateTarget(__FUNCTION__)) return;
+	DUDEINFO* pDudeInfo = getDudeInfo(actor->spr.type);
+	int height = pDudeInfo->eyeHeight * actor->spr.yrepeat;
+
+	int x = actor->spr.pos.X;
+	int y = actor->spr.pos.Y;
+	int z = height; // ???
+	TARGETTRACK tt1 = { 0x10000, 0x10000, 0x100, 0x55, 0x1aaaaa };
+	Aim aim;
+	int ax, ay, az;
+	aim.dx = ax = bcos(actor->spr.ang);
+	aim.dy = ay = bsin(actor->spr.ang);
+	aim.dz = actor->dudeSlope;
+	az = 0;
+	int nClosest = 0x7fffffff;
+	BloodStatIterator it(kStatDude);
+	while (auto actor2 = it.Next())
+	{
+		if (actor == actor2 || !(actor2->spr.flags & 8))
+			continue;
+		int x2 = actor2->spr.pos.X;
+		int y2 = actor2->spr.pos.Y;
+		int z2 = actor2->spr.pos.Z;
+		int nDist = approxDist(x2 - x, y2 - y);
+		if (nDist == 0 || nDist > 0x2800)
+			continue;
+		if (tt1.at10)
+		{
+			int t = DivScale(nDist, tt1.at10, 12);
+			x2 += (actor->vel.X * t) >> 12;
+			y2 += (actor->vel.Y * t) >> 12;
+			z2 += (actor->vel.Z * t) >> 8;
+		}
+		int tx = x + MulScale(Cos(actor->spr.ang), nDist, 30);
+		int ty = y + MulScale(Sin(actor->spr.ang), nDist, 30);
+		int tz = z + MulScale(actor->dudeSlope, nDist, 10);
+		int tsr = MulScale(9460, nDist, 10);
+		int top, bottom;
+		GetActorExtents(actor2, &top, &bottom);
+		if (tz - tsr > bottom || tz + tsr < top)
+			continue;
+		int dx = (tx - x2) >> 4;
+		int dy = (ty - y2) >> 4;
+		int dz = (tz - z2) >> 8;
+		int nDist2 = ksqrt(dx * dx + dy * dy + dz * dz);
+		if (nDist2 < nClosest)
+		{
+			int nAngle = getangle(x2 - x, y2 - y);
+			int nDeltaAngle = ((nAngle - actor->spr.ang + 1024) & 2047) - 1024;
+			if (abs(nDeltaAngle) <= tt1.at8)
+			{
+				DUDEINFO* pDudeInfo2 = getDudeInfo(actor2->spr.type);
+				int height1 = (pDudeInfo2->aimHeight * actor2->spr.yrepeat) << 2;
+				int tz1 = (z2 - height1) - z;
+				if (cansee(x, y, z, actor->sector(), x2, y2, z2, actor2->sector()))
+				{
+					nClosest = nDist2;
+					aim.dx = bcos(nAngle);
+					aim.dy = bsin(nAngle);
+					aim.dz = DivScale(tz1, nDist, 10);
+				}
+				else
+					aim.dz = tz1;
+			}
+		}
+	}
+	switch (actor->spr.type) {
+	case kDudeCerberusTwoHead:
+		actFireMissile(actor, 350, -100, aim.dx, aim.dy, -aim.dz, kMissileFlameHound);
+		actFireMissile(actor, -350, 0, ax, ay, az, kMissileFlameHound);
+		break;
+	case kDudeCerberusOneHead:
+		actFireMissile(actor, 350, -100, aim.dx, aim.dy, -aim.dz, kMissileFlameHound);
+		break;
+	}
 }
 
 static void cerberusThinkSearch(DBloodActor* actor)
 {
-    auto pXSprite = &actor->x();
-    auto pSprite = &actor->s();
-    aiChooseDirection(pSprite, pXSprite, pXSprite->goalAng);
-    aiThinkTarget(actor);
+	aiChooseDirection(actor, actor->xspr.goalAng);
+	aiThinkTarget(actor);
 }
 
 static void cerberusThinkTarget(DBloodActor* actor)
 {
-    auto pXSprite = &actor->x();
-    auto pSprite = &actor->s();
-    ///assert(pSprite->type >= kDudeBase && pSprite->type < kDudeMax);
-    if (!(pSprite->type >= kDudeBase && pSprite->type < kDudeMax)) {
-        Printf(PRINT_HIGH, "pSprite->type >= kDudeBase && pSprite->type < kDudeMax");
-        return;
-    }
-    DUDEINFO *pDudeInfo = getDudeInfo(pSprite->type);
-    DUDEEXTRA_at6_u1 *pDudeExtraE = &gDudeExtra[pSprite->extra].at6.u1;
-    if (pDudeExtraE->xval3 && pDudeExtraE->xval2 < 10)
-        pDudeExtraE->xval2++;
-    else if (pDudeExtraE->xval2 >= 10 && pDudeExtraE->xval3)
-    {
-        pXSprite->goalAng += 256;
-        POINT3D *pTarget = &baseSprite[pSprite->index];
-        aiSetTarget(pXSprite, pTarget->x, pTarget->y, pTarget->z);
-        if (pSprite->type == kDudeCerberusTwoHead)
-            aiNewState(actor, &cerberus139890);
-        else
-            aiNewState(actor, &cerberus1398AC);
-        return;
-    }
-    if (Chance(pDudeInfo->alertChance))
-    {
-        for (int p = connecthead; p >= 0; p = connectpoint2[p])
-        {
-            PLAYER *pPlayer = &gPlayer[p];
-            if (pPlayer->pXSprite->health == 0 || powerupCheck(pPlayer, kPwUpShadowCloak) > 0)
-                continue;
-            int x = pPlayer->pSprite->x;
-            int y = pPlayer->pSprite->y;
-            int z = pPlayer->pSprite->z;
-            int nSector = pPlayer->pSprite->sectnum;
-            int dx = x-pSprite->x;
-            int dy = y-pSprite->y;
-            int nDist = approxDist(dx, dy);
-            if (nDist > pDudeInfo->seeDist && nDist > pDudeInfo->hearDist)
-                continue;
-            if (!cansee(x, y, z, nSector, pSprite->x, pSprite->y, pSprite->z-((pDudeInfo->eyeHeight*pSprite->yrepeat)<<2), pSprite->sectnum))
-                continue;
-            int nDeltaAngle = ((getangle(dx,dy)+1024-pSprite->ang)&2047)-1024;
-            if (nDist < pDudeInfo->seeDist && abs(nDeltaAngle) <= pDudeInfo->periphery)
-            {
-                pDudeExtraE->xval1 = 0;
-                aiSetTarget(pXSprite, pPlayer->nSprite);
-                aiActivateDude(&bloodActors[pXSprite->reference]);
-            }
-            else if (nDist < pDudeInfo->hearDist)
-            {
-                pDudeExtraE->xval1 = 0;
-                aiSetTarget(pXSprite, x, y, z);
-                aiActivateDude(&bloodActors[pXSprite->reference]);
-            }
-            else
-                continue;
-            break;
-        }
-    }
+	if (!(actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax)) {
+		Printf(PRINT_HIGH, "actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax");
+		return;
+	}
+	DUDEINFO* pDudeInfo = getDudeInfo(actor->spr.type);
+	DUDEEXTRA_STATS* pDudeExtraE = &actor->dudeExtra.stats;
+	if (pDudeExtraE->active && pDudeExtraE->thinkTime < 10)
+		pDudeExtraE->thinkTime++;
+	else if (pDudeExtraE->thinkTime >= 10 && pDudeExtraE->active)
+	{
+		actor->xspr.goalAng += 256;
+		POINT3D* pTarget = &actor->basePoint;
+		aiSetTarget(actor, pTarget->X, pTarget->Y, pTarget->Z);
+		if (actor->spr.type == kDudeCerberusTwoHead)
+			aiNewState(actor, &cerberus139890);
+		else
+			aiNewState(actor, &cerberus1398AC);
+		return;
+	}
+	if (Chance(pDudeInfo->alertChance))
+	{
+		for (int p = connecthead; p >= 0; p = connectpoint2[p])
+		{
+			PLAYER* pPlayer = &gPlayer[p];
+			if (pPlayer->actor->xspr.health == 0 || powerupCheck(pPlayer, kPwUpShadowCloak) > 0)
+				continue;
+			int x = pPlayer->actor->spr.pos.X;
+			int y = pPlayer->actor->spr.pos.Y;
+			int z = pPlayer->actor->spr.pos.Z;
+			auto pSector = pPlayer->actor->sector();
+			int dx = x - actor->spr.pos.X;
+			int dy = y - actor->spr.pos.Y;
+			int nDist = approxDist(dx, dy);
+			if (nDist > pDudeInfo->seeDist && nDist > pDudeInfo->hearDist)
+				continue;
+			if (!cansee(x, y, z, pSector, actor->spr.pos.X, actor->spr.pos.Y, actor->spr.pos.Z - ((pDudeInfo->eyeHeight * actor->spr.yrepeat) << 2), actor->sector()))
+				continue;
+			int nDeltaAngle = ((getangle(dx, dy) + 1024 - actor->spr.ang) & 2047) - 1024;
+			if (nDist < pDudeInfo->seeDist && abs(nDeltaAngle) <= pDudeInfo->periphery)
+			{
+				pDudeExtraE->thinkTime = 0;
+				aiSetTarget(actor, pPlayer->actor);
+				aiActivateDude(actor);
+			}
+			else if (nDist < pDudeInfo->hearDist)
+			{
+				pDudeExtraE->thinkTime = 0;
+				aiSetTarget(actor, x, y, z);
+				aiActivateDude(actor);
+			}
+			else
+				continue;
+			break;
+		}
+	}
 }
 
 static void cerberusThinkGoto(DBloodActor* actor)
 {
-    auto pXSprite = &actor->x();
-    auto pSprite = &actor->s();
-    ///assert(pSprite->type >= kDudeBase && pSprite->type < kDudeMax);
-    if (!(pSprite->type >= kDudeBase && pSprite->type < kDudeMax)) {
-        Printf(PRINT_HIGH, "pSprite->type >= kDudeBase && pSprite->type < kDudeMax");
-        return;
-    }
-    DUDEINFO *pDudeInfo = getDudeInfo(pSprite->type);
-    int dx = pXSprite->targetX-pSprite->x;
-    int dy = pXSprite->targetY-pSprite->y;
-    int nAngle = getangle(dx, dy);
-    int nDist = approxDist(dx, dy);
-    aiChooseDirection(pSprite, pXSprite, nAngle);
-    if (nDist < 512 && abs(pSprite->ang - nAngle) < pDudeInfo->periphery)
-    {
-        switch (pSprite->type) {
-            case kDudeCerberusTwoHead:
-                aiNewState(actor, &cerberusSearch);
-                break;
-            case kDudeCerberusOneHead:
-                aiNewState(actor, &cerberus2Search);
-                break;
-        }
-    }
-    aiThinkTarget(actor);
+	if (!(actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax)) {
+		Printf(PRINT_HIGH, "actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax");
+		return;
+	}
+	DUDEINFO* pDudeInfo = getDudeInfo(actor->spr.type);
+	int dx = actor->xspr.TargetPos.X - actor->spr.pos.X;
+	int dy = actor->xspr.TargetPos.Y - actor->spr.pos.Y;
+	int nAngle = getangle(dx, dy);
+	int nDist = approxDist(dx, dy);
+	aiChooseDirection(actor, nAngle);
+	if (nDist < 512 && abs(actor->spr.ang - nAngle) < pDudeInfo->periphery)
+	{
+		switch (actor->spr.type) {
+		case kDudeCerberusTwoHead:
+			aiNewState(actor, &cerberusSearch);
+			break;
+		case kDudeCerberusOneHead:
+			aiNewState(actor, &cerberus2Search);
+			break;
+		}
+	}
+	aiThinkTarget(actor);
 }
 
 static void cerberusThinkChase(DBloodActor* actor)
 {
-    auto pXSprite = &actor->x();
-    auto pSprite = &actor->s();
-    if (pXSprite->target == -1) {
-        switch (pSprite->type) {
-            case kDudeCerberusTwoHead:
-                aiNewState(actor, &cerberusGoto);
-                break;
-            case kDudeCerberusOneHead:
-                aiNewState(actor, &cerberus2Goto);
-                break;
-        }
-        return;
-    }
-    
-    ///assert(pSprite->type >= kDudeBase && pSprite->type < kDudeMax);
-    if (!(pSprite->type >= kDudeBase && pSprite->type < kDudeMax)) {
-        Printf(PRINT_HIGH, "pSprite->type >= kDudeBase && pSprite->type < kDudeMax");
-        return;
-    }
+	if (actor->GetTarget() == nullptr) {
+		switch (actor->spr.type) {
+		case kDudeCerberusTwoHead:
+			aiNewState(actor, &cerberusGoto);
+			break;
+		case kDudeCerberusOneHead:
+			aiNewState(actor, &cerberus2Goto);
+			break;
+		}
+		return;
+	}
 
-    DUDEINFO *pDudeInfo = getDudeInfo(pSprite->type);
+	///assert(actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax);
+	if (!(actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax)) {
+		Printf(PRINT_HIGH, "actor->spr.type >= kDudeBase && actor->spr.type < kDudeMax");
+		return;
+	}
 
-    ///assert(pXSprite->target >= 0 && pXSprite->target < kMaxSprites);
-    if (!(pXSprite->target >= 0 && pXSprite->target < kMaxSprites)) {
-        Printf(PRINT_HIGH, "pXSprite->target >= 0 && pXSprite->target < kMaxSprites");
-        return;
-    }
-    spritetype *pTarget = &sprite[pXSprite->target];
-    XSPRITE *pXTarget = &xsprite[pTarget->extra];
-    int dx = pTarget->x-pSprite->x;
-    int dy = pTarget->y-pSprite->y;
-    aiChooseDirection(pSprite, pXSprite, getangle(dx, dy));
-    
-    if (pXTarget->health == 0) {
-        switch (pSprite->type) {
-            case kDudeCerberusTwoHead:
-                aiNewState(actor, &cerberusSearch);
-                break;
-            case kDudeCerberusOneHead:
-                aiNewState(actor, &cerberus2Search);
-                break;
-        }
-        return;
-    }
+	DUDEINFO* pDudeInfo = getDudeInfo(actor->spr.type);
 
-    if (IsPlayerSprite(pTarget) && powerupCheck(&gPlayer[pTarget->type-kDudePlayer1], kPwUpShadowCloak) > 0) {
-        switch (pSprite->type) {
-            case kDudeCerberusTwoHead:
-                aiNewState(actor, &cerberusSearch);
-                break;
-            case kDudeCerberusOneHead:
-                aiNewState(actor, &cerberus2Search);
-                break;
-        }
-        return;
-    }
+	if (!actor->ValidateTarget(__FUNCTION__)) return;
+	auto target = actor->GetTarget();
 
-    int nDist = approxDist(dx, dy);
-    if (nDist <= pDudeInfo->seeDist)
-    {
-        int nDeltaAngle = ((getangle(dx,dy)+1024-pSprite->ang)&2047)-1024;
-        int height = (pDudeInfo->eyeHeight*pSprite->yrepeat)<<2;
-        if (cansee(pTarget->x, pTarget->y, pTarget->z, pTarget->sectnum, pSprite->x, pSprite->y, pSprite->z - height, pSprite->sectnum))
-        {
-            if (nDist < pDudeInfo->seeDist && abs(nDeltaAngle) <= pDudeInfo->periphery) {
-                aiSetTarget(pXSprite, pXSprite->target);
-                
-                if (nDist < 0x1b00 && nDist > 0xd00 && abs(nDeltaAngle) < 85) {
-                    switch (pSprite->type) {
-                        case kDudeCerberusTwoHead:
-                            aiNewState(actor, &cerberusBurn);
-                            break;
-                        case kDudeCerberusOneHead:
-                            aiNewState(actor, &cerberus2Burn);
-                            break;
-                    }
-                }
+	int dx = target->spr.pos.X - actor->spr.pos.X;
+	int dy = target->spr.pos.Y - actor->spr.pos.Y;
+	aiChooseDirection(actor, getangle(dx, dy));
 
-                else if (nDist < 0xb00 && nDist > 0x500 && abs(nDeltaAngle) < 85) {
-                    switch (pSprite->type) {
-                        case kDudeCerberusTwoHead:
-                            aiNewState(actor, &cerberus3Burn);
-                            break;
-                        case kDudeCerberusOneHead:
-                            aiNewState(actor, &cerberus4Burn);
-                            break;
-                    }
-                }
-                else if (nDist < 0x200 && abs(nDeltaAngle) < 85)
-                {
-                    int hit = HitScan(pSprite, pSprite->z, dx, dy, 0, CLIPMASK1, 0);
-                    switch (pSprite->type) {
-                    case kDudeCerberusTwoHead:
-                        switch (hit) {
-                            case -1:
-                                aiNewState(actor, &cerberusBite);
-                                break;
-                            case 3:
-                                if (pSprite->type != sprite[gHitInfo.hitsprite].type && sprite[gHitInfo.hitsprite].type != kDudeHellHound)
-                                    aiNewState(actor, &cerberusBite);
-                                break;
-                            case 0:
-                            case 4:
-                                break;
-                            default:
-                                aiNewState(actor, &cerberusBite);
-                                break;
-                        }
-                        break;
-                    case kDudeCerberusOneHead:
-                        switch (hit) {
-                            case -1:
-                                aiNewState(actor, &cerberus2Bite);
-                                break;
-                            case 3:
-                                if (pSprite->type != sprite[gHitInfo.hitsprite].type && sprite[gHitInfo.hitsprite].type != kDudeHellHound)
-                                    aiNewState(actor, &cerberus2Bite);
-                                break;
-                            case 0:
-                            case 4:
-                                break;
-                            default:
-                                aiNewState(actor, &cerberus2Bite);
-                                break;
-                        }
-                        break;
-                    }
-                }
-                return;
-            }
-        }
-    }
+	if (target->xspr.health == 0) {
+		switch (actor->spr.type) {
+		case kDudeCerberusTwoHead:
+			aiNewState(actor, &cerberusSearch);
+			break;
+		case kDudeCerberusOneHead:
+			aiNewState(actor, &cerberus2Search);
+			break;
+		}
+		return;
+	}
 
-    switch (pSprite->type) {
-        case kDudeCerberusTwoHead:
-            aiNewState(actor, &cerberusGoto);
-            break;
-        case kDudeCerberusOneHead:
-            aiNewState(actor, &cerberus2Goto);
-            break;
-    }
-    pXSprite->target = -1;
+	if (target->IsPlayerActor() && powerupCheck(&gPlayer[target->spr.type - kDudePlayer1], kPwUpShadowCloak) > 0) {
+		switch (actor->spr.type) {
+		case kDudeCerberusTwoHead:
+			aiNewState(actor, &cerberusSearch);
+			break;
+		case kDudeCerberusOneHead:
+			aiNewState(actor, &cerberus2Search);
+			break;
+		}
+		return;
+	}
+
+	int nDist = approxDist(dx, dy);
+	if (nDist <= pDudeInfo->seeDist)
+	{
+		int nDeltaAngle = ((getangle(dx, dy) + 1024 - actor->spr.ang) & 2047) - 1024;
+		int height = (pDudeInfo->eyeHeight * actor->spr.yrepeat) << 2;
+		if (cansee(target->spr.pos.X, target->spr.pos.Y, target->spr.pos.Z, target->sector(), actor->spr.pos.X, actor->spr.pos.Y, actor->spr.pos.Z - height, actor->sector()))
+		{
+			if (nDist < pDudeInfo->seeDist && abs(nDeltaAngle) <= pDudeInfo->periphery) {
+				aiSetTarget(actor, actor->GetTarget());
+
+				if (nDist < 0x1b00 && nDist > 0xd00 && abs(nDeltaAngle) < 85) {
+					switch (actor->spr.type) {
+					case kDudeCerberusTwoHead:
+						aiNewState(actor, &cerberusBurn);
+						break;
+					case kDudeCerberusOneHead:
+						aiNewState(actor, &cerberus2Burn);
+						break;
+					}
+				}
+
+				else if (nDist < 0xb00 && nDist > 0x500 && abs(nDeltaAngle) < 85) {
+					switch (actor->spr.type) {
+					case kDudeCerberusTwoHead:
+						aiNewState(actor, &cerberus3Burn);
+						break;
+					case kDudeCerberusOneHead:
+						aiNewState(actor, &cerberus4Burn);
+						break;
+					}
+				}
+				else if (nDist < 0x200 && abs(nDeltaAngle) < 85)
+				{
+					int hit = HitScan(actor, actor->spr.pos.Z, dx, dy, 0, CLIPMASK1, 0);
+					switch (actor->spr.type) {
+					case kDudeCerberusTwoHead:
+						switch (hit) {
+						case -1:
+							aiNewState(actor, &cerberusBite);
+							break;
+						case 3:
+							if (actor->spr.type != gHitInfo.actor()->spr.type && gHitInfo.actor()->spr.type != kDudeHellHound)
+								aiNewState(actor, &cerberusBite);
+							break;
+						case 0:
+						case 4:
+							break;
+						default:
+							aiNewState(actor, &cerberusBite);
+							break;
+						}
+						break;
+					case kDudeCerberusOneHead:
+						switch (hit) {
+						case -1:
+							aiNewState(actor, &cerberus2Bite);
+							break;
+						case 3:
+							if (actor->spr.type != gHitInfo.actor()->spr.type && gHitInfo.actor()->spr.type != kDudeHellHound)
+								aiNewState(actor, &cerberus2Bite);
+							break;
+						case 0:
+						case 4:
+							break;
+						default:
+							aiNewState(actor, &cerberus2Bite);
+							break;
+						}
+						break;
+					}
+				}
+				return;
+			}
+		}
+	}
+
+	switch (actor->spr.type) {
+	case kDudeCerberusTwoHead:
+		aiNewState(actor, &cerberusGoto);
+		break;
+	case kDudeCerberusOneHead:
+		aiNewState(actor, &cerberus2Goto);
+		break;
+	}
+	actor->SetTarget(nullptr);
 }
 
 END_BLD_NS

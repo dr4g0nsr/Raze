@@ -40,16 +40,13 @@ Modifications for JonoF's port by Jonathon Fowler (jf@jonof.id.au)
 #include "st_start.h"
 #include "i_interface.h"
 #include "prediction.h"
-#include "sbar.h"
 #include "gamestate.h"
 #include "dukeactor.h"
 #include "interpolate.h"
+#include "razefont.h"
 
 BEGIN_DUKE_NS
 
-
-FFont* IndexFont;
-FFont* DigiFont;
 
 //---------------------------------------------------------------------------
 //
@@ -63,8 +60,8 @@ FString GameInterface::GetCoordString()
 	FString out;
 
 	out.Format("pos= %d, %d, %d - angle = %2.3f - sector = %d, lotag = %d, hitag = %d",
-		ps[snum].posx, ps[snum].posy, ps[snum].posz, ps[snum].angle.ang.asdeg(), ps[snum].cursectnum,
-		sector[ps[snum].cursectnum].lotag, sector[ps[snum].cursectnum].hitag);
+		ps[snum].pos.X, ps[snum].pos.Y, ps[snum].pos.Z, ps[snum].angle.ang.asdeg(), sectnum(ps[snum].cursector),
+		ps[snum].cursector->lotag, ps[snum].cursector->hitag);
 
 	return out;
 }
@@ -180,7 +177,7 @@ void V_AddBlend (float r, float g, float b, float a, float v_blend[4])
 	b = clamp(b/255.f, 0.f, 0.25f);
 	a = clamp(a/255.f, 0.f, 0.25f);
 
-	
+
 	float a2, a3;
 
 	if (a <= 0)
@@ -193,7 +190,7 @@ void V_AddBlend (float r, float g, float b, float a, float v_blend[4])
 	v_blend[2] = v_blend[2]*a3 + b*(1-a3);
 	v_blend[3] = a2;
 }
- 
+
 //---------------------------------------------------------------------------
 //
 //
@@ -210,6 +207,26 @@ void V_AddBlend (float r, float g, float b, float a, float v_blend[4])
 	videoSetPalette(palid);
 }
 
+ //---------------------------------------------------------------------------
+ //
+ // draws the weapon sprite and other 2D content that's part of the scene.
+ //
+ //---------------------------------------------------------------------------
+
+ void drawweapon(double smoothratio)
+ {
+	 auto pp = &ps[screenpeek];
+	 if (!isRR() && pp->newOwner != nullptr)
+		 cameratext(pp->newOwner);
+	 else
+	 {
+		 fi.displayweapon(screenpeek, smoothratio);
+		 if (pp->over_shoulder_on == 0)
+			 fi.displaymasks(screenpeek, pp->GetActor()->spr.pal == 1 || !pp->insector() ? 1 : pp->cursector->floorpal, smoothratio);
+	 }
+
+ }
+
 //---------------------------------------------------------------------------
 //
 // draws everything not part of the 3D scene and its weapon sprite.
@@ -218,8 +235,6 @@ void V_AddBlend (float r, float g, float b, float a, float v_blend[4])
 
 void drawoverlays(double smoothratio)
 {
-	unsigned char fader = 0, fadeg = 0, fadeb = 0, fadef = 0, tintr = 0, tintg = 0, tintb = 0, tintf = 0, dotint = 0;
-
 	struct player_struct* pp;
 	int cposx, cposy, cang;
 
@@ -232,7 +247,7 @@ void drawoverlays(double smoothratio)
 	// loogies courtesy of being snotted on
 	if (pp->loogcnt > 0 && !isRR())
 	{
-		V_AddBlend(0, 63, 0, (pp->loogcnt >> 1), blend);
+		V_AddBlend(0, 63, 0, float(pp->loogcnt >> 1), blend);
 	}
 	if (blend[3])
 	{
@@ -243,24 +258,10 @@ void drawoverlays(double smoothratio)
 	else
 		videoclearFade();
 
-	MarkSectorSeen(pp->cursectnum);
+	MarkSectorSeen(pp->cursector);
 
 	if (ud.cameraactor == nullptr)
 	{
-		if (automapMode != am_full)
-		{
-			if (!isRR() && pp->newOwner != nullptr)
-				cameratext(pp->newOwner);
-			else
-			{
-				fi.displayweapon(screenpeek, smoothratio);
-				if (pp->over_shoulder_on == 0)
-					fi.displaymasks(screenpeek, pp->GetActor()->s->pal == 1 ? 1 : sector[pp->cursectnum].floorpal, smoothratio);
-			}
-			if (!isRR())
-				moveclouds(smoothratio);
-		}
-
 		if (automapMode != am_off)
 		{
 			DoInterpolations(smoothratio / 65536.);
@@ -275,15 +276,15 @@ void drawoverlays(double smoothratio)
 				}
 				else
 				{
-					cposx = interpolatedvalue(pp->oposx, pp->posx, smoothratio);
-					cposy = interpolatedvalue(pp->oposy, pp->posy, smoothratio);
+					cposx = interpolatedvalue(pp->opos.X, pp->pos.X, smoothratio);
+					cposy = interpolatedvalue(pp->opos.Y, pp->pos.Y, smoothratio);
 					cang = (!SyncInput() ? pp->angle.ang : interpolatedangle(pp->angle.oang, pp->angle.ang, smoothratio)).asbuild();
 				}
 			}
 			else
 			{
-				cposx = pp->oposx;
-				cposy = pp->oposy;
+				cposx = pp->opos.X;
+				cposy = pp->opos.Y;
 				cang = pp->angle.oang.asbuild();
 			}
 			DrawOverheadMap(cposx, cposy, cang, smoothratio);
@@ -291,9 +292,7 @@ void drawoverlays(double smoothratio)
 		}
 	}
 
-	DrawBorder();
-
-	StatusBar->UpdateStatusBar();
+	DrawStatusBar();
 
 	if (ps[myconnectindex].newOwner == nullptr && ud.cameraactor == nullptr)
 	{
@@ -305,8 +304,9 @@ void drawoverlays(double smoothratio)
 		double x = 160, y = 100;
 		double scale = isRR() ? 0.4 : 1.;
 		const char* text = GStrings("Game Paused");
-		x -= BigFont->StringWidth(text) * 0.5 * scale;
-		DrawText(twod, BigFont, CR_UNTRANSLATED, x, y - 12, text, DTA_FullscreenScale, FSMode_Fit320x200, DTA_ScaleX, scale, DTA_ScaleY, scale, TAG_DONE);
+		auto myfont = PickBigFont(text);
+		x -= myfont->StringWidth(text) * 0.5 * scale;
+		DrawText(twod, myfont, CR_UNTRANSLATED, x, y - 12, text, DTA_FullscreenScale, FSMode_Fit320x200, DTA_ScaleX, scale, DTA_ScaleY, scale, TAG_DONE);
 	}
 }
 
@@ -323,8 +323,8 @@ void cameratext(DDukeActor *cam)
 {
 	auto drawitem = [=](int tile, double x, double y, bool flipx, bool flipy)
 	{
-		DrawTexture(twod, tileGetTexture(tile), x, y, DTA_ViewportX, windowxy1.x, DTA_ViewportY, windowxy1.y, DTA_ViewportWidth, windowxy2.x - windowxy1.x + 1, DTA_CenterOffsetRel, true,
-			DTA_ViewportHeight, windowxy2.y - windowxy1.y + 1, DTA_FlipX, flipx, DTA_FlipY, flipy, DTA_FullscreenScale, FSMode_Fit320x200, TAG_DONE);
+		DrawTexture(twod, tileGetTexture(tile), x, y, DTA_ViewportX, windowxy1.X, DTA_ViewportY, windowxy1.Y, DTA_ViewportWidth, windowxy2.X - windowxy1.X + 1, DTA_CenterOffsetRel, 2,
+			DTA_ViewportHeight, windowxy2.Y - windowxy1.Y + 1, DTA_FlipX, flipx, DTA_FlipY, flipy, DTA_FullscreenScale, FSMode_Fit320x200, TAG_DONE);
 	};
 	if (!cam->temp_data[0])
 	{
@@ -338,8 +338,6 @@ void cameratext(DDukeActor *cam)
 	}
 	else
 	{
-		int flipbits = (PlayClock << 1) & 48;
-
 		for (int x = -64; x < 394; x += 64)
 			for (int y = 0; y < 200; y += 64)
 				drawitem(TILE_STATIC, x, y, !!(PlayClock & 8), !!(PlayClock & 16));
@@ -391,7 +389,7 @@ ReservedSpace GameInterface::GetReservedScreenSpace(int viewsize)
 //
 //---------------------------------------------------------------------------
 
-bool GameInterface::DrawAutomapPlayer(int cposx, int cposy, int czoom, int cang, double const smoothratio)
+bool GameInterface::DrawAutomapPlayer(int mx, int my, int cposx, int cposy, int czoom, int cang, double const smoothratio)
 {
 	int i, j, k, l, x1, y1, x2, y2, x3, y3, x4, y4, ox, oy, xoff, yoff;
 	int dax, day, cosang, sinang, xspan, yspan, sprx, spry;
@@ -399,41 +397,38 @@ bool GameInterface::DrawAutomapPlayer(int cposx, int cposy, int czoom, int cang,
 	int xvect, yvect;
 	int p;
 	PalEntry col;
-	spritetype* spr;
 
 	xvect = -bsin(cang) * czoom;
 	yvect = -bcos(cang) * czoom;
 
 	//Draw sprites
 	auto pactor = ps[screenpeek].GetActor();
-	for (i = 0; i < numsectors; i++)
+	for (unsigned ii = 0; ii < sector.Size(); ii++)
 	{
-		if (!gFullMap || !show2dsector[i]) continue;
-		DukeSectIterator it(i);
+		if (!gFullMap || !show2dsector[ii]) continue;
+		DukeSectIterator it(ii);
 		while (auto act = it.Next())
 		{
-			spr = act->s;
-
-			if (act == pactor || (spr->cstat & 0x8000) || spr->cstat == 257 || spr->xrepeat == 0) continue;
+			if (act == pactor || (act->spr.cstat & CSTAT_SPRITE_INVISIBLE) || act->spr.cstat == CSTAT_SPRITE_BLOCK_ALL || act->spr.xrepeat == 0) continue;
 
 			col = PalEntry(0, 170, 170);
-			if (spr->cstat & 1) col = PalEntry(170, 0, 170);
+			if (act->spr.cstat & CSTAT_SPRITE_BLOCK) col = PalEntry(170, 0, 170);
 
-			sprx = spr->x;
-			spry = spr->y;
+			sprx = act->spr.pos.X;
+			spry = act->spr.pos.Y;
 
-			if ((spr->cstat & 257) != 0) switch (spr->cstat & 48)
+			if ((act->spr.cstat & CSTAT_SPRITE_BLOCK_ALL) != 0) switch (act->spr.cstat & CSTAT_SPRITE_ALIGNMENT_MASK)
 			{
-			case 0:
-				//                    break;
+			case CSTAT_SPRITE_ALIGNMENT_FACING:
+				//break;
 
 				ox = sprx - cposx;
 				oy = spry - cposy;
 				x1 = DMulScale(ox, xvect, -oy, yvect, 16);
 				y1 = DMulScale(oy, xvect, ox, yvect, 16);
 
-				ox = bcos(spr->ang, -7);
-				oy = bsin(spr->ang, -7);
+				ox = bcos(act->spr.ang, -7);
+				oy = bsin(act->spr.ang, -7);
 				x2 = DMulScale(ox, xvect, -oy, yvect, 16);
 				y2 = DMulScale(oy, xvect, ox, yvect, 16);
 
@@ -448,16 +443,16 @@ bool GameInterface::DrawAutomapPlayer(int cposx, int cposy, int czoom, int cang,
 					x1 + x2 + (xdim << 11), y1 + y3 + (ydim << 11), col);
 				break;
 
-			case 16:
-				if (spr->picnum == TILE_LASERLINE)
+			case CSTAT_SPRITE_ALIGNMENT_WALL:
+				if (actorflag(act, SFLAG2_SHOWWALLSPRITEONMAP))
 				{
 					x1 = sprx;
 					y1 = spry;
-					tilenum = spr->picnum;
-					xoff = tileLeftOffset(tilenum) + spr->xoffset;
-					if ((spr->cstat & 4) > 0) xoff = -xoff;
-					k = spr->ang;
-					l = spr->xrepeat;
+					tilenum = act->spr.picnum;
+					xoff = tileLeftOffset(tilenum) + act->spr.xoffset;
+					if ((act->spr.cstat & CSTAT_SPRITE_XFLIP) > 0) xoff = -xoff;
+					k = act->spr.ang;
+					l = act->spr.xrepeat;
 					dax = bsin(k) * l;
 					day = -bcos(k) * l;
 					l = tileWidth(tilenum);
@@ -483,20 +478,27 @@ bool GameInterface::DrawAutomapPlayer(int cposx, int cposy, int czoom, int cang,
 
 				break;
 
-			case 32:
-				tilenum = spr->picnum;
-				xoff = tileLeftOffset(tilenum) + spr->xoffset;
-				yoff = tileTopOffset(tilenum) + spr->yoffset;
-				if ((spr->cstat & 4) > 0) xoff = -xoff;
-				if ((spr->cstat & 8) > 0) yoff = -yoff;
+			case CSTAT_SPRITE_ALIGNMENT_FLOOR:
+			case CSTAT_SPRITE_ALIGNMENT_SLOPE:
+				tilenum = act->spr.picnum;
+				xoff = tileLeftOffset(tilenum);
+				yoff = tileTopOffset(tilenum);
+				if ((act->spr.cstat & CSTAT_SPRITE_ALIGNMENT_MASK) != CSTAT_SPRITE_ALIGNMENT_SLOPE)
+				{
+					xoff += act->spr.xoffset;
+					yoff += act->spr.yoffset;
+				}
 
-				k = spr->ang;
+				if ((act->spr.cstat & CSTAT_SPRITE_XFLIP) > 0) xoff = -xoff;
+				if ((act->spr.cstat & CSTAT_SPRITE_YFLIP) > 0) yoff = -yoff;
+
+				k = act->spr.ang;
 				cosang = bcos(k);
 				sinang = bsin(k);
 				xspan = tileWidth(tilenum);
-				xrepeat = spr->xrepeat;
+				xrepeat = act->spr.xrepeat;
 				yspan = tileHeight(tilenum);
-				yrepeat = spr->yrepeat;
+				yrepeat = act->spr.yrepeat;
 
 				dax = ((xspan >> 1) + xoff) * xrepeat;
 				day = ((yspan >> 1) + yoff) * yrepeat;
@@ -553,26 +555,33 @@ bool GameInterface::DrawAutomapPlayer(int cposx, int cposy, int czoom, int cang,
 	for (p = connecthead; p >= 0; p = connectpoint2[p])
 	{
 		auto act = ps[p].GetActor();
-		auto pspr = act->s;
-		auto spos = pspr->interpolatedvec2(smoothratio);
-		daang = ((!SyncInput() ? pspr->ang : pspr->interpolatedang(smoothratio)) - cang) & 2047;
+		auto spos = act->interpolatedvec2(smoothratio);
+
+		ox = mx - cposx;
+		oy = my - cposy;
+		x1 = DMulScale(ox, xvect, -oy, yvect, 16);
+		y1 = DMulScale(oy, xvect, ox, yvect, 16);
+		int xx = xdim / 2. + x1 / 4096.;
+		int yy = ydim / 2. + y1 / 4096.;
+
+		daang = ((!SyncInput() ? act->spr.ang : act->interpolatedang(smoothratio)) - cang) & 2047;
 
 		if (p == screenpeek || ud.coop == 1)
 		{
 			auto& pp = ps[p];
-			if (pspr->xvel > 16 && pp.on_ground)
+			if (act->spr.xvel > 16 && pp.on_ground)
 				i = TILE_APLAYERTOP + ((PlayClock >> 4) & 3);
 			else
 				i = TILE_APLAYERTOP;
 
-			j = abs(pp.truefz - pp.posz) >> 8;
-			j = czoom * (pspr->yrepeat + j);
+			j = abs(pp.truefz - pp.pos.Z) >> 8;
+			j = czoom * (act->spr.yrepeat + j);
 
 			if (j < 22000) j = 22000;
 			else if (j > (65536 << 1)) j = (65536 << 1);
 
-			DrawTexture(twod, tileGetTexture(i), xdim / 2. + spos.x / 4096., ydim / 2. + spos.y / 4096., DTA_TranslationIndex, TRANSLATION(Translation_Remap + setpal(&pp), pspr->pal), DTA_CenterOffset, true,
-				DTA_Rotate, daang * -BAngToDegree, DTA_Color, shadeToLight(pspr->shade), DTA_ScaleX, j / 65536., DTA_ScaleY, j / 65536., TAG_DONE);
+			DrawTexture(twod, tileGetTexture(i), xx, yy, DTA_TranslationIndex, TRANSLATION(Translation_Remap + setpal(&pp), act->spr.pal), DTA_CenterOffset, true,
+				DTA_Rotate, daang * -BAngToDegree, DTA_Color, shadeToLight(act->spr.shade), DTA_ScaleX, j / 65536., DTA_ScaleY, j / 65536., TAG_DONE);
 		}
 	}
 	return true;

@@ -58,6 +58,8 @@ BEGIN_SW_NS
 // This cannot have a namespace declaration
 #include "saveable.h"
 
+extern int parallaxyscale_override, pskybits_override;
+
 /*
 //////////////////////////////////////////////////////////////////////////////
 TO DO
@@ -69,8 +71,6 @@ TO DO
 void InitLevelGlobals(void);
 
 extern int lastUpdate;
-extern char SaveGameDescr[10][80];
-extern short Bunny_Count;
 extern bool NewGame;
 extern int GodMode;
 extern int FinishTimer;
@@ -79,7 +79,6 @@ extern int GameVersion;
 //extern short Zombies;
 
 extern bool bosswasseen[3];
-extern short BossSpriteNum[3];
 
 #define ANIM_SAVE 1
 
@@ -96,19 +95,8 @@ extern STATE s_NotRestored[];
 
 FSerializer& Serialize(FSerializer& arc, const char* keyname, savedcodesym& w, savedcodesym* def)
 {
-    static savedcodesym nul;
-    if (!def)
-    {
-        def = &nul;
-        if (arc.isReading()) w = {};
-    }
-
-    if (arc.BeginObject(keyname))
-    {
-        arc("module", w.module, def->module)
-            ("index", w.index, def->index)
-            .EndObject();
-    }
+	if (arc.isWriting() && w.name.IsEmpty()) return arc;
+	arc(keyname, w.name);
     return arc;
 }
 
@@ -120,18 +108,11 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, savedcodesym& w, s
 
 FSerializer& Serialize(FSerializer& arc, const char* keyname, saveddatasym& w, saveddatasym* def)
 {
-    static saveddatasym nul;
-    if (!def)
+	if (arc.isWriting() && w.name.IsEmpty()) return arc;
+	if (arc.BeginObject(keyname))
     {
-        def = &nul;
-        if (arc.isReading()) w = {};
-    }
-
-    if (arc.BeginObject(keyname))
-    {
-        arc("module", w.module, def->module)
-            ("index", w.index, def->index)
-            ("offset", w.offset, def->offset)
+        arc("name", w.name)
+            ("offset", w.offset)
             .EndObject();
     }
     return arc;
@@ -188,32 +169,32 @@ FSerializer& SerializeCodePtr(FSerializer& arc, const char* keyname, void** w)
 //
 //---------------------------------------------------------------------------
 
-FSerializer& Serialize(FSerializer& arc, const char* keyname, PANEL_STATEp& w, PANEL_STATEp* def)
+FSerializer& Serialize(FSerializer& arc, const char* keyname, PANEL_STATE*& w, PANEL_STATE** def)
 {
 	return SerializeDataPtr(arc, keyname, *(void**)&w, sizeof(PANEL_STATE));
 }
 
-FSerializer& Serialize(FSerializer& arc, const char* keyname, STATEp& w, STATEp* def)
+FSerializer& Serialize(FSerializer& arc, const char* keyname, STATE*& w, STATE** def)
 {
 	return SerializeDataPtr(arc, keyname, *(void**)&w, sizeof(STATE));
 }
 
-FSerializer& Serialize(FSerializer& arc, const char* keyname, STATEp*& w, STATEp** def)
+FSerializer& Serialize(FSerializer& arc, const char* keyname, STATE**& w, STATE*** def)
 {
-	return SerializeDataPtr(arc, keyname, *(void**)&w, sizeof(STATEp));
+	return SerializeDataPtr(arc, keyname, *(void**)&w, sizeof(STATE*));
 }
 
-FSerializer& Serialize(FSerializer& arc, const char* keyname, ACTOR_ACTION_SETp& w, ACTOR_ACTION_SETp* def)
+FSerializer& Serialize(FSerializer& arc, const char* keyname, ACTOR_ACTION_SET*& w, ACTOR_ACTION_SET** def)
 {
 	return SerializeDataPtr(arc, keyname, *(void**)&w, sizeof(ACTOR_ACTION_SET));
 }
 
-FSerializer& Serialize(FSerializer& arc, const char* keyname, PERSONALITYp& w, PERSONALITYp* def)
+FSerializer& Serialize(FSerializer& arc, const char* keyname, PERSONALITY*& w, PERSONALITY** def)
 {
 	return SerializeDataPtr(arc, keyname, *(void**)&w, sizeof(PERSONALITY));
 }
 
-FSerializer& Serialize(FSerializer& arc, const char* keyname, ATTRIBUTEp& w, ATTRIBUTEp* def)
+FSerializer& Serialize(FSerializer& arc, const char* keyname, ATTRIBUTE*& w, ATTRIBUTE** def)
 {
 	return SerializeDataPtr(arc, keyname, *(void**)&w, sizeof(ATTRIBUTE));
 }
@@ -225,9 +206,9 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, ATTRIBUTEp& w, ATT
 //---------------------------------------------------------------------------
 
 // Temporary array to serialize the panel sprites.
-static TArray<PANEL_SPRITEp> pspAsArray;
+static TArray<PANEL_SPRITE*> pspAsArray;
 
-FSerializer& Serialize(FSerializer& arc, const char* keyname, PANEL_SPRITEp& w, PANEL_SPRITEp* def)
+FSerializer& Serialize(FSerializer& arc, const char* keyname, PANEL_SPRITE*& w, PANEL_SPRITE** def)
 {
 	unsigned idx = ~0u;
 	if (arc.isWriting())
@@ -240,7 +221,7 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, PANEL_SPRITEp& w, 
 				for (unsigned i = 0; i < MAX_SW_PLAYERS_REG; i++)
 				{
 					// special case for pointing to the list head
-					if ((LIST)w == (LIST)&Player[i].PanelSpriteList)
+					if ((List*)w == (List*)&Player[i].PanelSpriteList)
 					{
 						idx = 1000'0000 + i;
 						break;
@@ -258,7 +239,7 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, PANEL_SPRITEp& w, 
 		arc(keyname, ndx);
 
 		if (ndx == ~0u) w = nullptr;
-		else if (ndx >= 1000'0000) w = (PANEL_SPRITEp)&Player[ndx - 1000'0000].PanelSpriteList;
+		else if (ndx >= 1000'0000) w = (PANEL_SPRITE*)&Player[ndx - 1000'0000].PanelSpriteList;
 		else if ((unsigned)ndx >= pspAsArray.Size())
 			I_Error("Bad panel sprite index in savegame");
 		else w = pspAsArray[ndx];
@@ -281,27 +262,26 @@ void preSerializePanelSprites(FSerializer& arc)
 		pspAsArray.Resize(siz);
 		for (unsigned i = 0; i < siz; i++)
 		{
-			pspAsArray[i] = (PANEL_SPRITEp)CallocMem(sizeof(PANEL_SPRITE), 1);
+			pspAsArray[i] = (PANEL_SPRITE*)CallocMem(sizeof(PANEL_SPRITE), 1);
 		}
 	}
 }
 
 void postSerializePanelSprites(FSerializer& arc)
 {
+	if (arc.BeginArray("panelsprites"))
+	{
+		for(unsigned i = 0; i < pspAsArray.Size(); i++)
+		{
+			arc(nullptr, *pspAsArray[i]);
+		}
+		arc.EndArray();
+	}
 	if (arc.isWriting())
 	{
 		unsigned siz = pspAsArray.Size();
 		arc("panelcount", siz);
 	}
-	if (arc.BeginArray("panelsprites"))
-	{
-		for (auto psp : pspAsArray)
-		{
-			arc(nullptr, *psp);
-		}
-		arc.EndArray();
-	}
-	pspAsArray.Clear();
 }
 
 //---------------------------------------------------------------------------
@@ -331,9 +311,9 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, PANEL_SPRITE_OVERL
 //
 //---------------------------------------------------------------------------
 
-FSerializer& Serialize(FSerializer& arc, const char* keyname, PANEL_SPRITEstruct& w, PANEL_SPRITEstruct* def)
+FSerializer& Serialize(FSerializer& arc, const char* keyname, PANEL_SPRITE& w, PANEL_SPRITE* def)
 {
-	static PANEL_SPRITEstruct nul;
+	static PANEL_SPRITE nul;
 	if (!def)
 	{
 		def = &nul;
@@ -350,18 +330,18 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, PANEL_SPRITEstruct
 			("PresentState", w.PresentState)
 			("ActionState", w.ActionState)
 			("RestState", w.RestState)
-			("xfract", w.xfract)
-			("x", w.x)
-			("yfract", w.yfract)
-			("y", w.y)
+			("ox", w.opos.X)
+			("oy", w.opos.Y)
+			("x", w.pos.X)
+			("y", w.pos.Y)
 			.Array("over", w.over, countof(w.over))
 			("id", w.ID)
 			("picndx", w.picndx)
 			("picnum", w.picnum)
 			("vel", w.vel)
 			("vel_adj", w.vel_adj)
-			("xorig", w.xorig)
-			("yorig", w.yorig)
+			("xorig", w.bobpos.X)
+			("yorig", w.bobpos.Y)
 			("flags", w.flags)
 			("priority", w.priority)
 			("scale", w.scale)
@@ -388,8 +368,8 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, PANEL_SPRITEstruct
 	}
 	if (arc.isReading())
 	{
-		w.ox = w.x;
-		w.oy = w.y;
+		w.opos.X = w.pos.X;
+		w.opos.Y = w.pos.Y;
 	}
 	return arc;
 }
@@ -411,24 +391,23 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, REMOTE_CONTROL& w,
 
 	if (arc.BeginObject(keyname))
 	{
-		arc("cursectnum", w.cursectnum)
-			("lastcursectnum", w.lastcursectnum)
+		arc("cursectnum", w.cursectp)
+			("lastcursectnum", w.lastcursectp)
 			("pang", w.pang)
-			("filler", w.filler)
-			("xvect", w.xvect)
-			("yvect", w.yvect)
-			("slide_xvect", w.slide_xvect)
-			("slide_yvect", w.slide_yvect)
-			("x", w.posx)
-			("y", w.posy)
-			("z", w.posz)
+			("xvect", w.vect.X)
+			("yvect", w.vect.Y)
+			("slide_xvect", w.slide_vect.X)
+			("slide_yvect", w.slide_vect.Y)
+			("x", w.pos.X)
+			("y", w.pos.Y)
+			("z", w.pos.Z)
 			("sop_control", w.sop_control)
 			.EndObject();
 	}
 	if (arc.isReading())
 	{
-		w.oxvect = w.xvect;
-		w.oyvect = w.yvect;
+		w.ovect.Y = w.vect.X;
+		w.ovect.Y = w.vect.Y;
 	}
 	return arc;
 }
@@ -439,7 +418,7 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, REMOTE_CONTROL& w,
 //
 //---------------------------------------------------------------------------
 
-FSerializer& Serialize(FSerializer& arc, const char* keyname, PLAYERp& w, PLAYERp* def)
+FSerializer& Serialize(FSerializer& arc, const char* keyname, PLAYER*& w, PLAYER** def)
 {
 	int ndx = w ? int(w - Player) : -1;
 	arc(keyname, ndx);
@@ -453,18 +432,18 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, PLAYERp& w, PLAYER
 //
 //---------------------------------------------------------------------------
 
-FSerializer& Serialize(FSerializer& arc, const char* keyname, PLAYERstruct& w, PLAYERstruct* def)
+FSerializer& Serialize(FSerializer& arc, const char* keyname, PLAYER& w, PLAYER* def)
 {
 	if (arc.BeginObject(keyname))
 	{
-		arc("x", w.posx)
-			("y", w.posy)
-			("z", w.posz)
-			("lv_sectnum", w.lv_sectnum)
-			("lv_x", w.lv_x)
-			("lv_y", w.lv_y)
-			("lv_z", w.lv_z)
-			("remote_sprite", w.remote_sprite)
+		arc("x", w.pos.X)
+			("y", w.pos.Y)
+			("z", w.pos.Z)
+			("lv_sectnum", w.lv_sector)
+			("lv_x", w.lv.X)
+			("lv_y", w.lv.Y)
+			("lv_z", w.lv.Z)
+			("remote_sprite", w.remoteActor)
 			("remote", w.remote)
 			("sop_remote", w.sop_remote)
 			("sop", w.sop)
@@ -480,28 +459,27 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, PLAYERstruct& w, P
 			("floor_dist", w.floor_dist)
 			("hi_sectp", w.hi_sectp)
 			("lo_sectp", w.lo_sectp)
-			("hi_sp", w.hi_sp)
-			("lo_sp", w.lo_sp)
-			("last_camera_sp", w.last_camera_sp)
+			("hi_sp", w.highActor)
+			("lo_sp", w.lowActor)
+			("last_camera_sp", w.last_camera_act)
 			("circle_camera_dist", w.circle_camera_dist)
-			("six", w.six)
-			("siy", w.siy)
-			("siz", w.siz)
+			("six", w.si.X)
+			("siy", w.si.Y)
+			("siz", w.si.Z)
 			("siang", w.siang)
-			("xvect", w.xvect)
-			("yvect", w.yvect)
+			("xvect", w.vect.X)
+			("yvect", w.vect.Y)
 			("friction", w.friction)
-			("slide_xvect", w.slide_xvect)
-			("slide_yvect", w.slide_yvect)
+			("slide_xvect", w.slide_vect.X)
+			("slide_yvect", w.slide_vect.Y)
 			("slide_ang", w.slide_ang)
 			("slide_dec", w.slide_dec)
 			("drive_avel", w.drive_avel)
 			("view_outside_dang", w.view_outside_dang)
 			("circle_camera_ang", w.circle_camera_ang)
 			("camera_check_time_delay", w.camera_check_time_delay)
-			("cursectnum", w.cursectnum)
-			("lastcursectnum", w.lastcursectnum)
-			("turn180_target", w.turn180_target)
+			("cursectnum", w.cursector)
+			("lastcursectnum", w.lastcursector)
 			("hvel", w.hvel)
 			("tilt", w.tilt)
 			("tilt_dest", w.tilt_dest)
@@ -511,21 +489,20 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, PLAYERstruct& w, P
 			("recoil_speed", w.recoil_speed)
 			("recoil_ndx", w.recoil_ndx)
 			("recoil_horizoff", w.recoil_horizoff)
-			("oldposx", w.oldposx)
-			("oldposy", w.oldposy)
-			("oldposz", w.oldposz)
-			("revolvex", w.RevolveX)
-			("revolvey", w.RevolveY)
+			("recoil_ohorizoff", w.recoil_ohorizoff)
+			("oldposx", w.oldpos.X)
+			("oldposy", w.oldpos.Y)
+			("oldposz", w.oldpos.Z)
+			("revolvex", w.Revolve.X)
+			("revolvey", w.Revolve.Y)
 			("RevolveDeltaAng", w.RevolveDeltaAng)
 			("RevolveAng", w.RevolveAng)
-			("PlayerSprite", w.PlayerSprite)
-			("PlayerUnderSprite", w.PlayerUnderSprite)
-			("SpriteP", w.SpriteP)
-			("UnderSpriteP", w.UnderSpriteP)
+			("PlayerSprite", w.actor)
+			("PlayerUnderSprite", w.PlayerUnderActor)
 			("pnum", w.pnum)
 			("LadderSector", w.LadderSector)
-			("lx", w.lx)
-			("ly", w.ly)
+			("lx", w.LadderPosition.X)
+			("ly", w.LadderPosition.Y)
 			("JumpDuration", w.JumpDuration)
 			("WadeDepth", w.WadeDepth)
 			("bob_amt", w.bob_amt)
@@ -565,7 +542,7 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, PLAYERstruct& w, P
 			("DiveDamageTics", w.DiveDamageTics)
 			("DeathType", w.DeathType)
 			("Kills", w.Kills)
-			("Killer", w.Killer)
+			("Killer", w.KillerActor)
 			.Array("KilledPlayer", w.KilledPlayer, countof(w.KilledPlayer))
 			("SecretsFound", w.SecretsFound)
 			("Armor", w.Armor)
@@ -598,17 +575,18 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, PLAYERstruct& w, P
 			("keypressbits", w.KeyPressBits)
 			("chops", w.Chops);
 
+
 		SerializeCodePtr(arc, "DoPlayerAction", (void**)&w.DoPlayerAction);
 		arc.EndObject();
 	}
 	if (arc.isReading())
 	{
-		w.oposx = w.posx;
-		w.oposy = w.posx;
-		w.oposz = w.posx;
+		w.opos.X = w.pos.X;
+		w.opos.Y = w.pos.X;
+		w.opos.Z = w.pos.X;
 		w.oz_speed = w.z_speed;
-		w.oxvect = w.xvect;
-		w.oyvect = w.yvect;
+		w.ovect.X = w.vect.X;
+		w.ovect.Y = w.vect.Y;
 		w.obob_z = w.bob_z;
 		w.input = {};
 		w.lastinput = {};
@@ -625,7 +603,7 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, PLAYERstruct& w, P
 //
 //---------------------------------------------------------------------------
 
-FSerializer& Serialize(FSerializer& arc, const char* keyname, SECTOR_OBJECTp& w, SECTOR_OBJECTp* def)
+FSerializer& Serialize(FSerializer& arc, const char* keyname, SECTOR_OBJECT*& w, SECTOR_OBJECT** def)
 {
 	int ndx = w ? int(w - SectorObject) : -1;
 	arc(keyname, ndx);
@@ -639,9 +617,9 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, SECTOR_OBJECTp& w,
 //
 //---------------------------------------------------------------------------
 
-FSerializer& Serialize(FSerializer& arc, const char* keyname, SECTOR_OBJECTstruct& w, SECTOR_OBJECTstruct* def)
+FSerializer& Serialize(FSerializer& arc, const char* keyname, SECTOR_OBJECT& w, SECTOR_OBJECT* def)
 {
-	static SECTOR_OBJECTstruct nul;
+	static SECTOR_OBJECT nul;
 	if (!def)
 	{
 		def = &nul;
@@ -649,25 +627,20 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, SECTOR_OBJECTstruc
 	}
 	if (arc.BeginObject(keyname))
 	{
-		int sp_cnt;
-		for (sp_cnt = 0; w.sp_num[sp_cnt] != -1 && sp_cnt < (int)countof(w.sp_num); sp_cnt++) {}
-
 		arc("num_sectors", w.num_sectors, def->num_sectors)
 			("num_walls", w.num_walls, def->num_walls)
-			("num_sp", sp_cnt)
 			("clipbox_num", w.clipbox_num, def->clipbox_num)
 			.Array("sectp", w.sectp, def->sectp, w.num_sectors)
-			.Array("sector", w.sector, def->sector, w.num_sectors)  // is this really different from sectp?
 			.Array("zorig_floor", w.zorig_floor, def->zorig_floor, w.num_sectors)
 			.Array("zorig_ceiling", w.zorig_ceiling, def->zorig_ceiling, w.num_sectors)
-			.Array("sp_num", w.sp_num, def->sp_num, countof(w.sp_num))
+			.Array("sp_num", w.so_actors, def->so_actors, countof(w.so_actors))
 			.Array("xorig", w.xorig, def->xorig, w.num_walls)
 			.Array("yorig", w.yorig, def->yorig, w.num_walls)
 			("controller", w.controller, def->controller)
 			("child", w.sp_child, def->sp_child)
-			("xmid", w.xmid, def->xmid)
-			("ymid", w.ymid, def->ymid)
-			("zmid", w.zmid, def->zmid)
+			("xmid", w.pmid.X, def->pmid.X)
+			("ymid", w.pmid.Y, def->pmid.Y)
+			("zmid", w.pmid.Z, def->pmid.Z)
 			("vel", w.vel, def->vel)
 			("vel_tgt", w.vel_tgt, def->vel_tgt)
 			("player_xoff", w.player_xoff, def->player_xoff)
@@ -691,7 +664,6 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, SECTOR_OBJECTstruc
 			("drive_slide", w.drive_slide, def->drive_slide)
 			("crush_z", w.crush_z, def->crush_z)
 			("flags", w.flags, def->flags)
-			("sectnum", w.sectnum, def->sectnum)
 			("mid_sector", w.mid_sector, def->mid_sector)
 			("max_damage", w.max_damage, def->max_damage)
 			("ram_damage", w.ram_damage, def->ram_damage)
@@ -716,7 +688,7 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, SECTOR_OBJECTstruc
 			("save_vel", w.save_vel, def->save_vel)
 			("save_spin_speed", w.save_spin_speed, def->save_spin_speed)
 			("match_event", w.match_event, def->match_event)
-			("match_event_sprite", w.match_event_sprite, def->match_event_sprite)
+			("match_event_sprite", w.match_event_actor, def->match_event_actor)
 			("scale_type", w.scale_type, def->scale_type)
 			("scale_active_type", w.scale_active_type, def->scale_active_type)
 			("scale_dist", w.scale_dist, def->scale_dist)
@@ -786,65 +758,6 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, ROTATOR& w, ROTATO
 // 
 //
 //---------------------------------------------------------------------------
-
-FSerializer& Serialize(FSerializer& arc, const char* keyname, SECT_USER& w, SECT_USER* def)
-{
-	static SECT_USER nul;
-	if (!def)
-	{
-		def = &nul;
-		if (arc.isReading()) w = {};
-	}
-	if (arc.BeginObject(keyname))
-	{
-		arc("dist", w.dist, def->dist)
-			("flags", w.flags, def->flags)
-			("depth", w.depth_fixed, def->depth_fixed)
-			("stag", w.stag, def->stag)
-			("ang", w.ang, def->ang)
-			("height", w.height, def->height)
-			("speed", w.speed, def->speed)
-			("damage", w.damage, def->damage)
-			("number", w.number, def->number)
-			("flags2", w.flags2, def->flags2)
-			.EndObject();
-	}
-	return arc;
-}
-
-//---------------------------------------------------------------------------
-//
-// 
-//
-//---------------------------------------------------------------------------
-
-void SerializeSectUser(FSerializer& arc)
-{
-	FixedBitArray<MAXSECTORS> hitlist;
-
-	if (arc.isWriting())
-	{
-		for (int i = 0; i < MAXSECTORS; i++)
-		{
-			hitlist.Set(i, !!SectUser[i].Data());
-		}
-	}
-	else
-	{
-		for (int i = 0; i < MAXSECTORS; i++)
-		{
-			SectUser[i].Clear();
-		}
-	}
-	arc("sectusermap", hitlist);
-	arc.SparseArray("sectuser", SectUser, MAXSECTORS, hitlist);
-}
-
-//---------------------------------------------------------------------------
-//
-// 
-//
-//---------------------------------------------------------------------------
 static USER nuluser; // must be outside the function to evade C++'s retarded initialization rules for static function variables.
 
 FSerializer& Serialize(FSerializer& arc, const char* keyname, USER& w, USER* def)
@@ -885,17 +798,15 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, USER& w, USER* def
 			("zclip", w.zclip, def->zclip)
 			("hi_sectp", w.hi_sectp, def->hi_sectp)
 			("lo_sectp", w.lo_sectp, def->lo_sectp)
-			("hi_sp", w.hi_sp, def->hi_sp)
-			("lo_sp", w.lo_sp, def->lo_sp)
+			("hi_sp", w.highActor, def->highActor)
+			("lo_sp", w.lowActor, def->lowActor)
 			("active_range", w.active_range, def->active_range)
-			("SpriteNum", w.SpriteNum, def->SpriteNum)
-			("Attach", w.Attach, def->Attach)
-			("SpriteP", w.SpriteP, def->SpriteP)
+			("Attach", w.attachActor, def->attachActor)
 			("PlayerP", w.PlayerP, def->PlayerP)
 			("Sibling", w.Sibling, def->Sibling)
-			("xchange", w.xchange, def->xchange)
-			("ychange", w.ychange, def->ychange)
-			("zchange", w.zchange, def->zchange)
+			("xchange", w.change.X, def->change.X)
+			("ychange", w.change.Y, def->change.Y)
+			("zchange", w.change.Z, def->change.Z)
 			("z_tgt", w.z_tgt, def->z_tgt)
 			("vel_tgt", w.vel_tgt, def->vel_tgt)
 			("vel_rate", w.vel_rate, def->vel_rate)
@@ -905,11 +816,11 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, USER& w, USER* def
 			("Counter3", w.Counter3, def->Counter3)
 			("DamageTics", w.DamageTics, def->DamageTics)
 			("BladeDamageTics", w.BladeDamageTics, def->BladeDamageTics)
-			("WpnGoal", w.WpnGoal, def->WpnGoal)
+			("WpnGoal", w.WpnGoalActor, def->WpnGoalActor)
 			("Radius", w.Radius, def->Radius)
 			("OverlapZ", w.OverlapZ, def->OverlapZ)
-			("flame", w.flame, def->flame)
-			("tgt_sp", w.tgt_sp, def->tgt_sp)
+			("flame", w.flameActor, def->flameActor)
+			("tgt_sp", w.targetActor, def->targetActor)
 			("scale_speed", w.scale_speed, def->scale_speed)
 			("scale_value", w.scale_value, def->scale_value)
 			("scale_tgt", w.scale_tgt, def->scale_tgt)
@@ -928,18 +839,19 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, USER& w, USER* def
 			("motion_blur_num", w.motion_blur_num, def->motion_blur_num)
 			("wait_active_check", w.wait_active_check, def->wait_active_check)
 			("inactive_time", w.inactive_time, def->inactive_time)
-			("sx", w.sx, def->sx)
-			("sy", w.sy, def->sy)
-			("sz", w.sz, def->sz)
+			("sx", w.pos.X, def->pos.X)
+			("sy", w.pos.Y, def->pos.Y)
+			("sz", w.pos.Z, def->pos.Z)
 			("sang", w.sang, def->sang)
 			("spal", w.spal, def->spal)
-			("ret", w.ret, def->ret)
+			//("ret", w.coll, def->coll) // is this needed?
 			("Flag1", w.Flag1, def->Flag1)
 			("LastWeaponNum", w.LastWeaponNum, def->LastWeaponNum)
 			("WeaponNum", w.WeaponNum, def->WeaponNum)
 			("bounce", w.bounce, def->bounce)
 			("ShellNum", w.ShellNum, def->ShellNum)
 			("FlagOwner", w.FlagOwner, def->FlagOwner)
+			("FlagOwnerActor", w.flagOwnerActor, def->flagOwnerActor)
 			("Vis", w.Vis, def->Vis)
 			("DidAlert", w.DidAlert, def->DidAlert)
 			("filler", w.filler, def->filler)
@@ -964,38 +876,9 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, USER& w, USER* def
 //
 //---------------------------------------------------------------------------
 
-void SerializeUser(FSerializer& arc)
-{
-	FixedBitArray<MAXSPRITES> hitlist;
-
-	if (arc.isWriting())
-	{
-		for (int i = 0; i < MAXSPRITES; i++)
-		{
-			hitlist.Set(i, !!User[i].Data());
-		}
-	}
-	else
-	{
-		for (int i = 0; i < MAXSPRITES; i++)
-		{
-			User[i].Clear();
-		}
-	}
-	arc("usermap", hitlist);
-	arc.SparseArray("user", User, MAXSPRITES, hitlist);
-}
-
-
-//---------------------------------------------------------------------------
-//
-// 
-//
-//---------------------------------------------------------------------------
-
 FSerializer& Serialize(FSerializer& arc, const char* keyname, SINE_WAVE_FLOOR& w, SINE_WAVE_FLOOR* def)
 {
-	static SINE_WAVE_FLOOR nul = { -1,-1,-1,-1,-1,-1,255 };
+	static SINE_WAVE_FLOOR nul = { nullptr,-1,-1,-1,-1,-1,255 };
 	if (!def)
 	{
 		def = &nul;
@@ -1007,7 +890,7 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, SINE_WAVE_FLOOR& w
 		arc("floor_origz", w.floor_origz, def->floor_origz)
 			("ceiling_origz", w.ceiling_origz, def->ceiling_origz)
 			("range", w.range, def->range)
-			("sector", w.sector, def->sector)
+			("sector", w.sectp, def->sectp)
 			("sintable_ndx", w.sintable_ndx, def->sintable_ndx)
 			("speed_shift", w.speed_shift, def->speed_shift)
 			("flags", w.flags, def->flags)
@@ -1024,7 +907,7 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, SINE_WAVE_FLOOR& w
 
 FSerializer& Serialize(FSerializer& arc, const char* keyname, SINE_WALL& w, SINE_WALL* def)
 {
-	static SINE_WALL nul = { -1,-1,-1,-1,-1,-1 };
+	static SINE_WALL nul = { nullptr,-1,-1,-1,-1,-1 };
 	if (!def)
 	{
 		def = &nul;
@@ -1035,7 +918,7 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, SINE_WALL& w, SINE
 	{
 		arc("orig_xy", w.orig_xy, def->orig_xy)
 			("range", w.range, def->range)
-			("sector", w.wall, def->wall)
+			("sector", w.wallp, def->wallp)
 			("sintable_ndx", w.sintable_ndx, def->sintable_ndx)
 			("speed_shift", w.speed_shift, def->speed_shift)
 			("flags", w.type, def->type)
@@ -1052,7 +935,7 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, SINE_WALL& w, SINE
 
 FSerializer& Serialize(FSerializer& arc, const char* keyname, SPRING_BOARD& w, SPRING_BOARD* def)
 {
-	static SPRING_BOARD nul = { -1,-1 };
+	static SPRING_BOARD nul = { nullptr,-1 };
 	if (!def)
 	{
 		def = &nul;
@@ -1061,7 +944,7 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, SPRING_BOARD& w, S
 
 	if (arc.BeginObject(keyname))
 	{
-		arc("sector", w.Sector, def->Sector)
+		arc("sector", w.sectp, def->sectp)
 			("timeout", w.TimeOut, def->TimeOut)
 			.EndObject();
 	}
@@ -1084,10 +967,10 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, MIRRORTYPE& w, MIR
 	}
 	if (arc.BeginObject(keyname))
 	{
-		arc("mirrorwall", w.mirrorwall, def->mirrorwall)
-			("mirrorsector", w.mirrorsector, def->mirrorsector)
-			("camera", w.camera, def->camera)
-			("camsprite", w.camsprite, def->camsprite)
+		arc("mirrorwall", w.mirrorWall, def->mirrorWall)
+			("mirrorsector", w.mirrorSector, def->mirrorSector)
+			("camera", w.cameraActor, def->cameraActor)
+			("camsprite", w.camspriteActor, def->camspriteActor)
 			("campic", w.campic, def->campic)
 			("numspawnspots", w.numspawnspots, def->numspawnspots)
 			.Array("spawnspots", w.spawnspots, def->spawnspots, w.numspawnspots)
@@ -1189,6 +1072,13 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, TRACK_POINT& w, TR
 	return arc;
 }
 
+
+//---------------------------------------------------------------------------
+//
+// 
+//
+//---------------------------------------------------------------------------
+
 FSerializer& Serialize(FSerializer& arc, const char* keyname, TRACK& w, TRACK* def)
 {
 	static int nul;
@@ -1220,15 +1110,29 @@ FSerializer& Serialize(FSerializer& arc, const char* keyname, TRACK& w, TRACK* d
 //
 //---------------------------------------------------------------------------
 
+void DSWActor::Serialize(FSerializer& arc)
+{
+	Super::Serialize(arc);
+	arc("hasuser", hasUser)
+		("tempwall", tempwall)
+		("owner", ownerActor);
+	if (hasUser) arc("user", user); // only write if defined.
+}
+
+//---------------------------------------------------------------------------
+//
+// 
+//
+//---------------------------------------------------------------------------
+
 void GameInterface::SerializeGameState(FSerializer& arc)
 {
+	pspAsArray.Clear();
     Saveable_Init();
 
-    if (arc.BeginObject("state"))
-    {
-        preSerializePanelSprites(arc);
-        SerializeUser(arc);
-		SerializeSectUser(arc);
+	if (arc.BeginObject("state"))
+	{
+		preSerializePanelSprites(arc);
 		so_serializeinterpolations(arc);
 		arc("numplayers", numplayers)
 			.Array("players", Player, numplayers)
@@ -1268,35 +1172,38 @@ void GameInterface::SerializeGameState(FSerializer& arc)
 			("FinishTimer", FinishTimer)
 			("FinishAnim", FinishAnim)
 			.Array("bosswasseen", bosswasseen, 3)
-			.Array("BossSpriteNum", BossSpriteNum, 3);
-			arc.Array("tracks", Track, countof(Track))
+			.Array("BossSpriteNum", BossSpriteNum, 3)
+			.Array("tracks", Track, countof(Track))
 			("minenemyskill", MinEnemySkill)
-            ;
-        postSerializePanelSprites(arc);
-        arc.EndObject();
-    }
+			("parallaxys", parallaxyscale_override)
+			("pskybits", pskybits_override)
+			;
+		postSerializePanelSprites(arc);
+		arc.EndObject();
+	}
 
 	if (arc.isReading())
-    {
-    DoTheCache();
+	{
+		DoTheCache();
 
-        int SavePlayClock = PlayClock;
-        InitTimingVars();
-        PlayClock = SavePlayClock;
-    InitNetVars();
+		int SavePlayClock = PlayClock;
+		InitTimingVars();
+		PlayClock = SavePlayClock;
+		defineSky(DEFAULTPSKY, pskybits_override, nullptr, 0, parallaxyscale_override / 65536.f);
+		InitNetVars();
 
-    screenpeek = myconnectindex;
+		screenpeek = myconnectindex;
 
-    Mus_ResumeSaved();
-    if (snd_ambience)
-        StartAmbientSound();
+		Mus_ResumeSaved();
+		if (snd_ambience)
+			StartAmbientSound();
 
-    // this is not a new game
-    ShadowWarrior::NewGame = false;
+		// this is not a new game
+		ShadowWarrior::NewGame = false;
 
 		DoPlayerDivePalette(Player + myconnectindex);
 		DoPlayerNightVisionPalette(Player + myconnectindex);
-    InitLevelGlobals();
+		InitLevelGlobals();
 	}
 }
 

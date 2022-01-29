@@ -29,7 +29,6 @@ Modifications for JonoF's port by Jonathon Fowler (jf@jonof.id.au)
 #include "ns.h"	// Must come before everything else!
 
 #include "duke3d.h"
-#include "sbar.h"
 #include "m_argv.h"
 #include "mapinfo.h"
 #include "texturemanager.h"
@@ -38,11 +37,11 @@ BEGIN_DUKE_NS
 
 
 int myx, omyx, myxvel, myy, omyy, myyvel, myz, omyz, myzvel;
-short globalskillsound;
+int globalskillsound;
 binangle myang, omyang;
 fixedhoriz myhoriz, omyhoriz, myhorizoff, omyhorizoff;
-short mycursectnum, myjumpingcounter;
-char myjumpingtoggle, myonground, myhardlanding,myreturntocenter;
+int mycursectnum, myjumpingcounter;
+uint8_t myjumpingtoggle, myonground, myhardlanding,myreturntocenter;
 int fakemovefifoplc;
 int myxbak[MOVEFIFOSIZ], myybak[MOVEFIFOSIZ], myzbak[MOVEFIFOSIZ];
 int myhorizbak[MOVEFIFOSIZ];
@@ -51,14 +50,14 @@ short myangbak[MOVEFIFOSIZ];
 
 void resetmys()
 {
-	myx = omyx = ps[myconnectindex].posx;
-	myy = omyy = ps[myconnectindex].posy;
-	myz = omyz = ps[myconnectindex].posz;
+	myx = omyx = ps[myconnectindex].pos.X;
+	myy = omyy = ps[myconnectindex].pos.Y;
+	myz = omyz = ps[myconnectindex].pos.Z;
 	myxvel = myyvel = myzvel = 0;
-	myang = myang = ps[myconnectindex].angle.ang;
+	myang = ps[myconnectindex].angle.ang;
 	myhoriz = omyhoriz = ps[myconnectindex].horizon.horiz;
 	myhorizoff = omyhorizoff = ps[myconnectindex].horizon.horizoff;
-	mycursectnum = ps[myconnectindex].cursectnum;
+	mycursectnum = sectnum(ps[myconnectindex].cursector);
 	myjumpingcounter = ps[myconnectindex].jumping_counter;
 	myjumpingtoggle = ps[myconnectindex].jumping_toggle;
 	myonground = ps[myconnectindex].on_ground;
@@ -76,14 +75,14 @@ void fakedomovethingscorrect(void)
 	 i = ((movefifoplc-1)&(MOVEFIFOSIZ-1));
 	 p = &ps[myconnectindex];
 
-	 if (p->posx == myxbak[i] && p->posy == myybak[i] && p->posz == myzbak[i]
+	 if (p->pos.x == myxbak[i] && p->pos.y == myybak[i] && p->pos.z == myzbak[i]
 		  && p->horiz == myhorizbak[i] && p->ang == myangbak[i]) return;
 
-	 myx = p->posx; omyx = p->oposx; myxvel = p->posxv;
-	 myy = p->posy; omyy = p->oposy; myyvel = p->posyv;
-	 myz = p->posz; omyz = p->oposz; myzvel = p->poszv;
+	 myx = p->pos.x; omyx = p->oposx; myxvel = p->posxv;
+	 myy = p->pos.y; omyy = p->oposy; myyvel = p->posyv;
+	 myz = p->pos.z; omyz = p->oposz; myzvel = p->poszv;
 	 myang = p->ang; omyang = p->oang;
-	 mycursectnum = p->cursectnum;
+	 mycursectnum = p->cursector;
 	 myhoriz = p->horiz; omyhoriz = p->ohoriz;
 	 myhorizoff = p->horizoff; omyhorizoff = p->ohorizoff;
 	 myjumpingcounter = p->jumping_counter;
@@ -104,7 +103,7 @@ void fakedomovethings(void)
 		struct player_struct *p;
 		int i, j, k, doubvel, fz, cz, x, y;
 		Collision clz, chz;
-		short psect, psectlotag, tempsect, backcstat;
+		int psect, psectlotag, tempsect, backcstat;
 		uint8_t shrunk, spritebridge;
 		ESyncBits actions;
 
@@ -113,17 +112,17 @@ void fakedomovethings(void)
 		p = &ps[myconnectindex];
 
 		backcstat = p->GetActor()->s.cstat;
-		p->GetActor()->s.cstat &= ~257;
+		p->GetActor()->s.cstat &= ~CSTAT_SPRITE_BLOCK_ALL;
 
 		actions = syn->actions;
 
 		psect = mycursectnum;
-		psectlotag = sector[psect].lotag;
+		psectlotag = psect->lotag;
 		spritebridge = 0;
 
 		shrunk = (p->GetActor()->s.yrepeat < (isRR()? 8 : 32));
 
-		if( ud.clipping == 0 && ( sector[psect].floorpicnum == MIRROR || psect < 0 || psect >= MAXSECTORS) )
+		if( ud.clipping == 0 && ( psect->floorpicnum == MIRROR || psect == nullptr) )
 		{
 			myx = omyx;
 			myy = omyy;
@@ -146,7 +145,7 @@ void fakedomovethings(void)
 		if(clz.type == kHitSector && psectlotag == 1 && abs(myz-j) > gs.playerheight+(16<<8) )
 			psectlotag = 0;
 
-		if( p->aim_mode == 0 && myonground && psectlotag != 2 && (sector[psect].floorstat&2) )
+		if( p->aim_mode == 0 && myonground && psectlotag != 2 && (psect->floorstat&2) )
 		{
 				x = myx + bcos(myang, -5);
 				y = myy + bsin(myang, -5);
@@ -166,7 +165,7 @@ void fakedomovethings(void)
 
 		if(chz.type == kHitSprite)
 		{
-				if (chz.actor->s.statnum == 1 && chz.actor->s.extra >= 0)
+				if (chz.actor()->s.statnum == 1 && chz.actor()->s.extra >= 0)
 				{
 					chz.type = kHitNone;
 					cz = getceilzofslope(psect,myx,myy);
@@ -175,14 +174,14 @@ void fakedomovethings(void)
 
 		if (clz.type == kHitSprite)
 		{
-				 if ((clz.actor->s.cstat&33) == 33)
+				 if ((clz.actor()->s.cstat&33) == 33)
 				 {
 						psectlotag = 0;
 						spritebridge = 1;
 				 }
-				 if(badguy(chz.actor) && chz.actor->s.xrepeat > 24 && abs(p->GetActor()->s.z- chz.actor->s.z) < (84<<8) )
+				 if(badguy(chz.actor) && chz.actor()->s.xrepeat > 24 && abs(p->GetActor()->s.z- chz.actor()->s.z) < (84<<8) )
 				 {
-					j = getangle(chz.actor->s.x-myx, chz.actor->s.y-myy);
+					j = getangle(chz.actor()->s.x-myx, chz.actor()->s.y-myy);
 					myxvel -= bcos(j, 4);
 					myyvel -= bsin(j, 4);
 				}
@@ -274,7 +273,7 @@ void fakedomovethings(void)
 
 				 if(shrunk) j = 512;
 				 else j = 2048;
-				 
+
 				 if ((sb_snum&1) && !(p->OnMotorcycle || p->OnBoat))
 							myz -= j;
 				 if ((sb_snum&(1<<1)) && !(p->OnMotorcycle || p->OnBoat))
@@ -297,7 +296,7 @@ void fakedomovethings(void)
 			}
 				 if(myz < (fz-(i<<8)) && (floorspace(psect)|ceilingspace(psect)) == 0 ) //falling
 				 {
-							if( (sb_snum&3) == 0 && !(p->OnMotorcycle || p->OnBoat) && myonground && (sector[psect].floorstat&2) && myz >= (fz-(i<<8)-(16<<8) ) )
+							if( (sb_snum&3) == 0 && !(p->OnMotorcycle || p->OnBoat) && myonground && (psect->floorstat&2) && myz >= (fz-(i<<8)-(16<<8) ) )
 									 myz = fz-(i<<8);
 							else
 							{
@@ -399,8 +398,8 @@ void fakedomovethings(void)
 				 myxvel = 0;
 				 myyvel = 0;
 		}
-		else if ( syn->avel )          //p->ang += syncangvel * constant
-		{                         //ENGINE calculates angvel for you
+		else if ( syn->avel )//p->ang += syncangvel * constant
+		{                    //ENGINE calculates angvel for you
 			int tempang;
 
 			tempang = syn->avel<<1;

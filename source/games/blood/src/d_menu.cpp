@@ -25,7 +25,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "ns.h"	// Must come before everything else!
 
 #include "build.h"
-#include "compat.h"
 #include "c_bind.h"
 #include "razemenu.h"
 #include "gamestate.h"
@@ -41,8 +40,7 @@ BEGIN_BLD_NS
 class CGameMenuItemQAV
 {
 public:
-	int m_nX, m_nY;
-	TArray<uint8_t> raw;
+	QAV* data;
 	int duration;
 	int lastTick;
 	bool bWideScreen;
@@ -51,69 +49,77 @@ public:
 	void Draw(void);
 };
 
+//---------------------------------------------------------------------------
+//
+//
+//
+//---------------------------------------------------------------------------
+
 CGameMenuItemQAV::CGameMenuItemQAV(int a3, int a4, const char* name, bool widescreen, bool clearbackground)
 {
-	m_nY = a4;
-	m_nX = a3;
 	bWideScreen = widescreen;
 	bClearBackground = clearbackground;
 
 	if (name)
 	{
-		// NBlood read this directly from the file system cache, but let's better store the data locally for robustness.
-		raw = fileSystem.LoadFile(name, 0);
-		if (raw.Size() != 0)
+		data = getQAV(fileSystem.GetResourceId(fileSystem.FindFile(name)));
+		if (data)
 		{
-			auto data = (QAV*)raw.Data();
-			data->nSprite = -1;
-			data->x = m_nX;
-			data->y = m_nY;
-			//data->Preload();
+			data->x = a3;
+			data->y = a4;
 			duration = data->duration;
-			lastTick = I_GetBuildTime();
+			lastTick = I_GetTime(data->ticrate);
 		}
 	}
 }
+
+//---------------------------------------------------------------------------
+//
+//
+//
+//---------------------------------------------------------------------------
 
 void CGameMenuItemQAV::Draw(void)
 {
 	if (bClearBackground)
 		twod->ClearScreen();
 
-	if (raw.Size() > 0)
+	if (data)
 	{
-		auto data = (QAV*)raw.Data();
-		int backFC = PlayClock;
-		int currentclock = I_GetBuildTime();
-		PlayClock = currentclock;
-		int nTicks = currentclock - lastTick;
-		lastTick = currentclock;
-		duration -= nTicks;
+		qavProcessTicker(data, &duration, &lastTick);
+
 		if (duration <= 0 || duration > data->duration)
 		{
 			duration = data->duration;
 		}
-		data->Play(data->duration - duration - nTicks, data->duration - duration, -1, NULL);
+		auto currentDuration = data->duration - duration;
+		auto smoothratio = !cl_interpolate || cl_capfps? MaxSmoothRatio : I_GetTimeFrac(data->ticrate) * MaxSmoothRatio;
+
+		data->Play(currentDuration - data->ticksPerFrame, currentDuration, -1, NULL);
 
 		if (bWideScreen)
 		{
-			int xdim43 = scale(ydim, 4, 3);
+			int xdim43 = Scale(ydim, 4, 3);
 			int nCount = (twod->GetWidth() + xdim43 - 1) / xdim43;
 			int backX = data->x;
 			for (int i = 0; i < nCount; i++)
 			{
-				data->Draw(data->duration - duration, 10 + kQavOrientationLeft, 0, 0, false);
+				data->Draw(currentDuration, 10 + kQavOrientationLeft, 0, 0, false, smoothratio);
 				data->x += 320;
 			}
 			data->x = backX;
 		}
 		else
-			data->Draw(data->duration - duration, 10, 0, 0, false);
-
-		PlayClock = backFC;
+			data->Draw(currentDuration, 10, 0, 0, false, smoothratio);
 	}
 }
 
+
+//---------------------------------------------------------------------------
+//
+//
+//
+//---------------------------------------------------------------------------
 
 static std::unique_ptr<CGameMenuItemQAV> itemBloodQAV;	// This must be global to ensure that the animation remains consistent across menus.
 
@@ -155,7 +161,7 @@ void GameInterface::MenuClosed()
 
 bool GameInterface::CanSave()
 {
-	return (gamestate == GS_LEVEL && gPlayer[myconnectindex].pXSprite->health != 0);
+	return (gamestate == GS_LEVEL && gPlayer[myconnectindex].actor->xspr.health != 0);
 }
 
 FSavegameInfo GameInterface::GetSaveSig()

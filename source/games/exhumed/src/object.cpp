@@ -31,145 +31,126 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 BEGIN_PS_NS
 
-static short ObjectSeq[] = {
+static const int8_t ObjectSeq[] = {
     46, -1, 72, -1
 };
 
-static short ObjectStatnum[] = {
+static const int16_t ObjectStatnum[] = {
     kStatExplodeTrigger, kStatExplodeTarget, 98, kStatDestructibleSprite
 };
 
 struct Trail
 {
-    short field_0;
-    short field_2;
-    short field_4;
+    int16_t nPoint;
+    int16_t nVal;
+    int16_t nPoint2;
 };
 
 struct TrailPoint
 {
     int x;
     int y;
-    char nTrailPointVal;
-    short nTrailPointPrev;
-    short nTrailPointNext;
+    uint8_t nTrailPointVal;
+    int16_t nTrailPointPrev;
+    int16_t nTrailPointNext;
 
 };
 
 struct Bob
 {
-    short nSector;
-    char field_2;
-    char field_3;
+    sectortype* pSector;
     int z;
-    short sBobID;
-
+    uint8_t nPhase;
+    uint8_t field_3;
+    uint16_t sBobID;
 };
 
 struct Drip
 {
-    short nSprite;
-    short field_2;
+    TObjPtr<DExhumedActor*> pActor;
+    int16_t nCount;
 };
 
 // 56 bytes
 struct Elev
 {
-    short field_0;
-    short nChannel;
-    short nSector;
-    int field_6;
-    int field_A;
-    short nCountZOffsets; // count of items in zOffsets
-    short nCurZOffset;
+    TObjPtr<DExhumedActor*> pActor;
+    sectortype* pSector;
+    int16_t nFlags;
+    int16_t nChannel;
+    int nParam1;
+    int nParam2;
+    int16_t nCountZOffsets; // count of items in zOffsets
+    int16_t nCurZOffset;
     int zOffsets[8]; // different Z offsets
-    short field_32;
-    short nSprite;
-    short field_36;
+    int16_t nRunRec;
 };
 
 // 16 bytes
 struct MoveSect
 {
-    short nSector;
-    short nTrail;
-    short nTrailPoint;
-    short field_6;
-    short field_8; // nSector?
+    sectortype* pSector;
+    sectortype* pCurSector;
     int field_10;
-    short field_14; // nChannel?
-    short sMoveDir;
+    int16_t nTrail;
+    int16_t nTrailPoint;
+    int16_t nFlags;
+    int16_t nChannel; // nChannel?
+    int16_t sMoveDir;
 
-};
-
-struct Object
-{
-    short field_0;
-    short nHealth;
-    short field_4;
-    short nSprite;
-    short field_8;
-    short field_10;
-    short field_12;
 };
 
 struct wallFace
 {
-    short nChannel;
-    short nWall;
-    short field_4;
-    short field_6[8];
+    walltype* pWall;
+    int16_t nChannel;
+    int16_t count;
+    int16_t piclist[8];
 };
 
 struct slideData
 {
-    short nChannel;
-    short field_2a;
-    short field_4a;
-    short field_6a;
-    short field_8a;
+    TObjPtr<DExhumedActor*> pActor;
+    int16_t nChannel;
+    int16_t nStart;
+    int16_t nRunRec;
+    int16_t nRunC;
 
-    int field_0;
-    int field_4;
-    int field_8;
-    int field_C;
+    walltype* pStartWall;
+    walltype* pWall1;
+    walltype* pWall2;
+    walltype* pWall3;
     int x1;
     int y1;
     int x2;
     int y2;
-    int field_20;
-    int field_24;
-    int field_28;
-    int field_2C;
-    int field_30;
-    int field_34;
-    int field_38;
-    int field_3C;
+    int x3;
+    int y3;
+    int x4;
+    int y4;
+    int x5;
+    int y5;
+    int x6;
+    int y6;
 };
 
 struct Point
 {
-    short field_0;
-    short field_2;
-    short field_4;
-    short field_6;
-    short field_8;
-    short field_A;
-    short field_C;
-    short field_E;
+    sectortype* pSector;
+    int16_t nNext;
 };
 
 struct Trap
 {
-    short field_0;
-    short nSprite;
-    short nType;
-    short field_6;
-    short field_8;
-    short field_A;
-    short field_C;
-    short field_E;
-    short nTrapInterval;
+    TObjPtr<DExhumedActor*> pActor;
+    walltype* pWall1;
+    walltype* pWall2;
+
+    int16_t nState;
+    int16_t nType;
+    int16_t nPicnum1;
+    int16_t nPicnum2;
+    int16_t nTrapInterval;
 
 };
 
@@ -180,217 +161,205 @@ TArray<Bob> sBob;
 TArray<Trail> sTrail;
 TArray<TrailPoint> sTrailPoint;
 TArray<Elev> Elevator;
-TArray<Object> ObjectList;
+TArray<DExhumedActor*> ObjectList;
 TArray<MoveSect> sMoveSect;
 TArray<slideData> SlideData;
 TArray<wallFace> WallFace;
 TArray<Drip> sDrip;
+TArray<DExhumedActor*> EnergyBlocks;
+TObjPtr<DExhumedActor*> pFinaleSpr;
+
+size_t MarkObjects()
+{
+    GC::Mark(pFinaleSpr);
+    for (auto& d : sDrip) GC::Mark(d.pActor);
+    for (auto& d : sTrap) GC::Mark(d.pActor);
+    for (auto& d : Elevator) GC::Mark(d.pActor);
+    for (auto& d : SlideData) GC::Mark(d.pActor);
+    GC::MarkArray(EnergyBlocks);
+    return 1 + sDrip.Size() + sTrap.Size() + Elevator.Size() + SlideData.Size();
+}
 
 int lFinaleStart;
 
-short nEnergyBlocks;
-short nFinaleStage;
-short nFinaleSpr;
+int nFinaleStage;
 
-short nDronePitch = 0;
-short nSmokeSparks = 0;
+int nDronePitch = 0;
+int nSmokeSparks = 0;
 
 FSerializer& Serialize(FSerializer& arc, const char* keyname, Trail& w, Trail* def)
 {
-	if (arc.BeginObject(keyname))
-	{
-		arc("at0", w.field_0)
-			("at2", w.field_2)
-			("at4", w.field_4)
-			.EndObject();
-	}
-	return arc;
+    if (arc.BeginObject(keyname))
+    {
+        arc("at0", w.nPoint)
+            ("at2", w.nVal)
+            ("at4", w.nPoint2)
+            .EndObject();
+    }
+    return arc;
 }
 FSerializer& Serialize(FSerializer& arc, const char* keyname, TrailPoint& w, TrailPoint* def)
 {
-	if (arc.BeginObject(keyname))
-	{
-		arc("x", w.x)
-			("y", w.y)
-			("val", w.nTrailPointVal)
-			("next", w.nTrailPointNext)
-			("prev", w.nTrailPointPrev)
-			.EndObject();
-	}
-	return arc;
+    if (arc.BeginObject(keyname))
+    {
+        arc("x", w.x)
+            ("y", w.y)
+            ("val", w.nTrailPointVal)
+            ("next", w.nTrailPointNext)
+            ("prev", w.nTrailPointPrev)
+            .EndObject();
+    }
+    return arc;
 }
 FSerializer& Serialize(FSerializer& arc, const char* keyname, Bob& w, Bob* def)
 {
-	if (arc.BeginObject(keyname))
-	{
-		arc("sector", w.nSector)
-			("at2", w.field_2)
-			("at3", w.field_3)
-			("z", w.z)
-			("id", w.sBobID)
-			.EndObject();
-	}
-	return arc;
+    if (arc.BeginObject(keyname))
+    {
+        arc("sector", w.pSector)
+            ("at2", w.nPhase)
+            ("at3", w.field_3)
+            ("z", w.z)
+            ("id", w.sBobID)
+            .EndObject();
+    }
+    return arc;
 }
 FSerializer& Serialize(FSerializer& arc, const char* keyname, Drip& w, Drip* def)
 {
-	if (arc.BeginObject(keyname))
-	{
-		arc("sprite", w.nSprite)
-			("at2", w.field_2)
-			.EndObject();
-	}
-	return arc;
+    if (arc.BeginObject(keyname))
+    {
+        arc("sprite", w.pActor)
+            ("at2", w.nCount)
+            .EndObject();
+    }
+    return arc;
 }
 FSerializer& Serialize(FSerializer& arc, const char* keyname, Elev& w, Elev* def)
 {
-	if (arc.BeginObject(keyname))
-	{
-		arc("at0", w.field_0)
-			("channel", w.nChannel)
-			("sector", w.nSector)
-			("at6", w.field_6)
-			("ata", w.field_A)
-			("countz", w.nCountZOffsets)
-			("curz", w.nCurZOffset)
-			.Array("zofs", w.zOffsets, 8)
-			("at32", w.field_32)
-			("sprite", w.nSprite)
-			("at36", w.field_36)
-			.EndObject();
-	}
-	return arc;
+    if (arc.BeginObject(keyname))
+    {
+        arc("at0", w.nFlags)
+            ("channel", w.nChannel)
+            ("sector", w.pSector)
+            ("at6", w.nParam1)
+            ("ata", w.nParam2)
+            ("countz", w.nCountZOffsets)
+            ("curz", w.nCurZOffset)
+            .Array("zofs", w.zOffsets, 8)
+            ("at32", w.nRunRec)
+            ("sprite", w.pActor)
+            .EndObject();
+    }
+    return arc;
 }
 FSerializer& Serialize(FSerializer& arc, const char* keyname, MoveSect& w, MoveSect* def)
 {
-	if (arc.BeginObject(keyname))
-	{
-		arc("sector", w.nSector)
-			("trail", w.nTrail)
-			("trailpoint", w.nTrailPoint)
-			("at6", w.field_6)
-			("at8", w.field_8)
-			("at10", w.field_10)
-			("at14", w.field_14)
-			("movedir", w.sMoveDir)
-			.EndObject();
-	}
-	return arc;
+    if (arc.BeginObject(keyname))
+    {
+        arc("sector", w.pSector)
+            ("trail", w.nTrail)
+            ("trailpoint", w.nTrailPoint)
+            ("at6", w.nFlags)
+            ("at8", w.pCurSector)
+            ("at10", w.field_10)
+            ("at14", w.nChannel)
+            ("movedir", w.sMoveDir)
+            .EndObject();
+    }
+    return arc;
 }
-FSerializer& Serialize(FSerializer& arc, const char* keyname, Object& w, Object* def)
-{
-	if (arc.BeginObject(keyname))
-	{
-		arc("at0", w.field_0)
-			("health", w.nHealth)
-			("at4", w.field_4)
-			("at8", w.field_8)
-			("sprite", w.nSprite)
-			("at8", w.field_8)
-			("at10", w.field_10)
-			("at12", w.field_12)
-			.EndObject();
-	}
-	return arc;
-}
+
 FSerializer& Serialize(FSerializer& arc, const char* keyname, wallFace& w, wallFace* def)
 {
-	if (arc.BeginObject(keyname))
-	{
-		arc("channel", w.nChannel)
-			("wall", w.nWall)
-			("at4", w.field_4)
-			.Array("at6", w.field_6, 8)
-			.EndObject();
-	}
-	return arc;
+    if (arc.BeginObject(keyname))
+    {
+        arc("channel", w.nChannel)
+            ("wall", w.pWall)
+            ("at4", w.count)
+            .Array("at6", w.piclist, 8)
+            .EndObject();
+    }
+    return arc;
 }
 FSerializer& Serialize(FSerializer& arc, const char* keyname, slideData& w, slideData* def)
 {
-	if (arc.BeginObject(keyname))
-	{
-		arc("at0", w.field_0)
-			("at4", w.field_4)
-			("at8", w.field_8)
-			("atc", w.field_C)
-			("x1", w.x1)
-			("y1", w.y1)
-			("x2", w.x2)
-			("y2", w.y2)
-			("at20", w.field_20)
-			("at24", w.field_24)
-			("at28", w.field_28)
-			("at2c", w.field_2C)
-			("at30", w.field_30)
-			("at34", w.field_34)
-			("at38", w.field_38)
-			("at3c", w.field_3C)
-			("channel", w.nChannel)
-			("at2a", w.field_2a)
-			("at4a", w.field_4a)
-			("at6a", w.field_6a)
-			("at8a", w.field_8a)
-			.EndObject();
-	}
-	return arc;
+    if (arc.BeginObject(keyname))
+    {
+        arc("at0", w.pStartWall)
+            ("at4", w.pWall1)
+            ("at8", w.pWall2)
+            ("atc", w.pWall3)
+            ("x1", w.x1)
+            ("y1", w.y1)
+            ("x2", w.x2)
+            ("y2", w.y2)
+            ("at20", w.x3)
+            ("at24", w.y3)
+            ("at28", w.x4)
+            ("at2c", w.y4)
+            ("at30", w.x5)
+            ("at34", w.y5)
+            ("at38", w.x6)
+            ("at3c", w.y6)
+            ("channel", w.nChannel)
+            ("at2a", w.nStart)
+            ("at4a", w.nRunRec)
+            ("at6a", w.pActor)
+            ("at8a", w.nRunC)
+            .EndObject();
+    }
+    return arc;
 }
 FSerializer& Serialize(FSerializer& arc, const char* keyname, Point& w, Point* def)
 {
-	if (arc.BeginObject(keyname))
-	{
-		arc("at0", w.field_0)
-			("at2", w.field_2)
-			("at4", w.field_4)
-			("at6", w.field_6)
-			("at8", w.field_8)
-			("ata", w.field_A)
-			("atc", w.field_C)
-			("ate", w.field_E)
-			.EndObject();
-	}
-	return arc;
+    if (arc.BeginObject(keyname))
+    {
+        arc("at0", w.pSector)
+            ("ate", w.nNext)
+            .EndObject();
+    }
+    return arc;
 }
 FSerializer& Serialize(FSerializer& arc, const char* keyname, Trap& w, Trap* def)
 {
-	if (arc.BeginObject(keyname))
-	{
-		arc("at0", w.field_0)
-			("sprite", w.nSprite)
-			("type", w.nType)
-			("at6", w.field_6)
-			("at8", w.field_8)
-			("ata", w.field_A)
-			("atc", w.field_C)
-			("ate", w.field_E)
-			("interval", w.nTrapInterval)
-			.EndObject();
-	}
-	return arc;
+    if (arc.BeginObject(keyname))
+    {
+        arc("at0", w.nState)
+            ("sprite", w.pActor)
+            ("type", w.nType)
+            ("wall1", w.pWall1)
+            ("wall2", w.pWall2)
+            ("pic1", w.nPicnum1)
+            ("pic2", w.nPicnum2)
+            ("interval", w.nTrapInterval)
+            .EndObject();
+    }
+    return arc;
 }
 
 void SerializeObjects(FSerializer& arc)
 {
-	if (arc.BeginObject("objects"))
-	{
-		arc("points", PointList)
-			("traps", sTrap)
-			("bob", sBob)
-			("trails", sTrail)
-			("trailpoints", sTrailPoint)
-			("elevators", Elevator)
-			("objects", ObjectList)
-			("movesect", sMoveSect)
-			("slides", SlideData)
-			("wallface", WallFace)
-			("drips", sDrip)
-			("finalestart", lFinaleStart)
-			("energyblocks", nEnergyBlocks)
-			("finalestage", nFinaleStage)
-			("finalespr", nFinaleSpr)
-			("dronepitch", nDronePitch)
-			("smokesparks", nSmokeSparks)
-			.EndObject();
-	}
+    if (arc.BeginObject("objects"))
+    {
+        arc("points", PointList)
+            ("traps", sTrap)
+            ("bob", sBob)
+            ("trails", sTrail)
+            ("trailpoints", sTrailPoint)
+            ("elevators", Elevator)
+            ("objects", ObjectList)
+            ("movesect", sMoveSect)
+            ("slides", SlideData)
+            ("wallface", WallFace)
+            ("drips", sDrip)
+            ("finalestart", lFinaleStart)
+            ("energyblocks", EnergyBlocks)
+            ("finalestage", nFinaleStage)
+            ("finalespr", pFinaleSpr)
+            ("dronepitch", nDronePitch)
+            ("smokesparks", nSmokeSparks)
+            .EndObject();
+    }
 }
 
 // done
@@ -403,8 +372,8 @@ void InitObjects()
     ObjectList.Clear();
     sMoveSect.Clear();
     sDrip.Clear();
+    EnergyBlocks.Clear();
 
-    nEnergyBlocks = 0;
     nDronePitch = 0;
     nFinaleStage = 0;
     lFinaleStart = 0;
@@ -418,59 +387,45 @@ void InitElev()
 }
 
 // done
-int BuildWallSprite(int nSector)
+DExhumedActor* BuildWallSprite(sectortype* pSector)
 {
-    int nWall = sector[nSector].wallptr;
+    auto wal = pSector->firstWall();
 
-    int x = wall[nWall].x;
-    int y = wall[nWall].y;
+    auto pActor = insertActor(pSector, 401);
 
-    int x2 = wall[nWall + 1].x;
-    int y2 = wall[nWall + 1].y;
+	pActor->spr.pos.vec2 = wal->center();
+    pActor->spr.pos.Z = (pSector->floorz + pSector->ceilingz) / 2;
+    pActor->spr.cstat = CSTAT_SPRITE_INVISIBLE;
 
-    int nSprite = insertsprite(nSector, 401);
-
-    sprite[nSprite].x = (x + x2) / 2;
-    sprite[nSprite].y = (y + y2) / 2;
-    sprite[nSprite].z = (sector[nSector].floorz + sector[nSector].ceilingz) / 2;
-    sprite[nSprite].cstat = 0x8000;
-
-    return nSprite;
-}
+    return pActor;
+ }
 
 // done
-short FindWallSprites(short nSector)
+DExhumedActor* FindWallSprites(sectortype* pSector)
 {
     int var_24 = 0x7FFFFFFF;
-    int ecx    = 0x7FFFFFFF;
-
-    int nWall = sector[nSector].wallptr;
-    int nWallCount = sector[nSector].wallnum;
+    int ecx = 0x7FFFFFFF;
 
     int esi = 0x80000002;
     int edi = 0x80000002;
 
-    int i;
-
-    for (i = 0; i < nWallCount; i++)
+	for (auto& wal : wallsofsector(pSector))
     {
-        if (wall[nWall].x < var_24) {
-            var_24 = wall[nWall].x;
+        if (wal.pos.X < var_24) {
+            var_24 = wal.pos.X;
         }
 
-        if (esi < wall[nWall].x) {
-            esi = wall[nWall].x;
+        if (esi < wal.pos.X) {
+            esi = wal.pos.X;
         }
 
-        if (ecx > wall[nWall].y) {
-            ecx = wall[nWall].y;
+        if (ecx > wal.pos.Y) {
+            ecx = wal.pos.Y;
         }
 
-        if (edi < wall[nWall].y) {
-            edi = wall[nWall].y;
+        if (edi < wal.pos.Y) {
+            edi = wal.pos.Y;
         }
-
-        nWall++;
     }
 
     ecx -= 5;
@@ -478,61 +433,61 @@ short FindWallSprites(short nSector)
     edi += 5;
     var_24 -= 5;
 
-    int nSprite = -1;
+    DExhumedActor* pAct = nullptr;
 
-    for (i = 0; i < kMaxSprites; i++)
+    ExhumedSpriteIterator it;
+    while (auto actor = it.Next())
     {
-        if (sprite[i].lotag == 0)
+        if (actor->spr.lotag == 0)
         {
-            if ((sprite[i].cstat & 0x50) == 80)
+            if ((actor->spr.cstat & (CSTAT_SPRITE_ALIGNMENT_WALL | CSTAT_SPRITE_ONE_SIDE)) == (CSTAT_SPRITE_ALIGNMENT_WALL | CSTAT_SPRITE_ONE_SIDE))
             {
-                int var_28 = sprite[i].x;
-                int ebx = sprite[i].y;
+                int var_28 = actor->spr.pos.X;
+                int ebx = actor->spr.pos.Y;
 
                 if ((var_28 >= var_24) && (esi >= var_28) && (ebx >= ecx) && (ebx <= edi))
                 {
-                    sprite[i].owner = nSprite;
-                    nSprite = i;
+                    actor->pTarget = pAct;
+                    pAct = actor;
                 }
             }
         }
     }
 
-    if (nSprite < 0)
+    if (pAct == nullptr)
     {
-        nSprite = insertsprite(nSector, 401);
+        pAct = insertActor(pSector, 401);
 
-        sprite[nSprite].x = (var_24 + esi) / 2;
-        sprite[nSprite].y = (ecx + edi) / 2;
-        sprite[nSprite].z = sector[nSector].floorz;
-        sprite[nSprite].cstat = 0x8000;
-        sprite[nSprite].owner = -1;
-        sprite[nSprite].lotag = 0;
-        sprite[nSprite].hitag = 0;
+        pAct->spr.pos.X = (var_24 + esi) / 2;
+        pAct->spr.pos.Y = (ecx + edi) / 2;
+        pAct->spr.pos.Z = pSector->floorz;
+        pAct->spr.cstat = CSTAT_SPRITE_INVISIBLE;
+        pAct->spr.owner = -1;
+        pAct->spr.lotag = 0;
+        pAct->spr.hitag = 0;
     }
 
-    return nSprite;
+    return pAct;
 }
 
-int BuildElevF(int nChannel, int nSector, int nWallSprite, int arg_4, int arg_5, int nCount, ...)
+int BuildElevF(int nChannel, sectortype* pSector, DExhumedActor* nWallSprite, int arg_4, int arg_5, int nCount, ...)
 {
     auto ElevCount = Elevator.Reserve(1);
 
-    Elevator[ElevCount].field_0 = 2;
-    Elevator[ElevCount].field_6 = arg_4;
-    Elevator[ElevCount].field_32 = -1;
-    Elevator[ElevCount].field_A = arg_5;
+    Elevator[ElevCount].nFlags = 2;
+    Elevator[ElevCount].nParam1 = arg_4;
+    Elevator[ElevCount].nRunRec = -1;
+    Elevator[ElevCount].nParam2 = arg_5;
     Elevator[ElevCount].nChannel = nChannel;
-    Elevator[ElevCount].nSector = nSector;
+    Elevator[ElevCount].pSector = pSector;
     Elevator[ElevCount].nCountZOffsets = 0;
     Elevator[ElevCount].nCurZOffset = 0;
-    Elevator[ElevCount].field_36 = 0;
 
-    if (nWallSprite < 0) {
-        nWallSprite = BuildWallSprite(nSector);
+    if (nWallSprite == nullptr) {
+        nWallSprite = BuildWallSprite(pSector);
     }
 
-    Elevator[ElevCount].nSprite = nWallSprite;
+    Elevator[ElevCount].pActor = nWallSprite;
 
     va_list zlist;
     va_start(zlist, nCount);
@@ -554,33 +509,32 @@ int BuildElevF(int nChannel, int nSector, int nWallSprite, int arg_4, int arg_5,
     return ElevCount;
 }
 
-int BuildElevC(int arg1, int nChannel, int nSector, int nWallSprite, int arg5, int arg6, int nCount, ...)
+int BuildElevC(int arg1, int nChannel, sectortype* pSector, DExhumedActor* nWallSprite, int arg5, int arg6, int nCount, ...)
 {
     int edi = arg5;
 
     auto ElevCount = Elevator.Reserve(1);
 
-    Elevator[ElevCount].field_0 = arg1;
+    Elevator[ElevCount].nFlags = arg1;
 
     if (arg1 & 4)
     {
         edi = arg5 / 2;
     }
 
-    Elevator[ElevCount].field_6 = edi;
+    Elevator[ElevCount].nParam1 = edi;
     Elevator[ElevCount].nCountZOffsets = 0;
-    Elevator[ElevCount].field_36 = 0;
     Elevator[ElevCount].nCurZOffset = 0;
-    Elevator[ElevCount].field_A = arg6;
-    Elevator[ElevCount].field_32 = -1;
+    Elevator[ElevCount].nParam2 = arg6;
+    Elevator[ElevCount].nRunRec = -1;
     Elevator[ElevCount].nChannel = nChannel;
-    Elevator[ElevCount].nSector = nSector;
+    Elevator[ElevCount].pSector = pSector;
 
-    if (nWallSprite < 0) {
-        nWallSprite = BuildWallSprite(nSector);
+    if (nWallSprite == nullptr) {
+        nWallSprite = BuildWallSprite(pSector);
     }
 
-    Elevator[ElevCount].nSprite = nWallSprite;
+    Elevator[ElevCount].pActor = nWallSprite;
 
     va_list zlist;
     va_start(zlist, nCount);
@@ -605,7 +559,7 @@ int BuildElevC(int arg1, int nChannel, int nSector, int nWallSprite, int arg5, i
 // TODO - tidy me up
 // RENAME param A - not always Z
 // Confirmed 100% correct with original .exe
-int LongSeek(int *pZVal, int a2, int a3, int a4)
+int LongSeek(int* pZVal, int a2, int a3, int a4)
 {
     int v4; // edx@1
     int v5; // ebx@2
@@ -631,19 +585,18 @@ int LongSeek(int *pZVal, int a2, int a3, int a4)
 }
 
 // done
-int CheckSectorSprites(short nSector, int nVal)
+int CheckSectorSprites(sectortype* pSector, int nVal)
 {
     int b = 0;
 
     if (nVal)
     {
-        int nZDiff = sector[nSector].floorz - sector[nSector].ceilingz;
+        int nZDiff = pSector->floorz - pSector->ceilingz;
 
-        int nSprite;
-        SectIterator it(nSector);
-        while ((nSprite = it.NextIndex()) >= 0)
+        ExhumedSectIterator it(pSector);
+        while (auto pActor= it.Next())
         {
-            if ((sprite[nSprite].cstat & 0x101) && (nZDiff < GetSpriteHeight(nSprite)))
+            if ((pActor->spr.cstat & CSTAT_SPRITE_BLOCK_ALL) && (nZDiff < GetActorHeight(pActor)))
             {
                 if (nVal != 1) {
                     return 1;
@@ -651,26 +604,25 @@ int CheckSectorSprites(short nSector, int nVal)
 
                 b = 1;
 
-                runlist_DamageEnemy(nSprite, -1, 5);
+                runlist_DamageEnemy(pActor, nullptr, 5);
 
-                if (sprite[nSprite].statnum == 100 && PlayerList[GetPlayerFromSprite(nSprite)].nHealth <= 0)
+                if (pActor->spr.statnum == 100 && PlayerList[GetPlayerFromActor(pActor)].nHealth <= 0)
                 {
                     PlayFXAtXYZ(StaticSound[kSoundJonFDie],
-                        sprite[nSprite].x,
-                        sprite[nSprite].y,
-                        sprite[nSprite].z,
-                        sprite[nSprite].sectnum | 0x4000);
+                        pActor->spr.pos.X,
+                        pActor->spr.pos.Y,
+                        pActor->spr.pos.Z,
+                        CHANF_NONE, 0x4000);
                 }
             }
         }
     }
     else
     {
-        int i;
-        SectIterator it(nSector);
-        while ((i = it.NextIndex()) >= 0)
+        ExhumedSectIterator it(pSector);
+        while (auto pActor = it.Next())
         {
-            if (sprite[i].cstat & 0x101) {
+            if (pActor->spr.cstat & CSTAT_SPRITE_BLOCK_ALL) {
                 return 1;
             }
         }
@@ -681,27 +633,26 @@ int CheckSectorSprites(short nSector, int nVal)
 }
 
 // done
-void MoveSectorSprites(int nSector, int z)
+void MoveSectorSprites(sectortype* pSector, int z)
 {
-    int newz = sector[nSector].floorz;
+    int newz = pSector->floorz;
     int oldz = newz - z;
-    int minz = std::min(newz, oldz);
-    int maxz = std::max(newz, oldz);
-    int nSprite;
-    SectIterator it(nSector);
-    while ((nSprite = it.NextIndex()) >= 0)
+    int minz = min(newz, oldz);
+    int maxz = max(newz, oldz);
+    ExhumedSectIterator it(pSector);
+    while (auto pActor = it.Next())
     {
-        int z = sprite[nSprite].z;
-        if ((sprite[nSprite].statnum != 200 && z >= minz && z <= maxz) || sprite[nSprite].statnum >= 900)
+        int actz = pActor->spr.pos.Z;
+        if ((pActor->spr.statnum != 200 && actz >= minz && actz <= maxz) || pActor->spr.statnum >= 900)
         {
-            sprite[nSprite].z = newz;
+            pActor->spr.pos.Z = newz;
         }
     }
 }
 
-void StartElevSound(short nSprite, int nVal)
+void StartElevSound(DExhumedActor* pActor, int nVal)
 {
-    short nSound;
+    int nSound;
 
     if (nVal & 2) {
         nSound = nElevSound;
@@ -710,230 +661,213 @@ void StartElevSound(short nSprite, int nVal)
         nSound = nStoneSound;
     }
 
-    D3PlayFX(StaticSound[nSound], nSprite);
+    D3PlayFX(StaticSound[nSound], pActor);
 }
 
-void FuncElev(int a, int, int nRun)
+void AIElev::ProcessChannel(RunListEvent* ev)
 {
-    short nElev = RunData[nRun].nVal;
+    int nRun = ev->nRun;
+    int nElev = RunData[nRun].nObjIndex;
     assert(nElev >= 0 && nElev < (int)Elevator.Size());
 
-    short nChannel = Elevator[nElev].nChannel;
-    short var_18 = Elevator[nElev].field_0;
+    int nChannel = Elevator[nElev].nChannel;
+    int nFlags = Elevator[nElev].nFlags;
 
     assert(nChannel >= 0 && nChannel < kMaxChannels);
 
-    int nMessage = a & 0x7F0000;
+    //			int ax = var_18 & 8;
+    int dx = sRunChannels[nChannel].c;
 
-    if (nMessage < 0x10000) {
-        return;
-    }
+    int edi = 999; // FIXME CHECKME - this isn't default set to anything in the ASM that I can see - if ax is 0 and var_24 is 0, this will never be set to a known value otherwise!
 
-//	int var_24 = var_18 & 0x10; // floor based?
-
-    switch (nMessage)
+    if (nFlags & 0x8)
     {
-        default:
-        {
-            return;
+        if (dx) {
+            edi = 1;
         }
-
-        case 0x10000:
+        else {
+            edi = 0;
+        }
+    }
+    else
+    {
+        // loc_20D48:
+        if (nFlags & 0x10) // was var_24
         {
-//			short ax = var_18 & 8;
-            short dx = sRunChannels[nChannel].c;
-
-            int edi = 999; // FIXME CHECKME - this isn't default set to anything in the ASM that I can see - if ax is 0 and var_24 is 0, this will never be set to a known value otherwise!
-
-            if (var_18 & 0x8)
+            if (Elevator[nElev].nRunRec < 0)
             {
-                if (dx) {
+                Elevator[nElev].nRunRec = runlist_AddRunRec(NewRun, &RunData[nRun]);
+                StartElevSound(Elevator[nElev].pActor, nFlags);
+
+                edi = 1;
+            }
+        }
+        else
+        {
+            if (dx < 0) {
+                edi = 0;
+            }
+            else
+            {
+                if (dx == Elevator[nElev].nCurZOffset || dx >= Elevator[nElev].nCountZOffsets)
+                {
                     edi = 1;
                 }
-                else {
-                    edi = 0;
-                }
-            }
-            else
-            {
-                // loc_20D48:
-                if (var_18 & 0x10) // was var_24
-                {
-                    if (Elevator[nElev].field_32 < 0)
-                    {
-                        Elevator[nElev].field_32 = runlist_AddRunRec(NewRun, RunData[nRun].nMoves);
-                        StartElevSound(Elevator[nElev].nSprite, var_18);
-
-                        edi = 1;
-                    }
-                }
                 else
                 {
-                    if (dx < 0) {
-                        edi = 0;
-                    }
-                    else
-                    {
-                        if (dx == Elevator[nElev].nCurZOffset || dx >= Elevator[nElev].nCountZOffsets)
-                        {
-                            Elevator[nElev].field_36 = dx;
-                            edi = 1;
-                        }
-                        else
-                        {
-                            Elevator[nElev].nCurZOffset = sRunChannels[nChannel].c;
-                            edi = 1;
-                        }
-                    }
+                    Elevator[nElev].nCurZOffset = sRunChannels[nChannel].c;
+                    edi = 1;
                 }
             }
-
-            assert(edi != 999);
-
-            // loc_20DF9:
-            if (edi)
-            {
-                if (Elevator[nElev].field_32 < 0)
-                {
-                    Elevator[nElev].field_32 = runlist_AddRunRec(NewRun, RunData[nRun].nMoves);
-
-                    StartElevSound(Elevator[nElev].nSprite, var_18);
-                }
-            }
-            else
-            {
-                //loc_20E4E:
-                if (Elevator[nElev].field_32 >= 0)
-                {
-                    runlist_SubRunRec(Elevator[nElev].field_32);
-                    Elevator[nElev].field_32 = -1;
-                }
-            }
-
-            return;
         }
+    }
 
-        case 0x20000:
+    assert(edi != 999);
+
+    // loc_20DF9:
+    if (edi)
+    {
+        if (Elevator[nElev].nRunRec < 0)
         {
-            short nSector = Elevator[nElev].nSector;
-            short di = Elevator[nElev].nSprite;
+            Elevator[nElev].nRunRec = runlist_AddRunRec(NewRun, &RunData[nRun]);
 
-            int ebp = 0; // initialise to *something*
-
-            if (var_18 & 0x2)
-            {
-                int nZOffset = Elevator[nElev].nCurZOffset;
-                int nZVal = Elevator[nElev].zOffsets[nZOffset];
-
-                short nSectorB = nSector;
-
-                StartInterpolation(nSector, Interp_Sect_Floorz);
-                int nVal = LongSeek((int*)&sector[nSector].floorz, nZVal, Elevator[nElev].field_6, Elevator[nElev].field_A);
-                ebp = nVal;
-
-                if (!nVal)
-                {
-                    if (var_18 & 0x10)
-                    {
-                        Elevator[nElev].nCurZOffset ^= 1;
-                        StartElevSound(di, var_18);
-                    }
-                    else
-                    {
-                        StopSpriteSound(di);
-                        runlist_SubRunRec(nRun);
-                        Elevator[nElev].field_32 = -1;
-                        runlist_ReadyChannel(nChannel);
-
-                        D3PlayFX(StaticSound[nStopSound], Elevator[nElev].nSprite);
-                    }
-                }
-                else
-                {
-                    assert(nSector == nSectorB);
-                    MoveSectorSprites(nSector, nVal);
-
-                    if (nVal < 0 && CheckSectorSprites(nSector, 2))
-                    {
-                        runlist_ChangeChannel(nChannel, sRunChannels[nChannel].c == 0);
-                        return;
-                    }
-                }
-            }
-            else
-            {
-                // loc_20FC3:
-                int ceilZ = sector[nSector].ceilingz;
-                sectortype *cursect = &sector[nSector];
-
-                int nZOffset = Elevator[nElev].nCurZOffset;
-                int zVal = Elevator[nElev].zOffsets[nZOffset];
-
-                StartInterpolation(nSector, Interp_Sect_Ceilingz);
-                int nVal = LongSeek(&ceilZ, zVal, Elevator[nElev].field_6, Elevator[nElev].field_A);
-                ebp = nVal;
-
-                if (!nVal)
-                {
-                    if (var_18 & 0x10)
-                    {
-                        Elevator[nElev].nCurZOffset ^= 1;
-
-                        StartElevSound(Elevator[nElev].nSprite, var_18);
-                    }
-                    else
-                    {
-                        runlist_SubRunRec(nRun);
-                        Elevator[nElev].field_32 = -1;
-                        StopSpriteSound(Elevator[nElev].nSprite);
-                        D3PlayFX(StaticSound[nStopSound], Elevator[nElev].nSprite);
-                        runlist_ReadyChannel(nChannel);
-                    }
-
-                    return;
-                }
-                else if (nVal > 0)
-                {
-                    if (ceilZ == zVal)
-                    {
-                        if (var_18 & 0x4) {
-                            SetQuake(di, 30);
-                        }
-
-                        PlayFXAtXYZ(StaticSound[kSound26], sprite[di].x, sprite[di].y, sprite[di].z, sprite[di].sectnum);
-                    }
-
-                    if (var_18 & 0x4)
-                    {
-                        if (CheckSectorSprites(nSector, 1)) {
-                            return;
-                        }
-                    }
-                    else
-                    {
-                        if (CheckSectorSprites(nSector, 0))
-                        {
-                            runlist_ChangeChannel(nChannel, sRunChannels[nChannel].c == 0);
-                            return;
-                        }
-                    }
-                }
-
-                StartInterpolation(nSector, Interp_Sect_Ceilingz);
-                cursect->ceilingz = ceilZ;
-            }
-
-            // maybe this doesn't go here?
-            while (di != -1)
-            {
-                sprite[di].z += ebp;
-                di = sprite[di].owner;
-            }
-
-            return;
+            StartElevSound(Elevator[nElev].pActor, nFlags);
+        }
+    }
+    else
+    {
+        //loc_20E4E:
+        if (Elevator[nElev].nRunRec >= 0)
+        {
+            runlist_SubRunRec(Elevator[nElev].nRunRec);
+            Elevator[nElev].nRunRec = -1;
         }
     }
 }
+
+void AIElev::Tick(RunListEvent* ev)
+{
+    int nRun = ev->nRun;
+    int nElev = RunData[nRun].nObjIndex;
+    assert(nElev >= 0 && nElev < (int)Elevator.Size());
+
+    int nChannel = Elevator[nElev].nChannel;
+    int var_18 = Elevator[nElev].nFlags;
+
+    assert(nChannel >= 0 && nChannel < kMaxChannels);
+
+    auto pSector =Elevator[nElev].pSector;
+    DExhumedActor* pElevSpr = Elevator[nElev].pActor;
+
+    int ebp = 0; // initialise to *something*
+
+    if (var_18 & 0x2)
+    {
+        int nZOffset = Elevator[nElev].nCurZOffset;
+        int nZVal = Elevator[nElev].zOffsets[nZOffset];
+
+        StartInterpolation(pSector, Interp_Sect_Floorz);
+        int nVal = LongSeek((int*)&pSector->floorz, nZVal, Elevator[nElev].nParam1, Elevator[nElev].nParam2);
+        ebp = nVal;
+
+        if (!nVal)
+        {
+            if (var_18 & 0x10)
+            {
+                Elevator[nElev].nCurZOffset ^= 1;
+                StartElevSound(pElevSpr, var_18);
+            }
+            else
+            {
+                StopActorSound(pElevSpr);
+                runlist_SubRunRec(nRun);
+                Elevator[nElev].nRunRec = -1;
+                runlist_ReadyChannel(nChannel);
+
+                D3PlayFX(StaticSound[nStopSound], Elevator[nElev].pActor);
+            }
+        }
+        else
+        {
+            MoveSectorSprites(pSector, nVal);
+
+            if (nVal < 0 && CheckSectorSprites(pSector, 2))
+            {
+                runlist_ChangeChannel(nChannel, sRunChannels[nChannel].c == 0);
+                return;
+            }
+        }
+    }
+    else
+    {
+        // loc_20FC3:
+        int ceilZ = pSector->ceilingz;
+
+        int nZOffset = Elevator[nElev].nCurZOffset;
+        int zVal = Elevator[nElev].zOffsets[nZOffset];
+
+        StartInterpolation(pSector, Interp_Sect_Ceilingz);
+        int nVal = LongSeek(&ceilZ, zVal, Elevator[nElev].nParam1, Elevator[nElev].nParam2);
+        ebp = nVal;
+
+        if (!nVal)
+        {
+            if (var_18 & 0x10)
+            {
+                Elevator[nElev].nCurZOffset ^= 1;
+
+                StartElevSound(Elevator[nElev].pActor, var_18);
+            }
+            else
+            {
+                runlist_SubRunRec(nRun);
+                Elevator[nElev].nRunRec = -1;
+                StopActorSound(Elevator[nElev].pActor);
+                D3PlayFX(StaticSound[nStopSound], Elevator[nElev].pActor);
+                runlist_ReadyChannel(nChannel);
+            }
+
+            return;
+        }
+        else if (nVal > 0)
+        {
+            if (ceilZ == zVal)
+            {
+                if (var_18 & 0x4) {
+                    SetQuake(pElevSpr, 30);
+                }
+
+                PlayFXAtXYZ(StaticSound[kSound26], pElevSpr->spr.pos.X, pElevSpr->spr.pos.Y, pElevSpr->spr.pos.Z);
+            }
+
+            if (var_18 & 0x4)
+            {
+                if (CheckSectorSprites(pSector, 1)) {
+                    return;
+                }
+            }
+            else
+            {
+                if (CheckSectorSprites(pSector, 0))
+                {
+                    runlist_ChangeChannel(nChannel, sRunChannels[nChannel].c == 0);
+                    return;
+                }
+            }
+        }
+
+        StartInterpolation(pSector, Interp_Sect_Ceilingz);
+        pSector->setceilingz(ceilZ);
+    }
+
+    // maybe this doesn't go here?
+    while (pElevSpr)
+    {
+        pElevSpr->spr.pos.Z += ebp;
+        pElevSpr = pElevSpr->pTarget;
+    }
+}
+
 
 // done
 void InitWallFace()
@@ -941,12 +875,12 @@ void InitWallFace()
     WallFace.Clear();
 }
 
-int BuildWallFace(short nChannel, short nWall, int nCount, ...)
+int BuildWallFace(int nChannel, walltype* pWall, int nCount, ...)
 {
     auto WallFaceCount = WallFace.Reserve(1);
 
-    WallFace[WallFaceCount].field_4 = 0;
-    WallFace[WallFaceCount].nWall = nWall;
+    WallFace[WallFaceCount].count = 0;
+    WallFace[WallFaceCount].pWall = pWall;
     WallFace[WallFaceCount].nChannel = nChannel;
 
     if (nCount > 8) {
@@ -956,33 +890,30 @@ int BuildWallFace(short nChannel, short nWall, int nCount, ...)
     va_list piclist;
     va_start(piclist, nCount);
 
-    while (WallFace[WallFaceCount].field_4 < nCount)
+    while (WallFace[WallFaceCount].count < nCount)
     {
-        int i = WallFace[WallFaceCount].field_4;
-        WallFace[WallFaceCount].field_4++;
+        int i = WallFace[WallFaceCount].count;
+        WallFace[WallFaceCount].count++;
 
-        WallFace[WallFaceCount].field_6[i] = (short)va_arg(piclist, int);
+        WallFace[WallFaceCount].piclist[i] = (int16_t)va_arg(piclist, int);
     }
     va_end(piclist);
 
-    return WallFaceCount | 0x70000;
+    return WallFaceCount;
 }
 
-void FuncWallFace(int a, int, int nRun)
+void AIWallFace::ProcessChannel(RunListEvent* ev)
 {
-    int nWallFace = RunData[nRun].nVal;
+    int nWallFace = RunData[ev->nRun].nObjIndex;
     assert(nWallFace >= 0 && nWallFace < (int)WallFace.Size());
 
-    short nChannel = WallFace[nWallFace].nChannel;
+    int16_t nChannel = WallFace[nWallFace].nChannel;
 
-    if ((a & 0x7F0000) != 0x10000)
-        return;
+    int16_t si = sRunChannels[nChannel].c;
 
-    short si = sRunChannels[nChannel].c;
-
-    if ((si <= WallFace[nWallFace].field_4) && (si >= 0))
+    if ((si <= WallFace[nWallFace].count) && (si >= 0))
     {
-        wall[WallFace[nWallFace].nWall].picnum = WallFace[nWallFace].field_6[si];
+        WallFace[nWallFace].pWall->picnum = WallFace[nWallFace].piclist[si];
     }
 }
 
@@ -1004,638 +935,558 @@ void InitSlide()
     SlideData.Clear();
 }
 
-int IdentifySector(int nVal)
-{
-    for (int i = 0; i < numsectors; i++)
-    {
-        for (int j = 0; ; j++)
-        {
-            if (j < sector[i].wallnum)
-            {
-                int nWall = sector[i].wallptr;
-                if (nWall + j == nVal)
-                    return i;
-            }
-            else {
-                break;
-            }
-        }
-    }
-
-    return -1;
-}
-
-int BuildSlide(int nChannel, int nStartWall, int nWall1, int ecx, int nWall2, int nWall3, int nWall4)
+int BuildSlide(int nChannel, walltype* pStartWall, walltype* pWall1, walltype* p2ndLastWall, walltype* pWall2, walltype* pWall3, walltype* pWall4)
 {
     auto nSlide = SlideData.Reserve(1);
 
-    short nSector = IdentifySector(nStartWall);
+    auto pSector = pStartWall->sectorp();
 
-    SlideData[nSlide].field_4a = -1;
+    SlideData[nSlide].nRunRec = -1;
     SlideData[nSlide].nChannel = nChannel;
-    SlideData[nSlide].field_2a = -1;
+    SlideData[nSlide].nStart = -1;
 
     int nPoint = GrabPoint();
 
-    SlideData[nSlide].field_2a = nPoint;
+    SlideData[nSlide].nStart = nPoint;
 
-    PointList[nPoint].field_E = -1;
-    PointList[nPoint].field_0 = nSector;
+    PointList[nPoint].nNext = -1;
+    PointList[nPoint].pSector = pSector;
 
-    short startwall = sector[nSector].wallptr;
-    short endwall = startwall + sector[nSector].wallnum;
-
-    for (int nWall = startwall; nWall < endwall; nWall++)
+    for(auto& wal : wallsofsector(pSector))
     {
-        short ax = SlideData[nSlide].field_2a;
+        int ax = SlideData[nSlide].nStart;
 
         if (ax >= 0)
         {
             while (ax >= 0)
             {
-                if (wall[nWall].nextsector == PointList[ax].field_0) {
+                if (wal.nextSector() == PointList[ax].pSector) {
                     break;
                 }
 
-                ax = PointList[ax].field_E;
+                ax = PointList[ax].nNext;
             }
         }
         else
         {
-            if (wall[nWall].nextsector >= 0)
+            if (wal.twoSided())
             {
                 nPoint = GrabPoint();
 
-                PointList[nPoint].field_E = SlideData[nSlide].field_2a;
-                PointList[nPoint].field_0 = wall[nWall].nextsector;
+                PointList[nPoint].nNext = SlideData[nSlide].nStart;
+                PointList[nPoint].pSector = wal.nextSector();
 
-                SlideData[nSlide].field_2a = nPoint;
+                SlideData[nSlide].nStart = nPoint;
             }
         }
     }
 
-    SlideData[nSlide].field_0 = nStartWall;
-    SlideData[nSlide].field_4 = nWall1;
-    SlideData[nSlide].field_8 = nWall2;
-    SlideData[nSlide].field_C = nWall3;
+    SlideData[nSlide].pStartWall = pStartWall;
+    SlideData[nSlide].pWall1 = pWall1;
+    SlideData[nSlide].pWall2 = pWall2;
+    SlideData[nSlide].pWall3 = pWall3;
 
-    SlideData[nSlide].x1 = wall[nStartWall].x;
-    SlideData[nSlide].y1 = wall[nStartWall].y;
+    SlideData[nSlide].x1 = pStartWall->pos.X;
+    SlideData[nSlide].y1 = pStartWall->pos.Y;
 
-    SlideData[nSlide].x2 = wall[nWall2].x;
-    SlideData[nSlide].y2 = wall[nWall2].y;
+    SlideData[nSlide].x2 = pWall2->pos.X;
+    SlideData[nSlide].y2 = pWall2->pos.Y;
 
-    SlideData[nSlide].field_20 = wall[nWall1].x;
-    SlideData[nSlide].field_24 = wall[nWall1].y;
+    SlideData[nSlide].x3 = pWall1->pos.X;
+    SlideData[nSlide].y3 = pWall1->pos.Y;
 
-    SlideData[nSlide].field_28 = wall[nWall3].x;
-    SlideData[nSlide].field_2C = wall[nWall3].y;
+    SlideData[nSlide].x4 = pWall3->pos.X;
+    SlideData[nSlide].y4 = pWall3->pos.Y;
 
-    SlideData[nSlide].field_30 = wall[ecx].x;
-    SlideData[nSlide].field_34 = wall[ecx].y;
+    SlideData[nSlide].x5 = p2ndLastWall->pos.X;
+    SlideData[nSlide].y5 = p2ndLastWall->pos.Y;
 
-    SlideData[nSlide].field_38 = wall[nWall4].x;
-    SlideData[nSlide].field_3C = wall[nWall4].y;
+    SlideData[nSlide].x6 = pWall4->pos.X;
+    SlideData[nSlide].y6 = pWall4->pos.Y;
 
-    StartInterpolation(nStartWall, Interp_Wall_X);
-    StartInterpolation(nStartWall, Interp_Wall_Y);
+    StartInterpolation(pStartWall, Interp_Wall_X);
+    StartInterpolation(pStartWall, Interp_Wall_Y);
 
-    StartInterpolation(nWall1, Interp_Wall_X);
-    StartInterpolation(nWall1, Interp_Wall_Y);
+    StartInterpolation(pWall1, Interp_Wall_X);
+    StartInterpolation(pWall1, Interp_Wall_Y);
 
-    StartInterpolation(nWall2, Interp_Wall_X);
-    StartInterpolation(nWall2, Interp_Wall_Y);
+    StartInterpolation(pWall2, Interp_Wall_X);
+    StartInterpolation(pWall2, Interp_Wall_Y);
 
-    StartInterpolation(nWall3, Interp_Wall_X);
-    StartInterpolation(nWall3, Interp_Wall_Y);
+    StartInterpolation(pWall3, Interp_Wall_X);
+    StartInterpolation(pWall3, Interp_Wall_Y);
 
 
-    int nSprite = insertsprite(nSector, 899);
+    auto pActor = insertActor(pSector, 899);
 
-    SlideData[nSlide].field_6a = nSprite;
-    sprite[nSprite].cstat = 0x8000;
-    sprite[nSprite].x = wall[nStartWall].x;
-    sprite[nSprite].y = wall[nStartWall].y;
-    sprite[nSprite].z = sector[nSector].floorz;
-    sprite[nSprite].backuppos();
+    SlideData[nSlide].pActor = pActor;
+    pActor->spr.cstat = CSTAT_SPRITE_INVISIBLE;
+    pActor->spr.pos.X = pStartWall->pos.X;
+    pActor->spr.pos.Y = pStartWall->pos.Y;
+    pActor->spr.pos.Z = pSector->floorz;
+    pActor->backuppos();
 
-    SlideData[nSlide].field_8a = 0;
+    SlideData[nSlide].nRunC = 0;
 
-    return nSlide | 0x80000;
+    return nSlide;
 }
 
-void FuncSlide(int a, int, int nRun)
+void AISlide::ProcessChannel(RunListEvent* ev)
 {
-    int nSlide = RunData[nRun].nVal;
+    int nRun = ev->nRun;
+    int nSlide = RunData[nRun].nObjIndex;
     assert(nSlide >= 0 && nSlide < (int)SlideData.Size());
 
-    short nChannel = SlideData[nSlide].nChannel;
+    int nChannel = SlideData[nSlide].nChannel;
 
-    int nMessage = a & 0x7F0000;
-
-    int ebp = 0;
-
-    short cx = sRunChannels[nChannel].c;
-
-    switch (nMessage)
+    if (SlideData[nSlide].nRunRec >= 0)
     {
-        case 0x10000:
-        {
-            if (SlideData[nSlide].field_4a >= 0)
-            {
-                runlist_SubRunRec(SlideData[nSlide].field_4a);
-                SlideData[nSlide].field_4a = -1;
-            }
+        runlist_SubRunRec(SlideData[nSlide].nRunRec);
+        SlideData[nSlide].nRunRec = -1;
+    }
 
-            if (sRunChannels[nChannel].c && sRunChannels[nChannel].c != 1) {
-                return;
-            }
+    if (sRunChannels[nChannel].c && sRunChannels[nChannel].c != 1) {
+        return;
+    }
 
-            SlideData[nSlide].field_4a = runlist_AddRunRec(NewRun, RunData[nRun].nMoves);
+    SlideData[nSlide].nRunRec = runlist_AddRunRec(NewRun, &RunData[nRun]);
 
-            if (SlideData[nSlide].field_8a != sRunChannels[nChannel].c)
-            {
-                D3PlayFX(StaticSound[kSound23], SlideData[nSlide].field_6a);
-                SlideData[nSlide].field_8a = sRunChannels[nChannel].c;
-            }
-
-            return;
-        }
-
-        case 0x20000:
-        {
-            int clipmask = ebp + 1; // RENAME
-
-            if (cx == 1)
-            {
-                short nWall = SlideData[nSlide].field_4;
-                int x = wall[nWall].x;
-                int y = wall[nWall].y;
-
-                int nSeekA = LongSeek(&x, SlideData[nSlide].field_30, 20, 20);
-                int var_34 = nSeekA;
-                int var_20 = nSeekA;
-
-                int nSeekB = LongSeek(&y, SlideData[nSlide].field_34, 20, 20);
-                int var_2C = nSeekB;
-                int var_24 = nSeekB;
-
-                dragpoint(SlideData[nSlide].field_4, x, y, 0);
-                movesprite(SlideData[nSlide].field_6a, var_34 << 14, var_2C << 14, 0, 0, 0, CLIPMASK1);
-
-                if (var_34 == 0)
-                {
-                    if (var_2C == 0)
-                    {
-                        ebp = clipmask;
-                    }
-                }
-
-                nWall = SlideData[nSlide].field_0;
-
-                y = wall[nWall].y + var_24;
-                x = wall[nWall].x + var_20;
-
-                dragpoint(SlideData[nSlide].field_0, x, y, 0);
-
-                nWall = SlideData[nSlide].field_C;
-
-                x = wall[nWall].x;
-                y = wall[nWall].y;
-
-                int nSeekC = LongSeek(&x, SlideData[nSlide].field_38, 20, 20);
-                int var_30 = nSeekC;
-                var_20 = nSeekC;
-
-                int nSeekD = LongSeek(&y, SlideData[nSlide].field_3C, 20, 20);
-                int edi = nSeekD;
-                var_24 = nSeekD;
-
-                dragpoint(SlideData[nSlide].field_C, x, y, 0);
-
-                if (var_30 == 0 && edi == 0) {
-                    ebp++;
-                }
-
-                nWall = SlideData[nSlide].field_8;
-
-                x = wall[nWall].x + var_20;
-                y = wall[nWall].y + var_24;
-
-                dragpoint(SlideData[nSlide].field_8, x, y, 0);
-            }
-            else if (cx == 0) // right branch
-            {
-                short nWall = SlideData[nSlide].field_0;
-                int x = wall[nWall].x;
-                int y = wall[nWall].y;
-
-                int nSeekA = LongSeek(&x, SlideData[nSlide].x1, 20, 20);
-                int edi = nSeekA;
-                int var_1C = nSeekA;
-
-                int nSeekB = LongSeek(&y, SlideData[nSlide].y1, 20, 20);
-                int ecx = nSeekB;
-                int var_28 = nSeekB;
-
-                dragpoint(SlideData[nSlide].field_0, x, y, 0);
-
-                if (edi == 0 && ecx == 0) {
-                    ebp = clipmask;
-                }
-
-                nWall = SlideData[nSlide].field_4;
-
-                y = wall[nWall].y + var_28;
-                x = wall[nWall].x + var_1C;
-
-                dragpoint(SlideData[nSlide].field_4, x, y, 0);
-
-                nWall = SlideData[nSlide].field_8;
-
-                x = wall[nWall].x;
-                y = wall[nWall].y;
-
-                int nSeekC = LongSeek(&x, SlideData[nSlide].x2, 20, 20);
-                edi = nSeekC;
-                var_1C = nSeekC;
-
-                int nSeekD = LongSeek(&y, SlideData[nSlide].y2, 20, 20);
-                ecx = nSeekD;
-                var_28 = nSeekD;
-
-                dragpoint(SlideData[nSlide].field_8, x, y, 0);
-
-                if (edi == 0 && ecx == 0) {
-                    ebp++;
-                }
-
-                nWall = SlideData[nSlide].field_C;
-
-                y = wall[nWall].y + var_28;
-                x = wall[nWall].x + var_1C;
-
-                dragpoint(SlideData[nSlide].field_C, x, y, 0);
-            }
-
-            // loc_21A51:
-            if (ebp >= 2)
-            {
-                runlist_SubRunRec(SlideData[nSlide].field_4a);
-
-                SlideData[nSlide].field_4a = -1;
-                D3PlayFX(StaticSound[nStopSound], SlideData[nSlide].field_6a);
-
-                runlist_ReadyChannel(nChannel);
-            }
-
-            return;
-        }
+    if (SlideData[nSlide].nRunC != sRunChannels[nChannel].c)
+    {
+        D3PlayFX(StaticSound[kSound23], SlideData[nSlide].pActor);
+        SlideData[nSlide].nRunC = sRunChannels[nChannel].c;
     }
 }
 
-int BuildTrap(int nSprite, int edx, int ebx, int ecx)
+void AISlide::Tick(RunListEvent* ev)
+{
+    int nRun = ev->nRun;
+    int nSlide = RunData[nRun].nObjIndex;
+    assert(nSlide >= 0 && nSlide < (int)SlideData.Size());
+
+    int nChannel = SlideData[nSlide].nChannel;
+    int ebp = 0;
+
+    int cx = sRunChannels[nChannel].c;
+
+    int clipmask = ebp + 1; // RENAME
+
+    if (cx == 1)
+    {
+        auto pWall = SlideData[nSlide].pWall1;
+        int x = pWall->pos.X;
+        int y = pWall->pos.Y;
+
+        int nSeekA = LongSeek(&x, SlideData[nSlide].x5, 20, 20);
+        int var_34 = nSeekA;
+        int var_20 = nSeekA;
+
+        int nSeekB = LongSeek(&y, SlideData[nSlide].y5, 20, 20);
+        int var_2C = nSeekB;
+        int var_24 = nSeekB;
+
+        dragpoint(SlideData[nSlide].pWall1, x, y);
+        movesprite(SlideData[nSlide].pActor, var_34 << 14, var_2C << 14, 0, 0, 0, CLIPMASK1);
+
+        if (var_34 == 0)
+        {
+            if (var_2C == 0)
+            {
+                ebp = clipmask;
+            }
+        }
+
+        pWall = SlideData[nSlide].pStartWall;
+
+        y = pWall->pos.Y + var_24;
+        x = pWall->pos.X + var_20;
+
+        dragpoint(SlideData[nSlide].pStartWall, x, y);
+
+        pWall = SlideData[nSlide].pWall3;
+
+        x = pWall->pos.X;
+        y = pWall->pos.Y;
+
+        int nSeekC = LongSeek(&x, SlideData[nSlide].x6, 20, 20);
+        int var_30 = nSeekC;
+        var_20 = nSeekC;
+
+        int nSeekD = LongSeek(&y, SlideData[nSlide].y6, 20, 20);
+        int edi = nSeekD;
+        var_24 = nSeekD;
+
+        dragpoint(SlideData[nSlide].pWall3, x, y);
+
+        if (var_30 == 0 && edi == 0) {
+            ebp++;
+        }
+
+        pWall = SlideData[nSlide].pWall2;
+
+        x = pWall->pos.X + var_20;
+        y = pWall->pos.Y + var_24;
+
+        dragpoint(SlideData[nSlide].pWall2, x, y);
+    }
+    else if (cx == 0) // right branch
+    {
+        auto pWall = SlideData[nSlide].pStartWall;
+        int x = pWall->pos.X;
+        int y = pWall->pos.Y;
+
+        int nSeekA = LongSeek(&x, SlideData[nSlide].x1, 20, 20);
+        int edi = nSeekA;
+        int var_1C = nSeekA;
+
+        int nSeekB = LongSeek(&y, SlideData[nSlide].y1, 20, 20);
+        int ecx = nSeekB;
+        int var_28 = nSeekB;
+
+        dragpoint(SlideData[nSlide].pStartWall, x, y);
+
+        if (edi == 0 && ecx == 0) {
+            ebp = clipmask;
+        }
+
+        pWall = SlideData[nSlide].pWall1;
+
+        y = pWall->pos.Y + var_28;
+        x = pWall->pos.X + var_1C;
+
+        dragpoint(SlideData[nSlide].pWall1, x, y);
+
+        pWall = SlideData[nSlide].pWall2;
+
+        x = pWall->pos.X;
+        y = pWall->pos.Y;
+
+        int nSeekC = LongSeek(&x, SlideData[nSlide].x2, 20, 20);
+        edi = nSeekC;
+        var_1C = nSeekC;
+
+        int nSeekD = LongSeek(&y, SlideData[nSlide].y2, 20, 20);
+        ecx = nSeekD;
+        var_28 = nSeekD;
+
+        dragpoint(SlideData[nSlide].pWall2, x, y);
+
+        if (edi == 0 && ecx == 0) {
+            ebp++;
+        }
+
+        pWall = SlideData[nSlide].pWall3;
+
+        y = pWall->pos.Y + var_28;
+        x = pWall->pos.X + var_1C;
+
+        dragpoint(SlideData[nSlide].pWall3, x, y);
+    }
+
+    // loc_21A51:
+    if (ebp >= 2)
+    {
+        runlist_SubRunRec(SlideData[nSlide].nRunRec);
+
+        SlideData[nSlide].nRunRec = -1;
+        D3PlayFX(StaticSound[nStopSound], SlideData[nSlide].pActor);
+
+        runlist_ReadyChannel(nChannel);
+    }
+}
+
+int BuildTrap(DExhumedActor* pActor, int edx, int ebx, int ecx)
 {
     int var_14 = edx;
     int var_18 = ebx;
     int var_10 = ecx;
 
     int nTrap = sTrap.Reserve(1);
+    sTrap[nTrap] = {};
 
-    changespritestat(nSprite, 0);
+    ChangeActorStat(pActor, 0);
 
-    sprite[nSprite].cstat = 0x8000;
-    sprite[nSprite].xvel = 0;
-    sprite[nSprite].yvel = 0;
-    sprite[nSprite].zvel = 0;
-    sprite[nSprite].extra = -1;
+    pActor->spr.cstat = CSTAT_SPRITE_INVISIBLE;
+    pActor->spr.xvel = 0;
+    pActor->spr.yvel = 0;
+    pActor->spr.zvel = 0;
+    pActor->spr.extra = -1;
 
-    sprite[nSprite].lotag = runlist_HeadRun() + 1;
-    sprite[nSprite].hitag = runlist_AddRunRec(NewRun, nTrap | 0x1F0000);
-    sprite[nSprite].owner = runlist_AddRunRec(sprite[nSprite].lotag - 1, nTrap | 0x1F0000);
+    pActor->spr.lotag = runlist_HeadRun() + 1;
+    pActor->spr.hitag = runlist_AddRunRec(NewRun, nTrap, 0x1F0000);
+    pActor->spr.owner = runlist_AddRunRec(pActor->spr.lotag - 1, nTrap, 0x1F0000);
 
-//	GrabTimeSlot(3);
+    //	GrabTimeSlot(3);
 
-    sTrap[nTrap].nSprite = nSprite;
+    sTrap[nTrap].pActor = pActor;
     sTrap[nTrap].nType = (var_14 == 0) + 14;
-    sTrap[nTrap].field_0 = -1;
+    sTrap[nTrap].nState = -1;
 
     sTrap[nTrap].nTrapInterval = 64 - (2 * var_10);
     if (sTrap[nTrap].nTrapInterval < 5) {
         sTrap[nTrap].nTrapInterval = 5;
     }
 
-    sTrap[nTrap].field_C = 0;
-    sTrap[nTrap].field_A = 0;
+    sTrap[nTrap].nPicnum2 = 0;
+    sTrap[nTrap].nPicnum1 = 0;
 
     if (var_18 == -1) {
-        return nTrap | 0x1F0000;
+        return nTrap;
     }
 
-    sTrap[nTrap].field_6 = -1;
-    sTrap[nTrap].field_8 = -1;
+    auto pSector = pActor->sector();
 
-    short nSector = sprite[nSprite].sectnum;
-    short nWall = sector[nSector].wallptr;
-
-    int i = 0;
-
-    while (1)
+    for(auto& wal : wallsofsector(pSector))
     {
-        if (sector[nSector].wallnum >= i) {
-            return nTrap | 0x1F0000;
-        }
-
-        if (var_18 == wall[nWall].hitag)
+        if (var_18 == wal.hitag)
         {
-            if (sTrap[nTrap].field_6 != -1)
+            if (sTrap[nTrap].pWall1 != nullptr)
             {
-                sTrap[nTrap].field_8 = nWall;
-                sTrap[nTrap].field_C = wall[nWall].picnum;
-                return nTrap | 0x1F0000;
+                sTrap[nTrap].pWall2 = &wal;
+                sTrap[nTrap].nPicnum2 = wal.picnum;
+                break;
             }
             else
             {
-                sTrap[nTrap].field_6 = nWall;
-                sTrap[nTrap].field_A = wall[nWall].picnum;
+                sTrap[nTrap].pWall1 = &wal;
+                sTrap[nTrap].nPicnum1 = wal.picnum;
             }
         }
-
-        ecx++;
-        nWall++;
     }
-    sprite[nSprite].backuppos();
-
+    pActor->backuppos();
+    return nTrap;
 }
 
-void FuncTrap(int a, int, int nRun)
+void AITrap::ProcessChannel(RunListEvent* ev)
 {
-    short nTrap = RunData[nRun].nVal;
-    short nSprite = sTrap[nTrap].nSprite;
+    int nChannel = ev->nParam & 0x3FFF;
+    int nTrap = RunData[ev->nRun].nObjIndex;
 
-    int nMessage = a & 0x7F0000;
-
-    switch (nMessage)
+    if (sRunChannels[nChannel].c > 0)
     {
-        case 0x10000:
-        {
-            short nChannel = a & 0x3FFF;
+        sTrap[nTrap].nState = 12;
+    }
+    else
+    {
+        sTrap[nTrap].nState = -1;
+    }
+}
 
-            if (sRunChannels[nChannel].c > 0)
-            {
-                sTrap[nTrap].field_0 = 12;
-            }
-            else
-            {
-                sTrap[nTrap].field_0 = -1;
-            }
+void AITrap::Tick(RunListEvent* ev)
+{
+    int nTrap = RunData[ev->nRun].nObjIndex;
+    DExhumedActor* pActor = sTrap[nTrap].pActor;
+    if (!pActor) return;
 
+    if (sTrap[nTrap].nState >= 0)
+    {
+        sTrap[nTrap].nState--;
+        if (sTrap[nTrap].nState > 10) {
             return;
         }
 
-        case 0x20000:
+        int nType = sTrap[nTrap].nType;
+
+        if (sTrap[nTrap].nState == 0)
         {
-            if (sTrap[nTrap].field_0 >= 0)
+            sTrap[nTrap].nState = sTrap[nTrap].nTrapInterval;
+
+            if (nType == 14)
             {
-                sTrap[nTrap].field_0--;
-                if (sTrap[nTrap].field_0 > 10) {
-                    return;
+                auto pWall = sTrap[nTrap].pWall1;
+                if (pWall)
+                {
+                    pWall->picnum = sTrap[nTrap].nPicnum1;
                 }
 
-                short nType = sTrap[nTrap].nType;
-
-                if (sTrap[nTrap].field_0 == 0)
+                pWall = sTrap[nTrap].pWall1;
+                if (pWall)
                 {
-                    sTrap[nTrap].field_0 = sTrap[nTrap].nTrapInterval;
+                    pWall->picnum = sTrap[nTrap].nPicnum2;
+                }
+            }
+        }
+        else
+        {
+            // loc_21D92:
+            if (sTrap[nTrap].nState != 5) {
+                return;
+            }
 
-                    if (nType == 14)
-                    {
-                        short nWall = sTrap[nTrap].field_6;
-                        if (nWall > -1)
-                        {
-                            wall[nWall].picnum = sTrap[nTrap].field_A;
-                        }
-
-                        nWall = sTrap[nTrap].field_8;
-                        if (nWall > -1)
-                        {
-                            wall[nWall].picnum = sTrap[nTrap].field_C;
-                        }
-                    }
+            auto pBullet = BuildBullet(pActor, nType, 0, pActor->spr.ang, nullptr, 1);
+            if (pBullet)
+            {
+                if (nType == 15)
+                {
+                    pBullet->spr.ang = (pBullet->spr.ang - 512) & kAngleMask;
+                    D3PlayFX(StaticSound[kSound32], pBullet);
                 }
                 else
                 {
-                    // loc_21D92:
-                    if (sTrap[nTrap].field_0 != 5) {
-                        return;
-                    }
+                    pBullet->spr.clipdist = 50;
 
-                    int nBullet = BuildBullet(nSprite, nType, 0, 0, 0, sprite[nSprite].ang, 0, 1);
-                    if (nBullet > -1)
+                    auto pWall = sTrap[nTrap].pWall1;
+                    if (pWall)
                     {
-                        short nBulletSprite = nBullet & 0xFFFF; // isolate the sprite index (disregard top 16 bits)
-                        assert(nBulletSprite >= 0);
-
-                        if (nType == 15)
-                        {
-                            sprite[nBulletSprite].ang = (sprite[nBulletSprite].ang - 512) & kAngleMask;
-                            D3PlayFX(StaticSound[kSound32], nSprite);
-                        }
-                        else
-                        {
-                            sprite[nBulletSprite].clipdist = 50;
-
-                            short nWall = sTrap[nTrap].field_6;
-                            if (nWall > -1)
-                            {
-                                wall[nWall].picnum = sTrap[nTrap].field_A + 1;
-                            }
-
-                            nWall = sTrap[nTrap].field_8;
-                            if (nWall > -1)
-                            {
-                                wall[nWall].picnum = sTrap[nTrap].field_C + 1;
-                            }
-
-                            D3PlayFX(StaticSound[kSound36], nSprite);
-                        }
+                        pWall->picnum = sTrap[nTrap].nPicnum1 + 1;
                     }
+
+                    pWall = sTrap[nTrap].pWall2;
+                    if (pWall)
+                    {
+                        pWall->picnum = sTrap[nTrap].nPicnum2;
+                    }
+
+                    D3PlayFX(StaticSound[kSound36], pBullet);
                 }
             }
-
-            return;
         }
-
-        case 0x30000:
-        case 0x90000:
-        case 0x80000:
-        case 0xA0000:
-            return;
-
-        default:
-            DebugOut("unknown msg %d for trap\n", a & 0x7F0000);
-            return;
     }
 }
 
-int BuildArrow(int nSprite, int nVal)
+int BuildArrow(DExhumedActor* nSprite, int nVal)
 {
     return BuildTrap(nSprite, 0, -1, nVal);
 }
 
-int BuildFireBall(int nSprite, int a, int b)
+int BuildFireBall(DExhumedActor* nSprite, int a, int b)
 {
     return BuildTrap(nSprite, 1, a, b);
 }
 
-int BuildSpark(int nSprite, int nVal)
+DExhumedActor* BuildSpark(DExhumedActor* pActor, int nVal)
 {
-    int var_14 = insertsprite(sprite[nSprite].sectnum, 0);
+    auto pSpark = insertActor(pActor->sector(), 0);
 
-    if (var_14 < 0) {
-        return -1;
-    }
-    auto spr = &sprite[var_14];
-
-    assert(var_14 < kMaxSprites);
-
-    spr->x = sprite[nSprite].x;
-    spr->y = sprite[nSprite].y;
-    spr->cstat = 0;
-    spr->shade = -127;
-    spr->pal = 1;
-    spr->xoffset = 0;
-    spr->yoffset = 0;
-    spr->xrepeat = 50;
-    spr->yrepeat = 50;
+    pSpark->spr.pos.X = pActor->spr.pos.X;
+    pSpark->spr.pos.Y = pActor->spr.pos.Y;
+    pSpark->spr.cstat = 0;
+    pSpark->spr.shade = -127;
+    pSpark->spr.pal = 1;
+    pSpark->spr.xoffset = 0;
+    pSpark->spr.yoffset = 0;
+    pSpark->spr.xrepeat = 50;
+    pSpark->spr.yrepeat = 50;
 
     if (nVal >= 2)
     {
-        spr->picnum = kEnergy2;
+        pSpark->spr.picnum = kEnergy2;
         nSmokeSparks++;
 
         if (nVal == 3)
         {
-            spr->xrepeat = 120;
-            spr->yrepeat = 120;
+            pSpark->spr.xrepeat = 120;
+            pSpark->spr.yrepeat = 120;
         }
         else
         {
-            spr->xrepeat = sprite[nSprite].xrepeat + 15;
-            spr->yrepeat = sprite[nSprite].xrepeat + 15;
+            pSpark->spr.xrepeat = pActor->spr.xrepeat + 15;
+            pSpark->spr.yrepeat = pActor->spr.xrepeat + 15;
         }
     }
     else
     {
-        int nAngle = (sprite[nSprite].ang + 256) - RandomSize(9);
+        int nAngle = (pActor->spr.ang + 256) - RandomSize(9);
 
         if (nVal)
         {
-            spr->xvel = bcos(nAngle, -5);
-            spr->yvel = bsin(nAngle, -5);
+            pSpark->spr.xvel = bcos(nAngle, -5);
+            pSpark->spr.yvel = bsin(nAngle, -5);
         }
         else
         {
-            spr->xvel = bcos(nAngle, -6);
-            spr->yvel = bsin(nAngle, -6);
+            pSpark->spr.xvel = bcos(nAngle, -6);
+            pSpark->spr.yvel = bsin(nAngle, -6);
         }
 
-        spr->zvel = -(RandomSize(4) << 7);
-        spr->picnum = kTile985 + nVal;
+        pSpark->spr.zvel = -(RandomSize(4) << 7);
+        pSpark->spr.picnum = kTile985 + nVal;
     }
 
-    spr->z = sprite[nSprite].z;
-    spr->lotag = runlist_HeadRun() + 1;
-    spr->clipdist = 1;
-    spr->hitag = 0;
-    spr->backuppos();
+    pSpark->spr.pos.Z = pActor->spr.pos.Z;
+    pSpark->spr.lotag = runlist_HeadRun() + 1;
+    pSpark->spr.clipdist = 1;
+    pSpark->spr.hitag = 0;
+    pSpark->backuppos();
 
-//	GrabTimeSlot(3);
+    //	GrabTimeSlot(3);
 
-    spr->extra = -1;
-    spr->owner = runlist_AddRunRec(spr->lotag - 1, var_14 | 0x260000);
-    spr->hitag = runlist_AddRunRec(NewRun, var_14 | 0x260000);
+    pSpark->spr.extra = -1;
+    pSpark->spr.owner = runlist_AddRunRec(pSpark->spr.lotag - 1, pSpark, 0x260000);
+    pSpark->spr.hitag = runlist_AddRunRec(NewRun, pSpark, 0x260000);
 
-    return var_14;
+    return pSpark;
 }
 
-void FuncSpark(int a, int, int nRun)
+void AISpark::Tick(RunListEvent* ev)
 {
-    int nSprite = RunData[nRun].nVal;
-    assert(nSprite >= 0 && nSprite < kMaxSprites);
+    auto pActor = ev->pObjActor;
+    if (!pActor) return;
 
-    int nMessage = a & 0x7F0000;
+    pActor->spr.shade += 3;
+    pActor->spr.xrepeat -= 2;
 
-    if (nMessage != 0x20000) {
-        return;
-    }
-
-    sprite[nSprite].shade += 3;
-    sprite[nSprite].xrepeat -= 2;
-
-    if (sprite[nSprite].xrepeat >= 4 && sprite[nSprite].shade <= 100)
+    if (pActor->spr.xrepeat >= 4 && pActor->spr.shade <= 100)
     {
-        sprite[nSprite].yrepeat -= 2;
+        pActor->spr.yrepeat -= 2;
 
         // calling BuildSpark() with 2nd parameter as '1' will set kTile986
-        if (sprite[nSprite].picnum == kTile986 && (sprite[nSprite].xrepeat & 2))
+        if (pActor->spr.picnum == kTile986 && (pActor->spr.xrepeat & 2))
         {
-            BuildSpark(nSprite, 2);
+            BuildSpark(pActor, 2);
         }
 
-        if (sprite[nSprite].picnum >= kTile3000) {
+        if (pActor->spr.picnum >= kTile3000) {
             return;
         }
 
-        sprite[nSprite].zvel += 128;
+        pActor->spr.zvel += 128;
 
-        int nMov = movesprite(nSprite, sprite[nSprite].xvel << 12, sprite[nSprite].yvel << 12, sprite[nSprite].zvel, 2560, -2560, CLIPMASK1);
-        if (!nMov) {
+        auto nMov = movesprite(pActor, pActor->spr.xvel << 12, pActor->spr.yvel << 12, pActor->spr.zvel, 2560, -2560, CLIPMASK1);
+        if (!nMov.type && !nMov.exbits) {
             return;
         }
 
-        if (sprite[nSprite].zvel <= 0) {
+        if (pActor->spr.zvel <= 0) {
             return;
         }
     }
 
-    sprite[nSprite].xvel = 0;
-    sprite[nSprite].yvel = 0;
-    sprite[nSprite].zvel = 0;
+    pActor->spr.xvel = 0;
+    pActor->spr.yvel = 0;
+    pActor->spr.zvel = 0;
 
-    if (sprite[nSprite].picnum > kTile3000) {
+    if (pActor->spr.picnum > kTile3000) {
         nSmokeSparks--;
     }
 
-    runlist_DoSubRunRec(sprite[nSprite].owner);
-    runlist_FreeRun(sprite[nSprite].lotag - 1);
-    runlist_SubRunRec(sprite[nSprite].hitag);
-    mydeletesprite(nSprite);
+    runlist_DoSubRunRec(pActor->spr.owner);
+    runlist_FreeRun(pActor->spr.lotag - 1);
+    runlist_SubRunRec(pActor->spr.hitag);
+    DeleteActor(pActor);
 }
+
 
 void DimLights()
 {
-    static short word_96786 = 0;
+    static int word_96786 = 0;
 
     word_96786 = word_96786 == 0;
     if (word_96786 == 0)
         return;
 
-    for (int i = 0; i < numsectors; i++)
+    for (auto&sect: sector)
     {
-        if (sector[i].ceilingshade < 100)
-            sector[i].ceilingshade++;
+        if (sect.ceilingshade < 100)
+            sect.ceilingshade++;
 
-        if (sector[i].floorshade < 100)
-            sector[i].floorshade++;
+        if (sect.floorshade < 100)
+            sect.floorshade++;
 
-        short startwall = sector[i].wallptr;
-        short endwall = startwall + sector[i].wallnum;
-
-        for (int nWall = startwall; nWall < endwall; nWall++)
+        for (auto& wal : wallsofsector(&sect))
         {
-            if (wall[nWall].shade < 100)
-                wall[nWall].shade++;
+            if (wal.shade < 100)
+                wal.shade++;
         }
     }
 }
@@ -1655,13 +1506,13 @@ void DoFinale()
         if (!(dword_96788 & 2))
         {
             int nAng = RandomSize(11);
-            sprite[nFinaleSpr].ang = nAng;
-            BuildSpark(nFinaleSpr, 1);
+            pFinaleSpr->spr.ang = nAng;
+            BuildSpark(pFinaleSpr, 1);
         }
 
         if (!RandomSize(2))
         {
-            PlayFX2(StaticSound[kSound78] | 0x2000, nFinaleSpr);
+            PlayFX2(StaticSound[kSound78] | 0x2000, pFinaleSpr);
 
             for (int i = 0; i < nTotalPlayers; i++) {
                 nQuake[i] = 1280;
@@ -1707,62 +1558,53 @@ void DoFinale()
     }
 }
 
-int BuildEnergyBlock(short nSector)
+DExhumedActor* BuildEnergyBlock(sectortype* pSector)
 {
-    short startwall = sector[nSector].wallptr;
-    short nWalls = sector[nSector].wallnum;
-
     int x = 0;
     int y = 0;
 
-    for (int i = 0; i < nWalls; i++)
+	for(auto& wal : wallsofsector(pSector))
     {
-        x += wall[startwall + i].x;
-        y += wall[startwall + i].y;
+        x += wal.pos.X;
+        y += wal.pos.Y;
 
-        wall[startwall + i].picnum = kClockSymbol16;
-        wall[startwall + i].pal = 0;
-        wall[startwall + i].shade = 50;
+        wal.picnum = kClockSymbol16;
+        wal.pal = 0;
+        wal.shade = 50;
     }
 
-    int xAvg = x / nWalls;
-    int yAvg = y / nWalls;
+    int xAvg = x / pSector->wallnum;
+    int yAvg = y / pSector->wallnum;
 
-    int const nSprite = insertsprite(nSector, 406);
-    auto spr = &sprite[nSprite];
+    auto pActor = insertActor(pSector, 406);
 
+	pActor->spr.pos.X = xAvg;
+    pActor->spr.pos.Y = yAvg;
 
-    short nextsector = wall[startwall].nextsector;
+    pSector->extra = (int16_t)EnergyBlocks.Push(pActor);
 
-    spr->x = xAvg;
-    spr->y = yAvg;
+    //	GrabTimeSlot(3);
 
-    sector[nSector].extra = nSprite;
-
-//	GrabTimeSlot(3);
-
-    spr->z = sector[nextsector].floorz;
+    pActor->spr.pos.Z = pSector->firstWall()->nextSector()->floorz;
 
     // CHECKME - name of this variable?
-    int nRepeat = (spr->z - sector[nSector].floorz) >> 8;
+    int nRepeat = (pActor->spr.pos.Z - pSector->floorz) >> 8;
     if (nRepeat > 255) {
         nRepeat = 255;
     }
 
-    spr->xrepeat = nRepeat;
-    spr->cstat = 0x8000;
-    spr->xvel = 0;
-    spr->yvel = 0;
-    spr->zvel = 0;
-    spr->extra = -1;
-    spr->lotag = runlist_HeadRun() + 1;
-    spr->hitag = 0;
-    spr->owner = runlist_AddRunRec(spr->lotag - 1, nSprite | 0x250000);
-    spr->backuppos();
+    pActor->spr.xrepeat = nRepeat;
+    pActor->spr.cstat = CSTAT_SPRITE_INVISIBLE;
+    pActor->spr.xvel = 0;
+    pActor->spr.yvel = 0;
+    pActor->spr.zvel = 0;
+    pActor->spr.extra = -1;
+    pActor->spr.lotag = runlist_HeadRun() + 1;
+    pActor->spr.hitag = 0;
+    pActor->spr.owner = runlist_AddRunRec(pActor->spr.lotag - 1, pActor, 0x250000);
+    pActor->backuppos();
 
-    nEnergyBlocks++;
-
-    return nSprite | 0x250000;
+    return pActor;
 }
 
 // TODO - tidy
@@ -1778,11 +1620,10 @@ void KillCreatures()
     {
         if (v0 != 100)
         {
-            int i;
-            StatIterator it(v1);
-            while ((i = it.NextIndex()) >= 0)
+            ExhumedStatIterator it(v1);
+            while (auto i = it.Next())
             {
-                runlist_DamageEnemy(i, -1, 1600);
+                runlist_DamageEnemy(i, nullptr, 1600);
             }
         }
         ++v0;
@@ -1794,57 +1635,53 @@ void KillCreatures()
     }
 }
 
-void ExplodeEnergyBlock(int nSprite)
+void ExplodeEnergyBlock(DExhumedActor* pActor)
 {
-    short nSector = sprite[nSprite].sectnum;
+	auto pSector = pActor->sector();
 
-    short startwall = sector[nSector].wallptr;
-    short nWalls = sector[nSector].wallnum;
-
-    int i;
-
-    for (i = 0; i < nWalls; i++)
+	for(auto& wal : wallsofsector(pSector))
     {
-        short nextwall = wall[startwall + i].nextwall;
+		if (!wal.twoSided()) continue;
+		auto nextwal = wal.nextWall();
 
-        if (wall[nextwall].pal >= 4) {
-            wall[nextwall].pal = 7;
+        if (nextwal->pal >= 4) {
+            nextwal->pal = 7;
         }
         else {
-            wall[nextwall].pal = 0;
+            nextwal->pal = 0;
         }
 
-        wall[nextwall].shade = 50;
+        nextwal->shade = 50;
     }
 
-    if (sector[nSector].floorpal >= 4) {
-        sector[nSector].floorpal = 7;
+    if (pSector->floorpal >= 4) {
+        pSector->floorpal = 7;
     }
     else {
-        sector[nSector].floorpal = 0;
+        pSector->floorpal = 0;
     }
 
-    sector[nSector].floorshade = 50;
-    sector[nSector].extra = -1;
-    sector[nSector].floorz = sprite[nSprite].z;
+    pSector->floorshade = 50;
+    pSector->extra = -1;
+    pSector->setfloorz(pActor->spr.pos.Z);
 
-    sprite[nSprite].z = (sprite[nSprite].z + sector[nSector].floorz) / 2;
+    pActor->spr.pos.Z = (pActor->spr.pos.Z + pSector->floorz) / 2;
 
-    BuildSpark(nSprite, 3);
+    BuildSpark(pActor, 3);
 
-    sprite[nSprite].cstat = 0;
-    sprite[nSprite].xrepeat = 100;
+    pActor->spr.cstat = 0;
+    pActor->spr.xrepeat = 100;
 
-    PlayFX2(StaticSound[kSound78], nSprite);
+    PlayFX2(StaticSound[kSound78], pActor);
 
-    sprite[nSprite].xrepeat = 0;
+    pActor->spr.xrepeat = 0;
 
     nEnergyTowers--;
 
-    for (i = 0; i < 20; i++)
+    for (int i = 0; i < 20; i++)
     {
-        sprite[nSprite].ang = RandomSize(11);
-        BuildSpark(nSprite, 1); // shoot out blue orbs
+        pActor->spr.ang = RandomSize(11);
+        BuildSpark(pActor, 1); // shoot out blue orbs
     }
 
     TintPalette(64, 64, 64);
@@ -1860,30 +1697,27 @@ void ExplodeEnergyBlock(int nSprite)
     }
     else
     {
-        nFinaleSpr = nSprite;
+        pFinaleSpr = pActor;
         lFinaleStart = PlayClock;
 
         if (!lFinaleStart) {
             lFinaleStart = lFinaleStart + 1;
         }
 
-        for (i = 0; i < numsectors; i++)
+		for(auto& sect: sector)
         {
-            if (sector[i].ceilingpal == 1) {
-                sector[i].ceilingpal = 0;
+            if (sect.ceilingpal == 1) {
+                sect.ceilingpal = 0;
             }
 
-            if (sector[i].floorpal == 1) {
-                sector[i].floorpal = 0;
+            if (sect.floorpal == 1) {
+                sect.floorpal = 0;
             }
 
-            short startwall = sector[i].wallptr;
-            short endwall = startwall + sector[i].wallnum;
-
-            for (int nWall = startwall; nWall < endwall; nWall++)
-            {
-                if (wall[nWall].pal == 1) {
-                    wall[nWall].pal = 0;
+			for (auto& wal : wallsofsector(&sect))
+             {
+                if (wal.pal == 1) {
+                    wal.pal = 0;
                 }
             }
         }
@@ -1891,468 +1725,438 @@ void ExplodeEnergyBlock(int nSprite)
         KillCreatures();
     }
 
-    changespritestat(nSprite, 0);
+    ChangeActorStat(pActor, 0);
 }
 
-void FuncEnergyBlock(int a, int nDamage, int nRun)
+void AIEnergyBlock::Damage(RunListEvent* ev)
 {
-    int const nSprite = RunData[nRun].nVal;
-    auto spr = &sprite[nSprite];
+    auto pActor = ev->pObjActor;
+    if (!pActor) return;
 
-    int nMessage = a & 0x7F0000;
+    ev->nDamage >>= 2;
+    if (ev->nDamage <= 0) {
+        return;
+    }
 
-    switch (nMessage)
+    if (ev->nDamage < pActor->spr.xrepeat)
     {
-        case 0x20000:
-        case 0x30000:
-        case 0x90000:
-        {
-            return;
-        }
+        pActor->spr.xrepeat -= ev->nDamage;
 
-        case 0xA0000:
-        {
-            short nSector = spr->sectnum;
+        auto pActor2 = insertActor(lasthitsect, 0);
 
-            if (sector[nSector].extra == -1) {
-                return;
-            }
+        pActor2->spr.ang = ev->nParam;
+        pActor2->spr.pos.X = lasthitx;
+        pActor2->spr.pos.Y = lasthity;
+        pActor2->spr.pos.Z = lasthitz;
 
-            int nFloorZ = sector[nSector].floorz;
-
-            sector[nSector].floorz = spr->z;
-            spr->z -= 256;
-
-            nDamage = runlist_CheckRadialDamage(nSprite);
-
-            // restore previous values
-            sector[nSector].floorz = nFloorZ;
-            spr->z += 256;
-
-            if (nDamage <= 0) {
-                return;
-            }
-
-            // fall through to case 0x80000
-            fallthrough__;
-        }
-
-        case 0x80000:
-        {
-            nDamage >>= 2;
-            if (nDamage <= 0) {
-                return;
-            }
-
-            if (nDamage < spr->xrepeat)
-            {
-                spr->xrepeat -= nDamage;
-
-                int nSprite2 = insertsprite(lasthitsect, 0);
-
-                sprite[nSprite2].ang = a & 0xFFFF;
-                sprite[nSprite2].x = lasthitx;
-                sprite[nSprite2].y = lasthity;
-                sprite[nSprite2].z = lasthitz;
-
-                BuildSpark(nSprite2, 0); // shoot out blue orb when damaged
-                mydeletesprite(nSprite2);
-            }
-            else
-            {
-                spr->xrepeat = 0; // using xrepeat to store health
-                ExplodeEnergyBlock(nSprite);
-            }
-
-            return;
-        }
-    }
-}
-
-int BuildObject(int const nSprite, int nOjectType, int nHitag)
-{
-    auto spr = &sprite[nSprite];
-
-    auto nObject = ObjectList.Reserve(1);
-
-    changespritestat(nSprite, ObjectStatnum[nOjectType]);
-
-    // 0x7FFD to ensure set as blocking ('B' and 'H') sprite and also disable translucency and set not invisible
-    spr->cstat = (spr->cstat | 0x101) & 0x7FFD;
-    spr->xvel = 0;
-    spr->yvel = 0;
-    spr->zvel = 0;
-    spr->extra = -1;
-    spr->lotag = runlist_HeadRun() + 1;
-    spr->hitag = 0;
-    spr->owner = runlist_AddRunRec(spr->lotag - 1, nObject | 0x170000);
-
-//	GrabTimeSlot(3);
-
-    if (spr->statnum == kStatDestructibleSprite) {
-        ObjectList[nObject].nHealth = 4;
-    }
-    else {
-        ObjectList[nObject].nHealth = 120;
-    }
-
-    ObjectList[nObject].nSprite = nSprite;
-    ObjectList[nObject].field_4 = runlist_AddRunRec(NewRun, nObject | 0x170000);
-
-    short nSeq = ObjectSeq[nOjectType];
-
-    if (nSeq > -1)
-    {
-        ObjectList[nObject].field_8 = SeqOffsets[nSeq];
-
-        if (!nOjectType) // if not Explosion Trigger (e.g. Exploding Fire Cauldron)
-        {
-            ObjectList[nObject].field_0 = RandomSize(4) % (SeqSize[ObjectList[nObject].field_8] - 1);
-        }
-
-        int nSprite2 = insertsprite(spr->sectnum, 0);
-        ObjectList[nObject].field_10 = nSprite2;
-
-        sprite[nSprite2].cstat = 0x8000;
-        sprite[nSprite2].x = spr->x;
-        sprite[nSprite2].y = spr->y;
-        sprite[nSprite2].z = spr->z;
+        BuildSpark(pActor2, 0); // shoot out blue orb when damaged
+        DeleteActor(pActor2);
     }
     else
     {
-        ObjectList[nObject].field_0 = 0;
-        ObjectList[nObject].field_8 = -1;
+        pActor->spr.xrepeat = 0; // using xrepeat to store health
+        ExplodeEnergyBlock(pActor);
+    }
+}
 
-        if (spr->statnum == kStatDestructibleSprite) {
-            ObjectList[nObject].field_10 = -1;
+void AIEnergyBlock::RadialDamage(RunListEvent* ev)
+{
+    auto pActor = ev->pObjActor;
+    if (!pActor) return;
+
+    auto pSector =pActor->sector();
+
+    if (pSector->extra == -1) {
+        return;
+    }
+
+    int nFloorZ = pSector->floorz;
+
+    pSector->setfloorz(pActor->spr.pos.Z);
+    pActor->spr.pos.Z -= 256;
+
+    ev->nDamage = runlist_CheckRadialDamage(pActor);
+
+    // restore previous values
+    pSector->setfloorz(nFloorZ);
+    pActor->spr.pos.Z += 256;
+
+    if (ev->nDamage <= 0) {
+        return;
+    }
+
+    // fall through to case 0x80000
+    Damage(ev);
+}
+
+
+DExhumedActor* BuildObject(DExhumedActor* pActor, int nOjectType, int nHitag)
+{
+    ChangeActorStat(pActor, ObjectStatnum[nOjectType]);
+
+    // 0x7FFD to ensure set as blocking ('B' and 'H') sprite and also disable translucency and set not invisible
+    pActor->spr.cstat = (pActor->spr.cstat | CSTAT_SPRITE_BLOCK_ALL) & ~(CSTAT_SPRITE_TRANSLUCENT | CSTAT_SPRITE_INVISIBLE);
+    pActor->spr.xvel = 0;
+    pActor->spr.yvel = 0;
+    pActor->spr.zvel = 0;
+    pActor->spr.extra = -1;
+    pActor->spr.lotag = runlist_HeadRun() + 1;
+    pActor->spr.hitag = 0;
+    pActor->spr.owner = runlist_AddRunRec(pActor->spr.lotag - 1, pActor, 0x170000);
+
+    //	GrabTimeSlot(3);
+    pActor->nPhase = ObjectList.Push(pActor);
+    if (pActor->spr.statnum == kStatDestructibleSprite) {
+        pActor->nHealth = 4;
+    }
+    else {
+        pActor->nHealth = 120;
+    }
+
+    pActor->nRun = runlist_AddRunRec(NewRun, pActor, 0x170000);
+
+    int nSeq = ObjectSeq[nOjectType];
+
+    if (nSeq > -1)
+    {
+        pActor->nIndex = SeqOffsets[nSeq];
+
+        if (!nOjectType) // if not Explosion Trigger (e.g. Exploding Fire Cauldron)
+        {
+            pActor->nFrame = RandomSize(4) % (SeqSize[pActor->nIndex] - 1);
+        }
+
+        auto  pActor2 = insertActor(pActor->sector(), 0);
+        pActor->pTarget = pActor2;
+        pActor->nIndex2 = -1;
+
+        pActor2->spr.cstat = CSTAT_SPRITE_INVISIBLE;
+        pActor2->spr.pos.X = pActor->spr.pos.X;
+        pActor2->spr.pos.Y = pActor->spr.pos.Y;
+        pActor2->spr.pos.Z = pActor->spr.pos.Z;
+    }
+    else
+    {
+        pActor->nFrame = 0;
+        pActor->nIndex = -1;
+
+        if (pActor->spr.statnum == kStatDestructibleSprite) {
+            pActor->nIndex2 = -1;
         }
         else {
-            ObjectList[nObject].field_10 = -nHitag;
+            pActor->nIndex2 = -nHitag;
         }
     }
-    spr->backuppos();
+    pActor->backuppos();
 
-    return nObject | 0x170000;
+    return pActor;
 }
 
 // in-game destructable wall mounted screen
-void ExplodeScreen(short nSprite)
+void ExplodeScreen(DExhumedActor* pActor)
 {
-    sprite[nSprite].z -= GetSpriteHeight(nSprite) / 2;
+    pActor->spr.pos.Z -= GetActorHeight(pActor) / 2;
 
     for (int i = 0; i < 30; i++) {
-        BuildSpark(nSprite, 0); // shoot out blue orbs
+        BuildSpark(pActor, 0); // shoot out blue orbs
     }
 
-    sprite[nSprite].cstat = 0x8000;
-    PlayFX2(StaticSound[kSound78], nSprite);
+    pActor->spr.cstat = CSTAT_SPRITE_INVISIBLE;
+    PlayFX2(StaticSound[kSound78], pActor);
 }
 
-void FuncObject(int a, int b, int nRun)
+void AIObject::Tick(RunListEvent* ev)
 {
-    short nObject = RunData[nRun].nVal;
+    auto pActor = ev->pObjActor;
+    if (!pActor) return;
+    int nStat = pActor->spr.statnum;
+    int bx = pActor->nIndex;
 
-    short nSprite = ObjectList[nObject].nSprite;
-    short nStat = sprite[nSprite].statnum;
-    short bx = ObjectList[nObject].field_8;
+    if (nStat == 97 || (!(pActor->spr.cstat & CSTAT_SPRITE_BLOCK_ALL))) {
+        return;
+    }
 
-    int nMessage = a & 0x7F0000;
+    if (nStat != kStatExplodeTarget) {
+        Gravity(pActor);
+    }
 
-    switch (nMessage)
+    // do animation
+    if (bx != -1)
     {
-        default:
-        {
-            DebugOut("unknown msg %d for Object\n", a & 0x7F0000);
-            return;
+        pActor->nFrame++;
+        if (pActor->nFrame >= SeqSize[bx]) {
+            pActor->nFrame = 0;
         }
 
-        case 0x30000:
-            return;
+        pActor->spr.picnum = seq_GetSeqPicnum2(bx, pActor->nFrame);
+    }
 
-        case 0x80000:
+    if (pActor->nHealth >= 0) {
+        goto FUNCOBJECT_GOTO;
+    }
+
+    pActor->nHealth++;
+
+    if (pActor->nHealth)
+    {
+    FUNCOBJECT_GOTO:
+        if (nStat != kStatExplodeTarget)
         {
-            if (nStat >= 150 || ObjectList[nObject].nHealth <= 0) {
-                return;
+            auto nMov = movesprite(pActor, pActor->spr.xvel << 6, pActor->spr.yvel << 6, pActor->spr.zvel, 0, 0, CLIPMASK0);
+
+            if (pActor->spr.statnum == kStatExplodeTrigger) {
+                pActor->spr.pal = 1;
             }
 
-            if (nStat == 98)
+            if (nMov.exbits & kHitAux2)
             {
-                D3PlayFX((StaticSound[kSound47] | 0x2000) | (RandomSize(2) << 9), nSprite);
-                return;
+                pActor->spr.xvel -= pActor->spr.xvel >> 3;
+                pActor->spr.yvel -= pActor->spr.yvel >> 3;
             }
 
-            ObjectList[nObject].nHealth -= (short)b;
-            if (ObjectList[nObject].nHealth > 0) {
-                return;
-            }
-
-            if (nStat == kStatDestructibleSprite)
+            if (nMov.type == kHitSprite)
             {
-                ExplodeScreen(nSprite);
+                pActor->spr.yvel = 0;
+                pActor->spr.xvel = 0;
             }
-            else
-            {
-                ObjectList[nObject].nHealth = -(RandomSize(3) + 1);
-            }
-
-            return;
         }
 
-        case 0x90000:
+        return;
+    }
+    else
+    {
+        int var_18;
+
+        // red branch
+        if ((nStat == kStatExplodeTarget) || (pActor->spr.pos.Z < pActor->sector()->floorz))
         {
-            if (bx > -1)
-            {
-                seq_PlotSequence(a & 0xFFFF, bx, ObjectList[nObject].field_0, 1);
-            }
-            return;
+            var_18 = 36;
+        }
+        else
+        {
+            var_18 = 34;
         }
 
-        case 0xA0000:
+        AddFlash(pActor->sector(), pActor->spr.pos.X, pActor->spr.pos.Y, pActor->spr.pos.Z, 128);
+        BuildAnim(nullptr, var_18, 0, pActor->spr.pos.X, pActor->spr.pos.Y, pActor->sector()->floorz, pActor->sector(), 240, 4);
+
+        //				int edi = nSprite | 0x4000;
+
+        if (nStat == kStatExplodeTrigger)
         {
-            if (ObjectList[nObject].nHealth > 0 && sprite[nSprite].cstat & 0x101
-                && (nStat != kStatExplodeTarget
-                    || sprite[nRadialSpr].statnum == 201
-                    || (nRadialBullet != 3 && nRadialBullet > -1)
-                    || sprite[nRadialSpr].statnum == kStatExplodeTrigger))
-            {
-                int nDamage = runlist_CheckRadialDamage(nSprite);
-                if (nDamage <= 0) {
-                    return;
-                }
-
-                if (sprite[nSprite].statnum != kStatAnubisDrum) {
-                    ObjectList[nObject].nHealth -= nDamage;
-                }
-
-                if (sprite[nSprite].statnum == kStatExplodeTarget)
-                {
-                    sprite[nSprite].xvel = 0;
-                    sprite[nSprite].yvel = 0;
-                    sprite[nSprite].zvel = 0;
-                }
-                else if (sprite[nSprite].statnum != kStatAnubisDrum)
-                {
-                    sprite[nSprite].xvel >>= 1;
-                    sprite[nSprite].yvel >>= 1;
-                    sprite[nSprite].zvel >>= 1;
-                }
-
-                if (ObjectList[nObject].nHealth > 0) {
-                    return;
-                }
-
-                if (sprite[nSprite].statnum == kStatExplodeTarget)
-                {
-                    ObjectList[nObject].nHealth = -1;
-                    short ax = ObjectList[nObject].field_10;
-
-                    if (ax < 0 || ObjectList[ax].nHealth <= 0) {
-                        return;
-                    }
-
-                    ObjectList[ax].nHealth = -1;
-                }
-                else if (sprite[nSprite].statnum == kStatDestructibleSprite)
-                {
-                    ObjectList[nObject].nHealth = 0;
-
-                    ExplodeScreen(nSprite);
-                }
-                else
-                {
-                    ObjectList[nObject].nHealth = -(RandomSize(4) + 1);
-                }
+            for (int i = 4; i < 8; i++) {
+                BuildCreatureChunk(pActor, seq_GetSeqPicnum(kSeqFirePot, (i >> 2) + 1, 0), true);
             }
 
-            return;
+            runlist_RadialDamageEnemy(pActor, 200, 20);
+        }
+        else if (nStat == kStatExplodeTarget)
+        {
+            for (int i = 0; i < 8; i++) {
+                BuildCreatureChunk(pActor, seq_GetSeqPicnum(kSeqFirePot, (i >> 1) + 3, 0), true);
+            }
         }
 
-        case 0x20000:
+        if (!(currentLevel->gameflags & LEVEL_EX_MULTI) || nStat != kStatExplodeTrigger)
         {
-            if (nStat == 97 || (!(sprite[nSprite].cstat & 0x101))) {
-                return;
-            }
+            runlist_SubRunRec(pActor->spr.owner);
+            runlist_SubRunRec(pActor->nRun);
 
-            if (nStat != kStatExplodeTarget) {
-                Gravity(nSprite);
-            }
+            DeleteActor(pActor);
+            return;
+        }
+        else
+        {
+            StartRegenerate(pActor);
+            pActor->nHealth = 120;
 
-            // do animation
-            if (bx != -1)
-            {
-                ObjectList[nObject].field_0++;
-                if (ObjectList[nObject].field_0 >= SeqSize[bx]) {
-                    ObjectList[nObject].field_0 = 0;
-                }
-
-                sprite[nSprite].picnum = seq_GetSeqPicnum2(bx, ObjectList[nObject].field_0);
-            }
-
-            if (ObjectList[nObject].nHealth >= 0) {
-                goto FUNCOBJECT_GOTO;
-            }
-
-            ObjectList[nObject].nHealth++;
-
-            if (ObjectList[nObject].nHealth)
-            {
-FUNCOBJECT_GOTO:
-                if (nStat != kStatExplodeTarget)
-                {
-                    int nMov = movesprite(nSprite, sprite[nSprite].xvel << 6, sprite[nSprite].yvel << 6, sprite[nSprite].zvel, 0, 0, CLIPMASK0);
-
-                    if (sprite[nSprite].statnum == kStatExplodeTrigger) {
-                        sprite[nSprite].pal = 1;
-                    }
-
-                    if (nMov & 0x20000)
-                    {
-                        sprite[nSprite].xvel -= sprite[nSprite].xvel >> 3;
-                        sprite[nSprite].yvel -= sprite[nSprite].yvel >> 3;
-                    }
-
-                    if (((nMov & 0xC000) > 0x8000) && ((nMov & 0xC000) == 0xC000))
-                    {
-                        sprite[nSprite].yvel = 0;
-                        sprite[nSprite].xvel = 0;
-                    }
-                }
-
-                return;
-            }
-            else
-            {
-                int var_18;
-
-                // red branch
-                if ((nStat == kStatExplodeTarget) || (sprite[nSprite].z < sector[sprite[nSprite].sectnum].floorz))
-                {
-                    var_18 = 36;
-                }
-                else
-                {
-                    var_18 = 34;
-                }
-
-                AddFlash(sprite[nSprite].sectnum, sprite[nSprite].x, sprite[nSprite].y, sprite[nSprite].z, 128);
-                BuildAnim(-1, var_18, 0, sprite[nSprite].x, sprite[nSprite].y, sector[sprite[nSprite].sectnum].floorz, sprite[nSprite].sectnum, 240, 4);
-
-//				int edi = nSprite | 0x4000;
-
-                if (nStat == kStatExplodeTrigger)
-                {
-                    for (int i = 4; i < 8; i++) {
-                        BuildCreatureChunk(nSprite | 0x4000, seq_GetSeqPicnum(kSeqFirePot, (i >> 2) + 1, 0));
-                    }
-
-                    runlist_RadialDamageEnemy(nSprite, 200, 20);
-                }
-                else if (nStat == kStatExplodeTarget)
-                {
-                    for (int i = 0; i < 8; i++) {
-                        BuildCreatureChunk(nSprite | 0x4000, seq_GetSeqPicnum(kSeqFirePot, (i >> 1) + 3, 0));
-                    }
-                }
-
-                if (!(currentLevel->gameflags & LEVEL_EX_MULTI) || nStat != kStatExplodeTrigger)
-                {
-                    runlist_SubRunRec(sprite[nSprite].owner);
-                    runlist_SubRunRec(ObjectList[nObject].field_4);
-
-                    mydeletesprite(nSprite);
-                    return;
-                }
-                else
-                {
-                    StartRegenerate(nSprite);
-                    ObjectList[nObject].nHealth = 120;
-
-                    sprite[nSprite].x = sprite[ObjectList[nObject].field_10].x;
-                    sprite[nSprite].y = sprite[ObjectList[nObject].field_10].y;
-                    sprite[nSprite].z = sprite[ObjectList[nObject].field_10].z;
-
-                    mychangespritesect(nSprite, sprite[ObjectList[nObject].field_10].sectnum);
-                    return;
-                }
-            }
+            pActor->spr.pos = pActor->pTarget->spr.pos;
+            ChangeActorSect(pActor, pActor->pTarget->sector());
+            return;
         }
     }
 }
 
-void BuildDrip(int nSprite)
+void AIObject::Damage(RunListEvent* ev)
+{
+    auto pActor = ev->pObjActor;
+    if (!pActor) return;
+    int nStat = pActor->spr.statnum;
+
+    if (nStat >= 150 || pActor->nHealth <= 0) {
+        return;
+    }
+
+    if (nStat == 98)
+    {
+        D3PlayFX((StaticSound[kSound47] | 0x2000) | (RandomSize(2) << 9), pActor);
+        return;
+    }
+
+    pActor->nHealth -= (int16_t)ev->nDamage;
+    if (pActor->nHealth > 0) {
+        return;
+    }
+
+    if (nStat == kStatDestructibleSprite)
+    {
+        ExplodeScreen(pActor);
+    }
+    else
+    {
+        pActor->nHealth = -(RandomSize(3) + 1);
+    }
+}
+
+void AIObject::Draw(RunListEvent* ev)
+{
+    auto pActor = ev->pObjActor;
+    if (!pActor) return;
+    int bx = pActor->nIndex;
+
+    if (bx > -1)
+    {
+        seq_PlotSequence(ev->nParam, bx, pActor->nFrame, 1);
+    }
+    return;
+}
+
+void AIObject::RadialDamage(RunListEvent* ev)
+{
+    auto pActor = ev->pObjActor;
+    if (!pActor) return;
+
+    int nStat = pActor->spr.statnum;
+
+    if (pActor->nHealth > 0 && pActor->spr.cstat & CSTAT_SPRITE_BLOCK_ALL
+        && (nStat != kStatExplodeTarget
+            || ev->pRadialActor->spr.statnum == 201
+            || (nRadialBullet != 3 && nRadialBullet > -1)
+            || ev->pRadialActor->spr.statnum == kStatExplodeTrigger))
+    {
+        int nDamage = runlist_CheckRadialDamage(pActor);
+        if (nDamage <= 0) {
+            return;
+        }
+
+        if (pActor->spr.statnum != kStatAnubisDrum) {
+            pActor->nHealth -= nDamage;
+        }
+
+        if (pActor->spr.statnum == kStatExplodeTarget)
+        {
+            pActor->spr.xvel = 0;
+            pActor->spr.yvel = 0;
+            pActor->spr.zvel = 0;
+        }
+        else if (pActor->spr.statnum != kStatAnubisDrum)
+        {
+            pActor->spr.xvel >>= 1;
+            pActor->spr.yvel >>= 1;
+            pActor->spr.zvel >>= 1;
+        }
+
+        if (pActor->nHealth > 0) {
+            return;
+        }
+
+        if (pActor->spr.statnum == kStatExplodeTarget)
+        {
+            pActor->nHealth = -1;
+            int ax = pActor->nIndex2;
+
+            if (ax < 0 || ObjectList[ax]->nHealth <= 0) {
+                return;
+            }
+
+            ObjectList[ax]->nHealth = -1;
+        }
+        else if (pActor->spr.statnum == kStatDestructibleSprite)
+        {
+            pActor->nHealth = 0;
+
+            ExplodeScreen(pActor);
+        }
+        else
+        {
+            pActor->nHealth = -(RandomSize(4) + 1);
+        }
+    }
+}
+
+void BuildDrip(DExhumedActor* pActor)
 {
     auto nDrips = sDrip.Reserve(1);
-    sDrip[nDrips].nSprite = nSprite;
-    sDrip[nDrips].field_2 = RandomSize(8) + 90;
-    sprite[nSprite].cstat = 0x8000u;
+    sDrip[nDrips].pActor = pActor;
+    sDrip[nDrips].nCount = RandomSize(8) + 90;
+    pActor->spr.cstat = CSTAT_SPRITE_INVISIBLE;
 }
 
 void DoDrips()
 {
     for (unsigned i = 0; i < sDrip.Size(); i++)
     {
-        sDrip[i].field_2--;
-        if (sDrip[i].field_2 <= 0)
+        sDrip[i].nCount--;
+        if (sDrip[i].nCount <= 0)
         {
-            short nSprite = sDrip[i].nSprite;
+            DExhumedActor* pActor = sDrip[i].pActor;
+            if (!pActor) continue;
+            int nSeqOffset = SeqOffsets[kSeqDrips];
 
-            short nSeqOffset = SeqOffsets[kSeqDrips];
-
-            if (!(SectFlag[sprite[nSprite].sectnum] & kSectLava)) {
+            if (!(pActor->sector()->Flag & kSectLava)) {
                 nSeqOffset++;
             }
 
-            seq_MoveSequence(nSprite, nSeqOffset, RandomSize(2) % SeqSize[nSeqOffset]);
+            seq_MoveSequence(pActor, nSeqOffset, RandomSize(2) % SeqSize[nSeqOffset]);
 
-            sDrip[i].field_2 = RandomSize(8) + 90;
+            sDrip[i].nCount = RandomSize(8) + 90;
         }
     }
 
     for (unsigned i = 0; i < sBob.Size(); i++)
     {
-        sBob[i].field_2 += 4;
+        sBob[i].nPhase += 4;
 
-        int edx = bsin(sBob[i].field_2 << 3, -4);
-        short nSector = sBob[i].nSector;
+        int edx = bsin(sBob[i].nPhase << 3, -4);
+        auto pSector =sBob[i].pSector;
 
         if (sBob[i].field_3)
         {
-            sector[nSector].ceilingz = edx + sBob[i].z;
+            pSector->setceilingz(edx + sBob[i].z);
         }
         else
         {
-            int nFloorZ = sector[nSector].floorz;
+            int nFloorZ = pSector->floorz;
 
-            sector[nSector].floorz = edx + sBob[i].z;
+            pSector->setfloorz(edx + sBob[i].z);
 
-            MoveSectorSprites(nSector, sector[nSector].floorz - nFloorZ);
+            MoveSectorSprites(pSector, pSector->floorz - nFloorZ);
         }
     }
 }
 
-void SnapBobs(short nSectorA, short nSectorB)
+void SnapBobs(sectortype* pSectorA, sectortype* pSectorB)
 {
-    int ecx = -1;
-    int ebx = ecx;
-//	int var_14 = nSector;
-//	int edi = edx;
+    int select1 = -1;
+    int select2 = select1;
+    int esi;
 
     for (unsigned i = 0; i < sBob.Size(); i++)
     {
-        int esi = sBob[i].nSector;
+        auto pSector = sBob[i].pSector;
 
-        if (esi != nSectorA)
+        if (pSector != pSectorA)
         {
-            if (nSectorB != esi)
+            if (pSectorB != pSector)
                 continue;
 
-            esi = ebx;
-            ecx = i;
+            esi = select2;
+            select1 = i;
         }
         else
         {
-            esi = ecx;
-            ebx = i;
+            esi = select1;
+            select2 = i;
         }
 
         if (esi != -1) {
@@ -2360,18 +2164,18 @@ void SnapBobs(short nSectorA, short nSectorB)
         }
     }
 
-    if (ecx <= -1) {
+    if (select1 <= -1) {
         return;
     }
 
-    if (ebx <= -1) {
+    if (select2 <= -1) {
         return;
     }
 
-    sBob[ecx].field_2 = sBob[ebx].field_2;
+    sBob[select1].nPhase = sBob[select2].nPhase;
 }
 
-void AddSectorBob(int nSector, int nHitag, int bx)
+void AddSectorBob(sectortype* pSector, int nHitag, int bx)
 {
     auto nBobs = sBob.Reserve(1);
     sBob[nBobs].field_3 = bx;
@@ -2379,44 +2183,44 @@ void AddSectorBob(int nSector, int nHitag, int bx)
     int z;
 
     if (bx == 0) {
-        z = sector[nSector].floorz;
+        z = pSector->floorz;
     }
     else {
-        z = sector[nSector].ceilingz;
+        z = pSector->ceilingz;
     }
 
     sBob[nBobs].z = z;
-    sBob[nBobs].field_2 = nHitag << 4;
+    sBob[nBobs].nPhase = nHitag << 4;
     sBob[nBobs].sBobID = nHitag;
 
-    sBob[nBobs].nSector = nSector;
-    StartInterpolation(nSector, bx == 0? Interp_Sect_Floorz : Interp_Sect_Ceilingz);
+    sBob[nBobs].pSector = pSector;
+    StartInterpolation(pSector, bx == 0 ? Interp_Sect_Floorz : Interp_Sect_Ceilingz);
 
-    SectFlag[nSector] |= 0x0010;
+    pSector->Flag |= 0x0010;
 }
 
 int FindTrail(int nVal)
 {
     for (unsigned i = 0; i < sTrail.Size(); i++)
     {
-        if (sTrail[i].field_2 == nVal)
+        if (sTrail[i].nVal == nVal)
             return i;
     }
 
     auto nTrails = sTrail.Reserve(1);
-    sTrail[nTrails].field_2 = nVal;
-    sTrail[nTrails].field_0 = -1;
-    sTrail[nTrails].field_4 = -1;
+    sTrail[nTrails].nVal = nVal;
+    sTrail[nTrails].nPoint = -1;
+    sTrail[nTrails].nPoint2 = -1;
     return nTrails;
 }
 
 // ok ?
-void ProcessTrailSprite(int nSprite, int nLotag, int nHitag)
+void ProcessTrailSprite(DExhumedActor* pActor, int nLotag, int nHitag)
 {
     auto nPoint = sTrailPoint.Reserve(1);
 
-    sTrailPoint[nPoint].x = sprite[nSprite].x;
-    sTrailPoint[nPoint].y = sprite[nSprite].y;
+    sTrailPoint[nPoint].x = pActor->spr.pos.X;
+    sTrailPoint[nPoint].y = pActor->spr.pos.Y;
 
     int nTrail = FindTrail(nHitag);
 
@@ -2424,12 +2228,12 @@ void ProcessTrailSprite(int nSprite, int nLotag, int nHitag)
 
     sTrailPoint[nPoint].nTrailPointVal = var_14;
 
-    int field0 = sTrail[nTrail].field_0;
+    int field0 = sTrail[nTrail].nPoint;
 
     if (field0 == -1)
     {
-        sTrail[nTrail].field_0 = nPoint;
-        sTrail[nTrail].field_4 = nPoint;
+        sTrail[nTrail].nPoint = nPoint;
+        sTrail[nTrail].nPoint2 = nPoint;
 
         sTrailPoint[nPoint].nTrailPointNext = -1;
         sTrailPoint[nPoint].nTrailPointPrev = -1;
@@ -2446,8 +2250,8 @@ void ProcessTrailSprite(int nSprite, int nLotag, int nHitag)
                 sTrailPoint[field0].nTrailPointPrev = nPoint;
                 sTrailPoint[nPoint].nTrailPointNext = field0;
 
-                if (field0 == sTrail[nTrail].field_0) {
-                    sTrail[nTrail].field_0 = nPoint;
+                if (field0 == sTrail[nTrail].nPoint) {
+                    sTrail[nTrail].nPoint = nPoint;
                 }
 
                 break;
@@ -2462,95 +2266,95 @@ void ProcessTrailSprite(int nSprite, int nLotag, int nHitag)
             sTrailPoint[ecx].nTrailPointNext = nPoint;
             sTrailPoint[nPoint].nTrailPointPrev = ecx;
             sTrailPoint[nPoint].nTrailPointNext = -1;
-            sTrail[nTrail].field_4 = nPoint;
+            sTrail[nTrail].nPoint2 = nPoint;
         }
     }
 
-    mydeletesprite(nSprite);
+    DeleteActor(pActor);
 }
 
 // ok?
-void AddMovingSector(int nSector, int edx, int ebx, int ecx)
+void AddMovingSector(sectortype* pSector, int edx, int ebx, int ecx)
 {
-    CreatePushBlock(nSector);
-    setsectinterpolate(nSector);
+    CreatePushBlock(pSector);
+    setsectinterpolate(pSector);
 
-    short nTrail = FindTrail(ebx);
+    int nTrail = FindTrail(ebx);
 
 
     auto nMoveSects = sMoveSect.Reserve(1);
-    MoveSect *pMoveSect = &sMoveSect[nMoveSects];
+    MoveSect* pMoveSect = &sMoveSect[nMoveSects];
 
     pMoveSect->sMoveDir = 1;
     pMoveSect->nTrail = nTrail;
     pMoveSect->nTrailPoint = -1;
-    pMoveSect->field_8 = -1;
-    pMoveSect->field_6 = ecx;
+    pMoveSect->pCurSector = nullptr;
+    pMoveSect->nFlags = ecx;
     pMoveSect->field_10 = (edx / 1000) + 1;
-    pMoveSect->nSector = nSector;
+    pMoveSect->pSector = pSector;
 
     if (ecx & 8)
     {
-        pMoveSect->field_14 = runlist_AllocChannel(ebx % 1000);
+        pMoveSect->nChannel = runlist_AllocChannel(ebx % 1000);
     }
     else
     {
-        pMoveSect->field_14 = -1;
+        pMoveSect->nChannel = -1;
     }
 
-    sector[nSector].floorstat |= 0x40;
+    pSector->floorstat |= CSTAT_SECTOR_ALIGN;
 }
 
 void DoMovingSects()
 {
     for (unsigned i = 0; i < sMoveSect.Size(); i++)
     {
-        if (sMoveSect[i].nSector == -1) {
+        if (sMoveSect[i].pSector == nullptr) {
             continue;
         }
 
-        if (sMoveSect[i].field_14 != -1 && !sRunChannels[sMoveSect[i].field_14].c) {
+        if (sMoveSect[i].nChannel != -1 && !sRunChannels[sMoveSect[i].nChannel].c) {
             continue;
         }
 
-        short nSector = sMoveSect[i].nSector;
-        short nBlock = sector[nSector].extra;
+        auto pSector =sMoveSect[i].pSector;
+        int nBlock = pSector->extra;
 
-        BlockInfo *pBlockInfo = &sBlockInfo[nBlock];
+        BlockInfo* pBlockInfo = &sBlockInfo[nBlock];
 
         if (sMoveSect[i].nTrailPoint == -1)
         {
-            if (sMoveSect[i].field_6 & 0x20)
+            if (sMoveSect[i].nFlags & 0x20)
             {
-                runlist_ChangeChannel(sMoveSect[i].field_14, 0);
+                runlist_ChangeChannel(sMoveSect[i].nChannel, 0);
             }
 
-            short ax;
+            int ax;
 
-            if (sMoveSect[i].field_6 & 0x10)
+            if (sMoveSect[i].nFlags & 0x10)
             {
                 sMoveSect[i].sMoveDir = -sMoveSect[i].sMoveDir;
                 if (sMoveSect[i].sMoveDir > 0)
                 {
-                    ax = sTrail[sMoveSect[i].nTrail].field_0;
+                    ax = sTrail[sMoveSect[i].nTrail].nPoint;
                 }
                 else
                 {
-                    ax = sTrail[sMoveSect[i].nTrail].field_4;
+                    ax = sTrail[sMoveSect[i].nTrail].nPoint2;
                 }
             }
             else
             {
-                ax = sTrail[sMoveSect[i].nTrail].field_0;
+                ax = sTrail[sMoveSect[i].nTrail].nPoint;
             }
 
             sMoveSect[i].nTrailPoint = ax;
         }
 
-        short nTrail = sMoveSect[i].nTrailPoint;
-//		TrailPoint *pTrail = &sTrailPoint[nTrail];
+        int nTrail = sMoveSect[i].nTrailPoint;
+        //		TrailPoint *pTrail = &sTrailPoint[nTrail];
 
-        // loc_23872:
+                // loc_23872:
         int nAngle = GetMyAngle(sTrailPoint[nTrail].x - pBlockInfo->x, sTrailPoint[nTrail].y - pBlockInfo->y);
 
         int nXVel = bcos(nAngle, 4) * sMoveSect[i].field_10;
@@ -2620,52 +2424,50 @@ void DoMovingSects()
         }
 
         // loc_2393A:
-        if (sMoveSect[i].field_8 != -1)
+        if (sMoveSect[i].pCurSector != nullptr)
         {
-            MoveSector(sMoveSect[i].field_8, -1, &nXVel, &nYVel);
+            MoveSector(sMoveSect[i].pCurSector, -1, &nXVel, &nYVel);
         }
 
         int var_2C = nXVel;
         int var_30 = nYVel;
 
-        MoveSector(nSector, -1, &nXVel, &nYVel);
+        MoveSector(pSector, -1, &nXVel, &nYVel);
 
         if (nXVel != var_2C || nYVel != var_30)
         {
-            MoveSector(sMoveSect[i].field_8, -1, &var_2C, &var_30);
-            MoveSector(sMoveSect[i].field_8, -1, &nXVel, &nYVel);
+            MoveSector(sMoveSect[i].pCurSector, -1, &var_2C, &var_30);
+            MoveSector(sMoveSect[i].pCurSector, -1, &nXVel, &nYVel);
         }
     }
 }
 
 void PostProcess()
 {
-    int i,j;
-
     for (unsigned i = 0; i < sMoveSect.Size(); i++)
     {
         int nTrail = sMoveSect[i].nTrail;
-        sMoveSect[i].nTrailPoint = sTrail[nTrail].field_0;
+        sMoveSect[i].nTrailPoint = sTrail[nTrail].nPoint;
 
-        if (sMoveSect[i].field_6 & 0x40) {
-            runlist_ChangeChannel(sMoveSect[i].field_14, 1);
+        if (sMoveSect[i].nFlags & 0x40) {
+            runlist_ChangeChannel(sMoveSect[i].nChannel, 1);
         }
 
-        short nSector = sMoveSect[i].nSector;
+        auto pSector =sMoveSect[i].pSector;
 
-        if (SectFlag[nSector] & kSectUnderwater)
+        if (pSector->Flag & kSectUnderwater)
         {
-            sector[nSector].ceilingstat |= 0x40;
-            sector[nSector].floorstat &= 0xBFFF;
+            pSector->ceilingstat |= CSTAT_SECTOR_ALIGN;
+            pSector->floorstat &= ~(CSTAT_SECTOR_EXHUMED_BIT1 | CSTAT_SECTOR_EXHUMED_BIT2);
 
             for (unsigned j = 0; j < sMoveSect.Size(); j++)
             {
                 if (j != i && sMoveSect[i].nTrail == sMoveSect[j].nTrail)
                 {
-                    sMoveSect[j].field_8 = sMoveSect[i].nSector;
+                    sMoveSect[j].pCurSector = sMoveSect[i].pSector;
 
-                    SnapSectors(sMoveSect[j].nSector, sMoveSect[i].nSector, 0);
-                    sMoveSect[i].nSector = -1;
+                    SnapSectors(sMoveSect[j].pSector, sMoveSect[i].pSector, 0);
+                    sMoveSect[i].pSector = nullptr;
                 }
             }
         }
@@ -2682,7 +2484,7 @@ void PostProcess()
                 if (j != i)
                 {
                     if (sBob[i].field_3 != 0 && sBob[j].sBobID == bobID) {
-                        SnapSectors(i, j, 0);
+                        SnapSectors(sBob[i].pSector, sBob[j].pSector, 0);
                     }
                 }
             }
@@ -2691,40 +2493,31 @@ void PostProcess()
 
     if (!(currentLevel->gameflags & LEVEL_EX_COUNTDOWN))
     {
-        // esi is i
-        for (i = 0; i < numsectors; i++)
+        for (auto& sect: sector)
         {
             int var_20 = 30000;
 
-            if (SectSpeed[i] && SectDepth[i] && !(SectFlag[i] & kSectLava))
+            if (sect.Speed && sect.Depth && !(sect.Flag & kSectLava))
             {
-                SectSoundSect[i] = i;
-                SectSound[i] = StaticSound[kSound43];
+                sect.pSoundSect = &sect;
+                sect.Sound = StaticSound[kSound43];
             }
             else
             {
-                // ebp and ecx are j
-                for (j = 0; j < numsectors; j++)
+                for (auto& sectj: sector)
                 {
                     // loc_23CA6:
 
-                    if (i != j && SectSpeed[j] && !(SectFlag[i] & kSectLava))
+                    if (&sect != &sectj && sectj.Speed && !(sect.Flag & kSectLava))
                     {
-                        int xVal = wall[sector[i].wallptr].x - wall[sector[j].wallptr].x;
-                        if (xVal < 0) {
-                            xVal = -xVal;
-                        }
-
-                        int yVal = wall[sector[i].wallptr].x - wall[sector[j].wallptr].x;
-                        if (yVal < 0) {
-                            yVal = -yVal;
-                        }
+						int xVal = abs(sect.firstWall()->pos.X - sectj.firstWall()->pos.X);
+						int yVal = abs(sect.firstWall()->pos.Y - sectj.firstWall()->pos.Y);
 
                         if (xVal < 15000 && yVal < 15000 && (xVal + yVal < var_20))
                         {
                             var_20 = xVal + yVal;
-                            SectSoundSect[i] = j;
-                            SectSound[i] = StaticSound[kSound43];
+                            sect.pSoundSect = &sectj;
+                            sect.Sound = StaticSound[kSound43];
                         }
                     }
                 }
@@ -2733,62 +2526,54 @@ void PostProcess()
     }
     else // nMap == kMap20)
     {
-        //		int var_24 = 0;
-        int ebp = 0;
-
-        for (i = 0; i < numsectors; i++)
+        for(auto& sect: sector)
         {
-            SectSoundSect[i] = i;
-            SectSound[i] = StaticSound[kSound62];
+            sect.pSoundSect = &sect;
+            sect.Sound = StaticSound[kSound62];
 
-            int startwall = sector[ebp].wallptr;
-            int endwall = sector[ebp].wallptr + sector[ebp].wallnum;
-
-            int nWall = startwall;
-
-            while (nWall < endwall)
+            for(auto& wal : wallsofsector(&sect))
             {
-                if (wall[nWall].picnum == kTile3603)
+                if (wal.picnum == kTile3603)
                 {
-                    wall[nWall].pal = 1;
-                    int nSprite = insertsprite(i, 407);
-                    sprite[nSprite].cstat = 0x8000;
+                    wal.pal = 1;
+                    auto pActor = insertActor(&sect, 407);
+                    pActor->spr.cstat = CSTAT_SPRITE_INVISIBLE;
                 }
-
-                nWall++;
             }
         }
 
-        for (i = 0; i < kMaxSprites; i++)
+        ExhumedSpriteIterator it;
+        while (auto act = it.Next())
         {
-            if (sprite[i].statnum < kMaxStatus && sprite[i].picnum == kTile3603)
+            if (act->spr.statnum < kMaxStatus && act->spr.picnum == kTile3603)
             {
-                changespritestat(i, 407);
-                sprite[i].pal = 1;
+                ChangeActorStat(act, 407);
+                act->spr.pal = 1;
             }
         }
     }
 
     for (unsigned i = 0; i < ObjectList.Size(); i++)
     {
-        int nObjectSprite = ObjectList[i].nSprite;
+        auto pObjectActor = ObjectList[i];
 
-        if (sprite[nObjectSprite].statnum == kStatExplodeTarget)
+        if (pObjectActor->spr.statnum == kStatExplodeTarget)
         {
-            if (!ObjectList[i].field_10) {
-                ObjectList[i].field_10 = -1;
+            if (!pObjectActor->nIndex2) {
+                pObjectActor->nIndex2 = -1;
             }
             else
             {
-                int edi = ObjectList[i].field_10;
-                ObjectList[i].field_10 = -1;
+                int edi = pObjectActor->nIndex2;
+                pObjectActor->nIndex2 = -1;
 
                 for (unsigned j = 0; j < ObjectList.Size(); j++)
                 {
-                    if (i != j && sprite[ObjectList[j].nSprite].statnum == kStatExplodeTarget && edi == ObjectList[j].field_10)
+
+                    if (i != j && ObjectList[j]->spr.statnum == kStatExplodeTarget && edi == ObjectList[j]->nIndex2)
                     {
-                        ObjectList[i].field_10 = j;
-                        ObjectList[j].field_10 = i;
+                        pObjectActor->nIndex2 = j;
+                        ObjectList[j]->nIndex2 = i;
                     }
                 }
             }

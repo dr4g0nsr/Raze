@@ -73,7 +73,7 @@
 #include "raze_music.h"
 #include "vm.h"
 #include "gamestate.h"
-#include "screenjob.h"
+#include "screenjob_.h"
 #include "c_console.h"
 #include "uiinput.h"
 #include "v_video.h"
@@ -104,7 +104,6 @@ bool r_NoInterpolate;
 int entertic;
 int oldentertics;
 int gametic;
-int intermissiondelay;
 
 FString savename;
 FString BackupSaveGame;
@@ -134,7 +133,7 @@ void G_BuildTiccmd(ticcmd_t* cmd)
 	cmd->ucmd = {};
 	I_GetEvent();
 	auto input = CONTROL_GetInput();
-	gi->GetInput(&cmd->ucmd, &input);
+	gi->GetInput(&input, I_GetInputFrac(SyncInput()), &cmd->ucmd);
 	cmd->consistency = consistency[myconnectindex][(maketic / ticdup) % BACKUPTICS];
 }
 
@@ -150,6 +149,8 @@ void NewGame(MapRecord* map, int skill, bool ns = false)
 	newGameStarted = true;
 	ShowIntermission(nullptr, map, nullptr, [=](bool) { 
 		gi->NewGame(map, skill, ns); 
+		ResetStatusBar();
+		Net_ClearFifo();
 		});
 }
 
@@ -193,28 +194,20 @@ static void GameTicker()
 		case ga_completed:
 			FX_StopAllSounds();
 			FX_SetReverb(0);
-			if (g_nextmap == currentLevel)
-			{
-				// if the same level is restarted, skip any progression stuff like summary screens or cutscenes.
-				gi->FreeLevelData();
-				gameaction = ga_level;
-				gi->NextLevel(g_nextmap, g_nextskill);
-			}
-			else
-			{
-				gi->LevelCompleted(g_nextmap, g_nextskill);
-				assert(gameaction != ga_nothing);
-			}
+			gi->LevelCompleted(g_nextmap, g_nextskill);
 			break;
 
 		case ga_nextlevel:
 			gi->FreeLevelData();
 			gameaction = ga_level;
 			gi->NextLevel(g_nextmap, g_nextskill);
+			ResetStatusBar();
+			Net_ClearFifo();
 			break;
 
 		case ga_newgame:
 			FX_StopAllSounds();
+			[[fallthrough]];
 		case ga_newgamenostopsound:
 			DeleteScreenJob();
 			FX_SetReverb(0);
@@ -235,6 +228,7 @@ static void GameTicker()
 		case ga_mainmenu:
 			FX_StopAllSounds();
 			if (isBlood()) Mus_Stop();
+			[[fallthrough]];
 		case ga_mainmenunostopsound:
 			gi->FreeLevelData();
 			gamestate = GS_MENUSCREEN;
@@ -278,7 +272,7 @@ static void GameTicker()
 			break;
 
 		case ga_intermission:
-			gamestate = GS_INTERMISSION;
+			gamestate = GS_CUTSCENE;
 			break;
 
 		case ga_fullconsole:
@@ -360,6 +354,7 @@ static void GameTicker()
 		gameupdatetime.Reset();
 		gameupdatetime.Clock();
 		gi->Ticker();
+		TickStatusBar();
 		levelTextTime--;
 		gameupdatetime.Unclock();
 		break;
@@ -367,13 +362,8 @@ static void GameTicker()
 	case GS_MENUSCREEN:
 	case GS_FULLCONSOLE:
 		break;
-	case GS_INTERMISSION:
+	case GS_CUTSCENE:
 	case GS_INTRO:
-		if (intermissiondelay > 0)
-		{
-			intermissiondelay--;
-			break;
-		}
 		if (ScreenJobTick())
 		{
 			// synchronize termination with the playsim.
@@ -390,6 +380,7 @@ static void GameTicker()
 // Display
 //
 //==========================================================================
+EXTERN_CVAR(Bool, vid_renderer);
 
 void Display()
 {
@@ -416,9 +407,9 @@ void Display()
 		break;
 
 	case GS_INTRO:
-	case GS_INTERMISSION:
+	case GS_CUTSCENE:
 		// screen jobs are not bound by the game ticker so they need to be ticked in the display loop.
-		if (intermissiondelay <= 0) ScreenJobDraw();
+		ScreenJobDraw();
 		break;
 
 	case GS_LEVEL:
@@ -452,7 +443,8 @@ void Display()
 	}
 	DrawRateStuff();
 
-	videoShowFrame(1);
+	if (vid_renderer == 0) videoShowFrame(1);
+	else screen->Update();
 }
 
 //==========================================================================
@@ -492,7 +484,7 @@ static void TicStabilityEnd()
 {
 	using namespace std::chrono;
 	uint64_t stabilityendtime = duration_cast<microseconds>(steady_clock::now().time_since_epoch()).count();
-	stabilityticduration = std::min(stabilityendtime - stabilitystarttime, (uint64_t)1'000'000);
+	stabilityticduration = min(stabilityendtime - stabilitystarttime, (uint64_t)1'000'000);
 }
 
 //==========================================================================
@@ -512,7 +504,7 @@ void TryRunTics (void)
 
 	// If paused, do not eat more CPU time than we need, because it
 	// will all be wasted anyway.
-	bool doWait = (cl_capfps || pauseext || (r_NoInterpolate && !M_IsAnimated() && gamestate != GS_INTERMISSION && gamestate != GS_INTRO));
+	bool doWait = (cl_capfps || pauseext || (r_NoInterpolate && !M_IsAnimated() && gamestate != GS_CUTSCENE && gamestate != GS_INTRO));
 
 	// get real tics
 	if (doWait)
@@ -553,7 +545,7 @@ void TryRunTics (void)
 		counts = realtics;
 	else
 		counts = availabletics;
-	
+
 	// Uncapped framerate needs seprate checks
 	if (counts == 0 && !doWait)
 	{
@@ -575,7 +567,7 @@ void TryRunTics (void)
 		{
 			I_GetEvent();
 			auto input = CONTROL_GetInput();
-			gi->GetInput(nullptr, &input);
+			gi->GetInput(&input, I_GetInputFrac(SyncInput()));
 		}
 		return;
 	}
@@ -690,7 +682,7 @@ void MainLoop ()
 		userConfig.CommandMap = "";
 		if (maprecord)
 		{
-			DeferedStartGame(maprecord, -1);
+			DeferredStartGame(maprecord, g_nextskill);
 		}
 	}
 

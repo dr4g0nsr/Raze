@@ -1,37 +1,29 @@
 BEGIN_SW_NS
 
-bool FindCeilingView(short match, int32_t* x, int32_t* y, int32_t z, int16_t* sectnum);
-bool FindFloorView(short match, int32_t* x, int32_t* y, int32_t z, int16_t* sectnum);
+bool FindCeilingView(int match, int* x, int* y, int z, sectortype** sect);
+bool FindFloorView(int match, int* x, int* y, int z, sectortype** sect);
 
 
-short
-ViewSectorInScene(short cursectnum, short level)
+int ViewSectorInScene(sectortype* cursect, int level)
 {
-    int i;
-    SPRITEp sp;
-    short match;
-
-    StatIterator it(STAT_FAF);
-    while ((i = it.NextIndex()) >= 0)
+    SWStatIterator it(STAT_FAF);
+    while (auto actor = it.Next())
     {
-        sp = &sprite[i];
-
-        if (sp->hitag == level)
+        if (actor->spr.hitag == level)
         {
-            if (cursectnum == sp->sectnum)
+            if (cursect == actor->sector())
             {
                 // ignore case if sprite is pointing up
-                if (sp->ang == 1536)
+                if (actor->spr.ang == 1536)
                     continue;
 
                 // only gets to here is sprite is pointing down
 
                 // found a potential match
-                match = sp->lotag;
+                int match = actor->spr.lotag;
 
-                if (!PicInView(FAF_MIRROR_PIC, true))
+                if (!testgotpic(FAF_MIRROR_PIC, true))
                     return -1;
-
                 return match;
             }
         }
@@ -42,30 +34,26 @@ ViewSectorInScene(short cursectnum, short level)
 
 
 
-void
-DrawOverlapRoom(int tx, int ty, int tz, fixed_t tq16ang, fixed_t tq16horiz, short tsectnum)
+void DrawOverlapRoom(int tx, int ty, int tz, fixed_t tq16ang, fixed_t tq16horiz, sectortype* tsect)
 {
-    short i;
-    short match;
-
     save.zcount = 0;
 
-    match = ViewSectorInScene(tsectnum, VIEW_LEVEL1);
+    int match = ViewSectorInScene(tsect, VIEW_LEVEL1);
     if (match != -1)
     {
-        FindCeilingView(match, &tx, &ty, tz, &tsectnum);
+        FindCeilingView(match, &tx, &ty, tz, &tsect);
 
-        if (tsectnum < 0)
+        if (tsect == nullptr)
             return;
 
-        renderDrawRoomsQ16(tx, ty, tz, tq16ang, tq16horiz, tsectnum);
+        renderDrawRoomsQ16(tx, ty, tz, tq16ang, tq16horiz, sectnum(tsect), false);
 
         // reset Z's
-        for (i = 0; i < save.zcount; i++)
+        for (int i = 0; i < save.zcount; i++)
         {
-            sector[save.sectnum[i]].floorz = save.zval[i];
-            sector[save.sectnum[i]].floorpicnum = save.pic[i];
-            sector[save.sectnum[i]].floorheinum = save.slope[i];
+            save.sect[i]->setfloorz(save.zval[i], true);
+            save.sect[i]->floorpicnum = save.pic[i];
+            save.sect[i]->setfloorslope(save.slope[i]);
         }
 
         analyzesprites(pm_tsprite, pm_spritesortcnt, tx, ty, tz, false);
@@ -75,22 +63,22 @@ DrawOverlapRoom(int tx, int ty, int tz, fixed_t tq16ang, fixed_t tq16horiz, shor
     }
     else
     {
-        match = ViewSectorInScene(tsectnum, VIEW_LEVEL2);
+        match = ViewSectorInScene(tsect, VIEW_LEVEL2);
         if (match != -1)
         {
-            FindFloorView(match, &tx, &ty, tz, &tsectnum);
+            FindFloorView(match, &tx, &ty, tz, &tsect);
 
-            if (tsectnum < 0)
+            if (tsect == nullptr)
                 return;
 
-            renderDrawRoomsQ16(tx, ty, tz, tq16ang, tq16horiz, tsectnum);
+            renderDrawRoomsQ16(tx, ty, tz, tq16ang, tq16horiz, sectnum(tsect), false);
 
             // reset Z's
-            for (i = 0; i < save.zcount; i++)
+            for (int i = 0; i < save.zcount; i++)
             {
-                sector[save.sectnum[i]].ceilingz = save.zval[i];
-                sector[save.sectnum[i]].ceilingpicnum = save.pic[i];
-                sector[save.sectnum[i]].ceilingheinum = save.slope[i];
+                save.sect[i]->setceilingz(save.zval[i], true);
+                save.sect[i]->ceilingpicnum = save.pic[i];
+                save.sect[i]->setceilingslope(save.slope[i]);
             }
 
             analyzesprites(pm_tsprite, pm_spritesortcnt, tx, ty, tz, false);
@@ -101,71 +89,66 @@ DrawOverlapRoom(int tx, int ty, int tz, fixed_t tq16ang, fixed_t tq16horiz, shor
     }
 }
 
-void FAF_DrawRooms(int x, int y, int z, fixed_t q16ang, fixed_t q16horiz, short sectnum)
+void FAF_DrawRooms(int x, int y, int z, fixed_t q16ang, fixed_t q16horiz, int sectnum)
 {
-    int i;
-    StatIterator it(STAT_CEILING_FLOOR_PIC_OVERRIDE);
-    while ((i = it.NextIndex()) >= 0)
+    SWStatIterator it(STAT_CEILING_FLOOR_PIC_OVERRIDE);
+    while (auto actor = it.Next())
     {
-        if (SPRITE_TAG3(i) == 0)
+        if (SP_TAG3(actor) == 0)
         {
             // back up ceilingpicnum and ceilingstat
-            SPRITE_TAG5(i) = sector[sprite[i].sectnum].ceilingpicnum;
-            sector[sprite[i].sectnum].ceilingpicnum = SPRITE_TAG2(i);
-            SPRITE_TAG4(i) = sector[sprite[i].sectnum].ceilingstat;
-            //SET(sector[sprite[i].sectnum].ceilingstat, ((int)SPRITE_TAG7(i))<<7);
-            SET(sector[sprite[i].sectnum].ceilingstat, SPRITE_TAG6(i));
-            RESET(sector[sprite[i].sectnum].ceilingstat, CEILING_STAT_PLAX);
+            SP_TAG5(actor) = actor->sector()->ceilingpicnum;
+            actor->sector()->ceilingpicnum = SP_TAG2(actor);
+            SP_TAG4(actor) = actor->sector()->ceilingstat;
+            actor->sector()->ceilingstat |= (ESectorFlags::FromInt(SP_TAG6(actor)));
+            actor->sector()->ceilingstat &= ~(CSTAT_SECTOR_SKY);
         }
-        else if (SPRITE_TAG3(i) == 1)
+        else if (SP_TAG3(actor) == 1)
         {
-            SPRITE_TAG5(i) = sector[sprite[i].sectnum].floorpicnum;
-            sector[sprite[i].sectnum].floorpicnum = SPRITE_TAG2(i);
-            SPRITE_TAG4(i) = sector[sprite[i].sectnum].floorstat;
-            //SET(sector[sprite[i].sectnum].floorstat, ((int)SPRITE_TAG7(i))<<7);
-            SET(sector[sprite[i].sectnum].floorstat, SPRITE_TAG6(i));
-            RESET(sector[sprite[i].sectnum].floorstat, FLOOR_STAT_PLAX);
+            SP_TAG5(actor) = actor->sector()->floorpicnum;
+            actor->sector()->floorpicnum = SP_TAG2(actor);
+            SP_TAG4(actor) = actor->sector()->floorstat;
+            actor->sector()->floorstat |= (ESectorFlags::FromInt(SP_TAG6(actor)));
+            actor->sector()->floorstat &= ~(CSTAT_SECTOR_SKY);
         }
     }
 
-    renderDrawRoomsQ16(x,y,z,q16ang,q16horiz,sectnum);
+    renderDrawRoomsQ16(x,y,z,q16ang,q16horiz,sectnum, false);
 
     it.Reset(STAT_CEILING_FLOOR_PIC_OVERRIDE);
-    while ((i = it.NextIndex()) >= 0)
+    while (auto actor = it.Next())
     {
         // manually set gotpic
-        if (gotsector[sprite[i].sectnum])
+        if (gotsector[actor->sectno()])
         {
-            SET_GOTPIC(FAF_MIRROR_PIC);
+            gotpic.Set(FAF_MIRROR_PIC);
         }
 
-        if (SPRITE_TAG3(i) == 0)
+        if (SP_TAG3(actor) == 0)
         {
             // restore ceilingpicnum and ceilingstat
-            sector[sprite[i].sectnum].ceilingpicnum = SPRITE_TAG5(i);
-            sector[sprite[i].sectnum].ceilingstat = SPRITE_TAG4(i);
-            //RESET(sector[sprite[i].sectnum].ceilingstat, CEILING_STAT_TYPE_MASK);
-            RESET(sector[sprite[i].sectnum].ceilingstat, CEILING_STAT_PLAX);
+            actor->sector()->ceilingpicnum = SP_TAG5(actor);
+            actor->sector()->ceilingstat = ESectorFlags::FromInt(SP_TAG4(actor));
+            actor->sector()->ceilingstat &= ~(CSTAT_SECTOR_SKY);
         }
-        else if (SPRITE_TAG3(i) == 1)
+        else if (SP_TAG3(actor) == 1)
         {
-            sector[sprite[i].sectnum].floorpicnum = SPRITE_TAG5(i);
-            sector[sprite[i].sectnum].floorstat = SPRITE_TAG4(i);
-            //RESET(sector[sprite[i].sectnum].floorstat, FLOOR_STAT_TYPE_MASK);
-            RESET(sector[sprite[i].sectnum].floorstat, FLOOR_STAT_PLAX);
+            actor->sector()->floorpicnum = SP_TAG5(actor);
+            actor->sector()->floorstat = ESectorFlags::FromInt(SP_TAG4(actor));
+            actor->sector()->floorstat &= ~(CSTAT_SECTOR_SKY);
         }
     }
 }
 
-void polymost_drawscreen(PLAYERp pp, int tx, int ty, int tz, binangle tang, fixedhoriz thoriz, int tsectnum)
+void polymost_drawscreen(PLAYER* pp, int tx, int ty, int tz, binangle tang, fixedhoriz thoriz, sectortype* tsect)
 {
     videoSetCorrectedAspect();
     renderSetAspect(xs_CRoundToInt(double(viewingrange) * tan(r_fov * (pi::pi() / 360.))), yxaspect);
     OverlapDraw = true;
-    DrawOverlapRoom(tx, ty, tz, tang.asq16(), thoriz.asq16(), tsectnum);
+    DrawOverlapRoom(tx, ty, tz, tang.asq16(), thoriz.asq16(), tsect);
     OverlapDraw = false;
 
-    if (automapMode != am_full)// && !ScreenSavePic)
+    if (automapMode != am_full)
     {
         // TEST this! Changed to camerapp
         //JS_DrawMirrors(camerapp, tx, ty, tz, tang.asq16(), thoriz.asq16());
@@ -175,7 +158,7 @@ void polymost_drawscreen(PLAYERp pp, int tx, int ty, int tz, binangle tang, fixe
     // TODO: This call is redundant if the tiled overhead map is shown, but the
     // HUD elements should be properly outputted with hardware rendering first.
     if (!FAF_DebugView)
-        FAF_DrawRooms(tx, ty, tz, tang.asq16(), thoriz.asq16(), tsectnum);
+        FAF_DrawRooms(tx, ty, tz, tang.asq16(), thoriz.asq16(), sectnum(tsect));
 
     analyzesprites(pm_tsprite, pm_spritesortcnt, tx, ty, tz, tang.asbuild());
     post_analyzesprites(pm_tsprite, pm_spritesortcnt);
@@ -183,7 +166,7 @@ void polymost_drawscreen(PLAYERp pp, int tx, int ty, int tz, binangle tang, fixe
 
 }
 
-void JS_DrawMirrors(PLAYERp pp, int tx, int ty, int tz,  fixed_t tpq16ang, fixed_t tpq16horiz)
+void JS_DrawMirrors(PLAYER* pp, int tx, int ty, int tz,  fixed_t tpq16ang, fixed_t tpq16horiz)
 {
     int j, cnt;
     int dist;
@@ -195,25 +178,19 @@ void JS_DrawMirrors(PLAYERp pp, int tx, int ty, int tz,  fixed_t tpq16ang, fixed
     // drift!
     bool bIsWallMirror = false;
 
-    // WARNING!  Assuming (MIRRORLABEL&31) = 0 and MAXMIRRORS = 64 <-- JBF: wrong
-    longptr = (int *)&gotpic[MIRRORLABEL >> 3];
-    if (longptr && (longptr[0] || longptr[1]))
     {
-        for (cnt = MAXMIRRORS - 1; cnt >= 0; cnt--)
-            //if (TEST_GOTPIC(cnt + MIRRORLABEL) || TEST_GOTPIC(cnt + CAMSPRITE))
-            if (TEST_GOTPIC(cnt + MIRRORLABEL) || ((unsigned)mirror[cnt].campic < MAXTILES && TEST_GOTPIC(mirror[cnt].campic)))
+        for (cnt = mirrorcnt - 1; cnt >= 0; cnt--)
+            //if (testgotpic(cnt + MIRRORLABEL) || testgotpic(cnt + CAMSPRITE))
+            if (testgotpic(cnt + MIRRORLABEL) || ((unsigned)mirror[cnt].campic < MAXTILES && testgotpic(mirror[cnt].campic)))
             {
                 bIsWallMirror = false;
-                if (TEST_GOTPIC(cnt + MIRRORLABEL))
+                if (testgotpic(cnt + MIRRORLABEL, true))
                 {
                     bIsWallMirror = true;
-                    RESET_GOTPIC(cnt + MIRRORLABEL);
                 }
-                //else if (TEST_GOTPIC(cnt + CAMSPRITE))
-                else if ((unsigned)mirror[cnt].campic < MAXTILES && TEST_GOTPIC(mirror[cnt].campic))
+                else if ((unsigned)mirror[cnt].campic < MAXTILES && testgotpic(mirror[cnt].campic))
                 {
-                    //RESET_GOTPIC(cnt + CAMSPRITE);
-                    RESET_GOTPIC(mirror[cnt].campic);
+                    gotpic.Clear(mirror[cnt].campic);
                 }
 
                 mirrorinview = true;
@@ -228,73 +205,66 @@ void JS_DrawMirrors(PLAYERp pp, int tx, int ty, int tz,  fixed_t tpq16ang, fixed
 
                 if (bIsWallMirror)
                 {
-                    j = abs(wall[mirror[cnt].mirrorwall].x - tx);
-                    j += abs(wall[mirror[cnt].mirrorwall].y - ty);
+                    j = abs(mirror[cnt].mirrorWall->pos.X - tx);
+                    j += abs(mirror[cnt].mirrorWall->pos.Y - ty);
                     if (j < dist)
                         dist = j;
                 }
-                else
+                else if (mirror[cnt].camspriteActor)
                 {
-                    SPRITEp tp;
+                    auto pos = mirror[cnt].camspriteActor->spr.pos;
 
-                    tp = &sprite[mirror[cnt].camsprite];
-
-                    j = abs(tp->x - tx);
-                    j += abs(tp->y - ty);
+                    j = abs(pos.X - tx);
+                    j += abs(pos.Y - ty);
                     if (j < dist)
                         dist = j;
                 }
 
                 if (mirror[cnt].ismagic)
                 {
-                    SPRITEp sp=NULL;
                     int camhoriz;
-                    short w;
+                    int w;
                     int dx, dy, dz, tdx, tdy, tdz, midx, midy;
 
-
-                    ASSERT(mirror[cnt].camera != -1);
-
-                    sp = &sprite[mirror[cnt].camera];
-
-                    ASSERT(sp);
+                    auto actor = mirror[cnt].cameraActor;
+                    ASSERT(actor != nullptr);
 
                     // Calculate the angle of the mirror wall
-                    w = mirror[cnt].mirrorwall;
+                    auto wal = mirror[cnt].mirrorWall;
 
                     // Get wall midpoint for offset in mirror view
-                    midx = (wall[w].x + wall[wall[w].point2].x) / 2;
-                    midy = (wall[w].y + wall[wall[w].point2].y) / 2;
+                    midx = (wal->pos.X + wal->point2Wall()->pos.X) / 2;
+                    midy = (wal->pos.Y + wal->point2Wall()->pos.Y) / 2;
 
                     // Finish finding offsets
                     tdx = abs(midx - tx);
                     tdy = abs(midy - ty);
 
                     if (midx >= tx)
-                        dx = sp->x - tdx;
+                        dx = actor->spr.pos.X - tdx;
                     else
-                        dx = sp->x + tdx;
+                        dx = actor->spr.pos.X + tdx;
 
                     if (midy >= ty)
-                        dy = sp->y - tdy;
+                        dy = actor->spr.pos.Y - tdy;
                     else
-                        dy = sp->y + tdy;
+                        dy = actor->spr.pos.Y + tdy;
 
-                    tdz = abs(tz - sp->z);
-                    if (tz >= sp->z)
-                        dz = sp->z + tdz;
+                    tdz = abs(tz - actor->spr.pos.Z);
+                    if (tz >= actor->spr.pos.Z)
+                        dz = actor->spr.pos.Z + tdz;
                     else
-                        dz = sp->z - tdz;
+                        dz = actor->spr.pos.Z - tdz;
 
 
                     // Is it a TV cam or a teleporter that shows destination?
                     // true = It's a TV cam
                     mirror[cnt].mstate = m_normal;
-                    if (TEST_BOOL1(sp))
+                    if (TEST_BOOL1(actor))
                         mirror[cnt].mstate = m_viewon;
 
                     // Show teleport destination
-                    // NOTE: Adding MAXSECTORS lets you draw a room, even if
+                    // NOTE: Adding true lets you draw a room, even if
                     // you are outside of it!
                     if (mirror[cnt].mstate != m_viewon)
                     {
@@ -304,12 +274,12 @@ void JS_DrawMirrors(PLAYERp pp, int tx, int ty, int tz,  fixed_t tpq16ang, fixed
 
                         if (mirror[cnt].campic != -1)
 							tileDelete(mirror[cnt].campic);
-                        renderDrawRoomsQ16(dx, dy, dz, tpq16ang, tpq16horiz, sp->sectnum + MAXSECTORS);
+                        renderDrawRoomsQ16(dx, dy, dz, tpq16ang, tpq16horiz, actor->sector(), true);
                         analyzesprites(pm_tsprite, pm_spritesortcnt, dx, dy, dz, false);
                         renderDrawMasks();
                     }
                 }
-                else
+                else if (mirror[cnt].mirrorWall)
                 {
                     // It's just a mirror
                     // Prepare drawrooms for drawing mirror and calculate
@@ -319,9 +289,9 @@ void JS_DrawMirrors(PLAYERp pp, int tx, int ty, int tz,  fixed_t tpq16ang, fixed
                     // completemirror after drawrooms
 					display_mirror = true;
                     renderPrepareMirror(tx, ty, tz, tpq16ang, tpq16horiz,
-                                  mirror[cnt].mirrorwall, /*mirror[cnt].mirrorsector,*/ &tposx, &tposy, &tang);
+                                  wallnum(mirror[cnt].mirrorWall), /*mirror[cnt].mirrorsector,*/ &tposx, &tposy, &tang);
 
-                    renderDrawRoomsQ16(tposx, tposy, tz, (tang), tpq16horiz, mirror[cnt].mirrorsector + MAXSECTORS);
+                    renderDrawRoomsQ16(tposx, tposy, tz, (tang), tpq16horiz, sectnum(mirror[cnt].mirrorSector), true);
 
                     analyzesprites(pm_tsprite, pm_spritesortcnt, tposx, tposy, tz, tang >> 16);
                     renderDrawMasks();
@@ -330,14 +300,9 @@ void JS_DrawMirrors(PLAYERp pp, int tx, int ty, int tz,  fixed_t tpq16ang, fixed
 					display_mirror = false;
                 }
 
-
-                // g_visibility = tvisibility;
-                // g_visibility = NormalVisibility;
-
-                // renderDrawRoomsQ16(tx, ty, tz, tpq16ang, tpq16horiz, pp->cursectnum);
                 // Clean up anything that the camera view might have done
 				tileDelete(MIRROR);
-                wall[mirror[cnt].mirrorwall].overpicnum = MIRRORLABEL + cnt;
+                mirror[cnt].mirrorWall->overpicnum = MIRRORLABEL + cnt;
             }
             else
                 mirrorinview = false;
@@ -345,4 +310,70 @@ void JS_DrawMirrors(PLAYERp pp, int tx, int ty, int tz,  fixed_t tpq16ang, fixed
 }
 
 
+void SW_FloorPortalHack(DSWActor* actor, int z, int match)
+{
+    // move ceiling multiple of 128 so that the wall tile will line up
+    int pix_diff = labs(z - actor->sector()->ceilingz) >> 8;
+    int newz = actor->sector()->ceilingz - ((pix_diff / 128) + 1) * Z(128);
+
+    SWStatIterator it(STAT_FAF);
+    while ((actor = it.Next()))
+    {
+        if (actor->spr.lotag == match)
+        {
+            // move upper levels floors down for the correct view
+            if (actor->spr.hitag == VIEW_LEVEL1)
+            {
+                // save it off
+                save.sect[save.zcount] = actor->sector();
+                save.zval[save.zcount] = actor->sector()->ceilingz;
+                save.pic[save.zcount] = actor->sector()->ceilingpicnum;
+                save.slope[save.zcount] = actor->sector()->ceilingheinum;
+
+                actor->sector()->setceilingz(newz, true);
+
+                // don't change FAF_MIRROR_PIC - ConnectArea
+                if (actor->sector()->ceilingpicnum != FAF_MIRROR_PIC)
+                    actor->sector()->ceilingpicnum = FAF_MIRROR_PIC + 1;
+                actor->sector()->setceilingslope(0);
+
+                save.zcount++;
+                PRODUCTION_ASSERT(save.zcount < ZMAX);
+            }
+        }
+    }
+}
+
+void SW_CeilingPortalHack(DSWActor* actor, int z, int match)
+{
+    int pix_diff = labs(z - actor->sector()->floorz) >> 8;
+    int newz = actor->sector()->floorz + ((pix_diff / 128) + 1) * Z(128);
+
+    SWStatIterator it(STAT_FAF);
+    while ((actor = it.Next()))
+    {
+        if (actor->spr.lotag == match)
+        {
+            // move lower levels ceilings up for the correct view
+            if (actor->spr.hitag == VIEW_LEVEL2)
+            {
+                // save it off
+                save.sect[save.zcount] = actor->sector();
+                save.zval[save.zcount] = actor->sector()->floorz;
+                save.pic[save.zcount] = actor->sector()->floorpicnum;
+                save.slope[save.zcount] = actor->sector()->floorheinum;
+
+                actor->sector()->setfloorz(newz, true);
+                // don't change FAF_MIRROR_PIC - ConnectArea
+                if (actor->sector()->floorpicnum != FAF_MIRROR_PIC)
+                    actor->sector()->floorpicnum = FAF_MIRROR_PIC + 1;
+                actor->sector()->setfloorslope(0);
+
+                save.zcount++;
+                PRODUCTION_ASSERT(save.zcount < ZMAX);
+            }
+        }
+    }
+
+}
 END_SW_NS

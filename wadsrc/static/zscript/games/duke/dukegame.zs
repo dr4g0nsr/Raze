@@ -35,7 +35,7 @@ struct Duke native
 		MUS_BRIEFING = 1,
 		MUS_LOADING = 2,
 	};
-	
+
 	enum EPalette
 	{
 		BASEPAL = 0,
@@ -49,41 +49,58 @@ struct Duke native
 		BASEPALCOUNT
 	};
 
+	enum dukeinvicon_t
+	{
+		ICON_NONE,  // 0
+		ICON_FIRSTAID,
+		ICON_STEROIDS,
+		ICON_HOLODUKE,
+		ICON_JETPACK,
+		ICON_HEATS,  // 5
+		ICON_SCUBA,
+		ICON_BOOTS,
+		ICON_MAX
+	};
+
 	native static void PlaySpecialMusic(int which);
 	native static int PlaySound(int num, int channel = CHAN_AUTO, int flags = 0, float vol =0.8f);
 	native static void StopSound(int num);
 	native static bool CheckSoundPlaying(int num);
-	
+	native static DukePlayer GetViewPlayer();
+	native static int MaxPlayerHealth();
+	native static int MaxAmmoAmount(int weap);
+
 	static void PlayBonusMusic()
 	{
-		if (Raze.MusicEnabled())
+		if (System.MusicEnabled())
 			PlaySound(DukeSnd.BONUSMUSIC, CHAN_AUTO, CHANF_UI);
 	}
-	
+
 	//==========================================================================
 	//
 	// wrappers around DrawText to allow easier reuse of the old code.
 	// The vertical displacements are to have the same positioning as with the original code.
 	//
 	//==========================================================================
-		
+
 	static void BigText(double x, double y, String text, int align = -1, double alpha = 1.)
 	{
-		
+		let myfont = Raze.PickBigFont();
 		if (!Raze.isRR())
 		{
-			if (align != -1) x -= BigFont.StringWidth(text) * (align == 0 ? 0.5 : 1);
-			Screen.DrawText(BigFont, Font.CR_UNTRANSLATED, x, y - 12, text, DTA_FullscreenScale, FSMode_Fit320x200, DTA_Alpha, alpha);
+			if (align != -1) x -= myfont.StringWidth(text) * (align == 0 ? 0.5 : 1);
+			Screen.DrawText(myfont, Font.CR_UNTRANSLATED, x, y - 12, text, DTA_FullscreenScale, FSMode_Fit320x200, DTA_Alpha, alpha);
 		}
 		else
 		{
-			if (align != -1) x -= BigFont.StringWidth(text) * (align == 0 ? 0.2 : 0.4);
-			Screen.DrawText(BigFont, Font.CR_UNTRANSLATED, x, y - 12, text, DTA_FullscreenScale, FSMode_Fit320x200, DTA_ScaleX, 0.4, DTA_ScaleY, 0.4, DTA_Alpha, alpha);
+			if (align != -1) x -= myfont.StringWidth(text) * (align == 0 ? 0.2 : 0.4);
+			Screen.DrawText(myfont, Font.CR_UNTRANSLATED, x, y - 12, text, DTA_FullscreenScale, FSMode_Fit320x200, DTA_ScaleX, 0.4, DTA_ScaleY, 0.4, DTA_Alpha, alpha);
 		}
 	}
 
 	static void GameText(double x, double y, String t, int shade, int align = -1, int trans = 0)
 	{
+		let myfont = Raze.PickSmallFont();
 		int fsmode = FSMode_Fit320x200;
 		if (Raze.isRR())
 		{
@@ -91,8 +108,210 @@ struct Duke native
 			y *= 2;
 			fsmode = FSMode_Fit640x400;
 		}
-		if (align != -1) x -= SmallFont.StringWidth(t) * (align == 0 ? 0.5 : 1);
-		Screen.DrawText(SmallFont, Font.CR_UNDEFINED, x, y + 2, t, DTA_FullscreenScale, fsmode, DTA_TranslationIndex, Translation.MakeID(Translation_Remap, trans), DTA_Color, Raze.shadeToLight(shade));
+		if (align != -1) x -= myfont.StringWidth(t) * (align == 0 ? 0.5 : 1);
+		Screen.DrawText(myfont, Font.CR_NATIVEPAL, x, y + 2, t, DTA_FullscreenScale, fsmode, DTA_TranslationIndex, Translation.MakeID(Translation_Remap, trans), DTA_Color, Raze.shadeToLight(shade));
+	}
+}
+
+struct DukePlayer 
+{
+	// The sound code wants to read a vector out of this so we need to define one for the main coordinate.
+	/*
+	union
+	{
+		vec3_t pos;
+		struct { int32_t posx, posy, posz; };
+	};
+
+	// player's horizon and angle structs.
+	PlayerHorizon horizon;
+	PlayerAngle angle;
+
+	uint16_t frags[MAXPLAYERS];
+	*/
+
+	native bool gotweapon[DukeWpn.MAX_WEAPONS];
+
+	// Palette management uses indices into the engine's palette table now.
+	native color pals;
+
+	// this was a global variable originally.
+	//vec2_t fric;
+
+	// weapon drawer variables and their interpolation counterparts.
+	native int weapon_sway;
+	native int oweapon_sway;
+	native int16 weapon_pos, kickback_pic, random_club_frame;
+	native int16 oweapon_pos, okickback_pic, orandom_club_frame;
+	native uint8 hard_landing;
+	native uint8 ohard_landing;
+
+	// Store current psectlotag as determined in processinput() for use with scaling angle aiming.
+	native int16 psectlotag;
+
+	// From here on it is unaltered from JFDuke with the exception of a few fields that are no longer needed and were removed.
+	native int numloogs, loogcnt;
+	native int invdisptime;
+	native int pyoff, opyoff;
+	native int last_pissed_time, truefz, truecz;
+	native int player_par, visibility;
+	native int bobcounter;
+	native int randomflamex, crack_time;
+	native int aim_mode, ftt;
+
+	//native int cursectnum;// , one_parallax_sectnum
+	//native walltype access_wall; // can't do yet.
+
+	native int16 last_extra, subweapon;
+	native int16 ammo_amount[DukeWpn.MAX_WEAPONS], frag, fraggedself;
+
+	native int16 curr_weapon, last_weapon, tipincs, wantweaponfire;
+	native int16 holoduke_amount, hurt_delay, hbomb_hold_delay;
+	native int16 jumping_counter, airleft, knee_incs, access_incs;
+	native int16 ftq;
+	native int16 got_access, weapon_ang, firstaid_amount;
+	native int16 over_shoulder_on, fist_incs;
+	native int16 cheat_phase;
+	native int16 extra_extra8, quick_kick, last_quick_kick;
+	native int16 heat_amount, timebeforeexit, customexitsound;
+	//DDukeActor* actor, actorsqu, *wackedbyactor, *on_crane, *holoduke_on, *somethingonplayer, *access_spritenum, *dummyplayersprite, *newOwner; // later
+	native voidptr holoduke_on; // cannot do it as a proper actor pointer yet - but the status bar needs it.
+
+	native int16 weaprecs[256], weapreccnt;
+	native uint interface_toggle_flag;
+
+	native int16 dead_flag, show_empty_weapon;	// JBF 20031220: added orotscrnang
+	native int16 scuba_amount, jetpack_amount, steroids_amount, shield_amount;
+	native int16 pycount, frag_ps;
+	native int16 transporter_hold, last_full_weapon, footprintshade, boot_amount;
+
+	native uint8 on_warping_sector, footprintcount;
+	native uint8 hbomb_on, jumping_toggle, rapid_fire_hold, on_ground;
+	//char name[32];
+	native uint8 inven_icon, buttonpalette;
+
+	native uint8 jetpack_on, spritebridge, lastrandomspot;
+	native uint8 scuba_on, footprintpal, heat_on;
+
+	native uint8  holster_weapon;
+	native uint8 falling_counter;
+	native uint8 refresh_inventory;
+
+	native uint8 toggle_key_flag, knuckle_incs; // ,select_dir;
+	native uint8 walking_snd_toggle, palookup;
+	native bool quick_kick_msg;
+
+	native int max_secret_rooms, secret_rooms, max_actors_killed, actors_killed;
+
+	native bool resurrected;
+
+	// Redneck Rampage additions. Those which did not have names in the reconstructed source got one from either RedneckGDX or RedNukem.
+	// Items were reordered by size.
+	native int stairs;
+	native int detonate_count; // at57e
+	native int noise_radius; // at286, at28a, at290
+	native int drink_timer; // at58e
+	native int eat_timer; // at592
+	native int SlotWin;
+	native int16 recoil;
+	native int16 detonate_time; // at57c
+	native int16 yehaa_timer;
+	native int16 drink_amt, eat, drunkang, eatang;
+	native uint8 shotgun_state[2];
+	native uint8 donoise; // at28e
+	native uint8 keys[5];
+
+	// RRRA. The same as for the RR block applies.
+	native int drug_aspect;
+	native int drug_timer;
+	native int SeaSick;
+	native int16 MamaEnd; // raat609
+	native int16 moto_drink;
+	native float TiltStatus, oTiltStatus;
+	native double VBumpNow, VBumpTarget;
+	native int16 TurbCount;
+	native int16 drug_stat[3]; // raat5f1..5
+	native uint8 DrugMode, lotag800kill;
+	native uint8 sea_sick_stat; // raat5dd
+	native uint8 hurt_delay2, nocheat;
+	native uint8 OnMotorcycle, OnBoat, moto_underwater, NotOnWater, MotoOnGround;
+	native uint8 moto_do_bump, moto_bump_fast, moto_on_oil, moto_on_mud;
+	native double vehForwardScale, vehReverseScale, MotoSpeed;
+	native bool vehTurnLeft, vehTurnRight, vehBraking;
+
+	// input stuff.
+	//InputPacket sync;
+
+	/*
+	DDukeActor* GetActor();
+	int GetPlayerNum();
+
+	void apply_seasick(double factor);
+	void backuppos(bool noclipping = false);
+	void backupweapon();
+	void checkhardlanding();
+	void playerweaponsway(int xvel);
+
+	float adjustavel(float avel)
+	{
+		return (psectlotag == ST_2_UNDERWATER)? avel * 0.875f : avel;
+	}
+	*/
+
+	native bool IsFrozen();
+	native int GetGameVar(String varname, int defval);
+
+
+}
+
+struct DukeWpn
+{
+	enum dukeweapon_t
+	{
+		KNEE_WEAPON,  // 0
+		PISTOL_WEAPON,
+		SHOTGUN_WEAPON,
+		CHAINGUN_WEAPON,
+		RPG_WEAPON,
+		HANDBOMB_WEAPON,  // 5
+		SHRINKER_WEAPON,
+		DEVISTATOR_WEAPON,
+		TRIPBOMB_WEAPON,
+		FREEZE_WEAPON,
+		HANDREMOTE_WEAPON,  // 10
+		GROW_WEAPON,
+		FLAMETHROWER_WEAPON,    // World Tour
+
+		MIN_WEAPON = 0,
+		MAX_WEAPON = 9,
+		MAX_WEAPONS = 17
+	}
+}
+
+struct RRWpn
+{
+	enum redneck_weapon_t
+	{
+		// These names have been pieced together from RedneckGDX and RedNukem because the reconstructed source recycled Duke's names for the first 11 weapons.
+		// Names for 0-2 are the same
+		KNEE_WEAPON,  // 0
+		PISTOL_WEAPON,
+		SHOTGUN_WEAPON,
+		RIFLEGUN_WEAPON,
+		DYNAMITE_WEAPON,
+		CROSSBOW_WEAPON, // 5
+		THROWSAW_WEAPON,
+		ALIENBLASTER_WEAPON,
+		POWDERKEG_WEAPON,
+		TIT_WEAPON,
+		THROWINGDYNAMITE_WEAPON, // 10
+		BUZZSAW_WEAPON,
+		BOWLING_WEAPON,
+		MOTORCYCLE_WEAPON,
+		BOAT_WEAPON,
+		SLINGBLADE_WEAPON, // 15
+		CHICKEN_WEAPON,
+		MAX_WEAPONS
 	}
 }
 

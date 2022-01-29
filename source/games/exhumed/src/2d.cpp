@@ -16,7 +16,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 //-------------------------------------------------------------------------
 #include "ns.h"
-#include "compat.h"
 #include "build.h"
 #include "exhumed.h"
 #include "names.h"
@@ -41,73 +40,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "gamefuncs.h"
 #include "c_bind.h"
 #include "vm.h"
+#include "razefont.h"
 
 #include <string>
 
 #include <assert.h>
 
 BEGIN_PS_NS
-
-//---------------------------------------------------------------------------
-//
-//
-//
-//---------------------------------------------------------------------------
-
-void InitFonts()
-{
-    GlyphSet fontdata;
-    fontdata.Insert(127, TexMan.FindGameTexture("TINYBLAK")); // this is only here to widen the color range of the font to produce a better translation.
-
-    for (int i = 0; i < 26; i++)
-    {
-        fontdata.Insert('A' + i, tileGetTexture(3522 + i));
-    }
-    for (int i = 0; i < 10; i++)
-    {
-        fontdata.Insert('0' + i, tileGetTexture(3555 + i));
-    }
-    fontdata.Insert('.', tileGetTexture(3548));
-    fontdata.Insert('!', tileGetTexture(3549));
-    fontdata.Insert('?', tileGetTexture(3550));
-    fontdata.Insert(',', tileGetTexture(3551));
-    fontdata.Insert('`', tileGetTexture(3552));
-    fontdata.Insert('"', tileGetTexture(3553));
-    fontdata.Insert('-', tileGetTexture(3554));
-    fontdata.Insert('_', tileGetTexture(3554));
-    fontdata.Insert(127, TexMan.FindGameTexture("TINYBLAK")); // this is only here to widen the color range of the font to produce a better translation.
-    GlyphSet::Iterator it(fontdata);
-    GlyphSet::Pair* pair;
-    while (it.NextPair(pair)) pair->Value->SetOffsetsNotForFont();
-    SmallFont = new ::FFont("SmallFont", nullptr, "defsmallfont", 0, 0, 0, -1, 4, false, false, false, &fontdata);
-    SmallFont->SetKerning(1);
-    fontdata.Clear();
-
-    fontdata.Insert(127, TexMan.FindGameTexture("TINYBLAK")); // this is only here to widen the color range of the font to produce a better translation.
-
-    for (int i = 0; i < 26; i++)
-    {
-        fontdata.Insert('A' + i, tileGetTexture(3624 + i));
-    }
-    for (int i = 0; i < 10; i++)
-    {
-        fontdata.Insert('0' + i, tileGetTexture(3657 + i));
-    }
-    fontdata.Insert('!', tileGetTexture(3651));
-    fontdata.Insert('"', tileGetTexture(3655));
-    fontdata.Insert('\'', tileGetTexture(3654));
-    fontdata.Insert('`', tileGetTexture(3654));
-    fontdata.Insert('.', tileGetTexture(3650));
-    fontdata.Insert(',', tileGetTexture(3653));
-    fontdata.Insert('-', tileGetTexture(3656));
-    fontdata.Insert('?', tileGetTexture(3652));
-    fontdata.Insert(127, TexMan.FindGameTexture("TINYBLAK")); // this is only here to widen the color range of the font to produce a better translation.
-    GlyphSet::Iterator it2(fontdata);
-    while (it2.NextPair(pair)) pair->Value->SetOffsetsNotForFont();
-    SmallFont2 = new ::FFont("SmallFont2", nullptr, "defsmallfont2", 0, 0, 0, -1, 4, false, false, false, &fontdata);
-    SmallFont2->SetKerning(1);
-}
-
 
 //---------------------------------------------------------------------------
 //
@@ -137,10 +76,10 @@ void DrawRel(int tile, double x, double y, int shade)
 // this might be static within the DoPlasma function?
 static uint8_t* PlasmaBuffer;
 static int nPlasmaTile = kTile4092;
-static unsigned int nSmokeBottom;
-static unsigned int nSmokeRight;
-static unsigned int nSmokeTop;
-static unsigned int nSmokeLeft;
+static int nSmokeBottom;
+static int nSmokeRight;
+static int nSmokeTop;
+static int nSmokeLeft;
 static int nextPlasmaTic;
 static int plasma_A[5] = { 0 };
 static int plasma_B[5] = { 0 };
@@ -167,9 +106,9 @@ void menu_DoPlasma()
 
     int ptile = nPlasmaTile;
     int pclock = I_GetBuildTime();
-    if (pclock >= nextPlasmaTic || !PlasmaBuffer)
+    while (pclock >= nextPlasmaTic || !PlasmaBuffer)
     {
-        nextPlasmaTic = pclock + 4;
+        nextPlasmaTic += 4;
 
         if (!PlasmaBuffer)
         {
@@ -209,6 +148,7 @@ void menu_DoPlasma()
             for (int y = 0; y < kPlasmaHeight - 2; y++)
             {
                 uint8_t al = *r_edx;
+                uint8_t cl;
 
                 if (al != 96)
                 {
@@ -226,8 +166,8 @@ void menu_DoPlasma()
                     }
                     else
                     {
-                        uint8_t al = *(r_edx + 1);
-                        uint8_t cl = *(r_edx - 1);
+                        al = *(r_edx + 1);
+                        cl = *(r_edx - 1);
 
                         if (al <= cl) {
                             al = cl;
@@ -313,7 +253,7 @@ void menu_DoPlasma()
             if (badOffset)
                 continue;
 
-            unsigned int nSmokeOffset = 0;
+            int nSmokeOffset = 0;
 
             if (plasma_A[j])
             {
@@ -389,6 +329,7 @@ void TextOverlay::Create(const FString& text, int pal)
 {
     lastclock = 0;
     FString ttext = GStrings(text);
+    font = PickSmallFont(ttext);
     screentext = ttext.Split("\n");
     ComputeCinemaText();
 }
@@ -414,8 +355,7 @@ void TextOverlay::ComputeCinemaText()
 void TextOverlay::ReadyCinemaText(const char* nVal)
 {
     FString label = nVal[0] == '$'? GStrings(nVal +1) : nVal;
-    screentext = label.Split("\n");
-    ComputeCinemaText();
+    Create(label, 0);
 }
 
 void TextOverlay::DisplayText()
@@ -428,7 +368,7 @@ void TextOverlay::DisplayText()
         while (i < screentext.Size() && y <= 199)
         {
             if (y >= -10) {
-                DrawText(twod, SmallFont, CR_UNDEFINED, nLeft[i], y, screentext[i], DTA_FullscreenScale, FSMode_Fit320x200, DTA_TranslationIndex, TRANSLATION(Translation_BasePalettes, currentCinemaPalette), TAG_DONE);
+                DrawText(twod, font, CR_NATIVEPAL, nLeft[i], y, screentext[i], DTA_FullscreenScale, FSMode_Fit320x200, DTA_TranslationIndex, TRANSLATION(Translation_BasePalettes, currentCinemaPalette), TAG_DONE);
             }
 
             i++;
@@ -441,7 +381,7 @@ bool TextOverlay::AdvanceCinemaText(double clock)
 {
     if (nHeight + nCrawlY > 0 || CDplaying())
     {
-        nCrawlY-= (clock - lastclock) / 15.;   // do proper interpolation.
+        nCrawlY-= min(clock - lastclock, 1.5) / 15.;   // do proper interpolation.
         lastclock = clock;
         return true;
     }
@@ -477,7 +417,7 @@ static const char * const cinpalfname[] = {
 
 void uploadCinemaPalettes()
 {
-    for (int i = 0; i < countof(cinpalfname); i++)
+    for (unsigned i = 0; i < countof(cinpalfname); i++)
     {
         uint8_t palette[768] = {};
         auto hFile = fileSystem.OpenFileReader(cinpalfname[i]);

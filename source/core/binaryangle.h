@@ -37,11 +37,11 @@
 #pragma once
 
 #include <math.h>
+#include "basics.h"
 #include "m_fixed.h"
 #include "xs_Float.h"	// needed for reliably overflowing float->int conversions.
 #include "serializer.h"
 #include "math/cmath.h"
-#include "templates.h"
 
 class FSerializer;
 
@@ -49,7 +49,10 @@ enum
 {
 	BAMBITS = 21,
 	BAMUNIT = 1 << BAMBITS,
-	SINSHIFT = 14
+	SINTABLEBITS = 30,
+	SINTABLEUNIT = 1 << SINTABLEBITS,
+	BUILDSINBITS = 14,
+	BUILDSINSHIFT = SINTABLEBITS - BUILDSINBITS,
 };
 
 //---------------------------------------------------------------------------
@@ -61,7 +64,12 @@ enum
 constexpr double BAngRadian = pi::pi() * (1. / 1024.);
 constexpr double BAngToDegree = 360. / 2048.;
 
-extern int16_t sintable[2048];
+extern int sintable[2048];
+
+inline constexpr double sinscale(const int shift)
+{
+	return shift >= -BUILDSINBITS ? uint64_t(1) << (BUILDSINBITS + shift) : 1. / (uint64_t(1) << abs(BUILDSINBITS + shift));
+}
 
 //---------------------------------------------------------------------------
 //
@@ -69,13 +77,13 @@ extern int16_t sintable[2048];
 //
 //---------------------------------------------------------------------------
 
-inline int bsin(const int ang, const int shift = 0)
+inline int bsin(const int ang, int shift = 0)
 {
-	return shift < 0 ? sintable[ang & 2047] >> abs(shift) : sintable[ang & 2047] << shift;
+	return (shift -= BUILDSINSHIFT) < 0 ? sintable[ang & 2047] >> abs(shift) : sintable[ang & 2047] << shift;
 }
 inline double bsinf(const double ang, const int shift = 0)
 {
-	return g_sin(ang * BAngRadian) * (shift >= -SINSHIFT ? uint64_t(1) << (SINSHIFT + shift) : 1. / (uint64_t(1) << abs(SINSHIFT + shift)));
+	return g_sin(ang * BAngRadian) * sinscale(shift);
 }
 
 
@@ -85,13 +93,13 @@ inline double bsinf(const double ang, const int shift = 0)
 //
 //---------------------------------------------------------------------------
 
-inline int bcos(const int ang, const int shift = 0)
+inline int bcos(const int ang, int shift = 0)
 {
-	return shift < 0 ? sintable[(ang + 512) & 2047] >> abs(shift) : sintable[(ang + 512) & 2047] << shift;
+	return (shift -= BUILDSINSHIFT) < 0 ? sintable[(ang + 512) & 2047] >> abs(shift) : sintable[(ang + 512) & 2047] << shift;
 }
 inline double bcosf(const double ang, const int shift = 0)
 {
-	return g_cos(ang * BAngRadian) * (shift >= -SINSHIFT ? uint64_t(1) << (SINSHIFT + shift) : 1. / (uint64_t(1) << abs(SINSHIFT + shift)));
+	return g_cos(ang * BAngRadian) * sinscale(shift);
 }
 
 
@@ -104,9 +112,9 @@ inline double bcosf(const double ang, const int shift = 0)
 class binangle
 {
 	uint32_t value;
-	
+
 	constexpr binangle(uint32_t v) : value(v) {}
-	
+
 	friend constexpr binangle bamang(uint32_t v);
 	friend constexpr binangle q16ang(uint32_t v);
 	friend constexpr binangle buildang(uint32_t v);
@@ -115,25 +123,27 @@ class binangle
 	friend binangle degang(double v);
 
 	friend FSerializer &Serialize(FSerializer &arc, const char *key, binangle &obj, binangle *defval);
-	
+
+	constexpr int32_t tosigned() const { return value > INT32_MAX ? int64_t(value) - UINT32_MAX : value; }
+
 public:
 	binangle() = default;
 	binangle(const binangle &other) = default;
+	binangle& operator=(const binangle& other) = default;
 	// This class intentionally makes no allowances for implicit type conversions because those would render it ineffective.
-	constexpr int32_t tosigned() const { return value > INT32_MAX ? int64_t(value) - UINT32_MAX : value; }
 	constexpr short asbuild() const { return value >> BAMBITS; }
-	constexpr double asbuildf() const { return value * (1. / BAMUNIT); }
+	constexpr double asbuildf() const { return value * (1. / +BAMUNIT); }
 	constexpr fixed_t asq16() const { return value >> 5; }
 	constexpr uint32_t asbam() const { return value; }
 	constexpr double asrad() const { return value * (pi::pi() / 0x80000000u); }
 	constexpr double asdeg() const { return AngleToFloat(value); }
 	constexpr short signedbuild() const { return tosigned() >> BAMBITS; }
-	constexpr double signedbuildf() const { return tosigned() * (1. / BAMUNIT); }
+	constexpr double signedbuildf() const { return tosigned() * (1. / +BAMUNIT); }
 	constexpr fixed_t signedq16() const { return tosigned() >> 5; }
 	constexpr int32_t signedbam() const { return tosigned(); }
 	constexpr double signedrad() const { return tosigned() * (pi::pi() / 0x80000000u); }
 	constexpr double signeddeg() const { return AngleToFloat(tosigned()); }
-	
+
 	double fsin() const { return g_sin(asrad()); }
 	double fcos() const { return g_cos(asrad()); }
 	double ftan() const { return g_tan(asrad()); }
@@ -174,31 +184,31 @@ public:
 
 	constexpr binangle &operator<<= (const uint8_t shift)
 	{
-		value <<= shift;
+		value = tosigned() << shift;
 		return *this;
 	}
 
 	constexpr binangle &operator>>= (const uint8_t shift)
 	{
-		value >>= shift;
+		value = tosigned() >> shift;
 		return *this;
 	}
 
 	constexpr binangle operator<< (const uint8_t shift) const
 	{
-		return binangle(value << shift);
+		return binangle(tosigned() << shift);
 	}
 
 	constexpr binangle operator>> (const uint8_t shift) const
 	{
-		return binangle(value >> shift);
+		return binangle(tosigned() >> shift);
 	}
 };
 
 inline constexpr binangle bamang(uint32_t v) { return binangle(v); }
 inline constexpr binangle q16ang(uint32_t v) { return binangle(v << 5); }
 inline constexpr binangle buildang(uint32_t v) { return binangle(v << BAMBITS); }
-inline binangle buildfang(double v) { return binangle(xs_CRoundToUInt(v * BAMUNIT)); }
+inline binangle buildfang(double v) { return binangle(xs_ToFixed(BAMBITS, v)); }
 inline binangle radang(double v) { return binangle(xs_CRoundToUInt(v * (0x80000000u / pi::pi()))); }
 inline binangle degang(double v) { return binangle(FloatToAngle(v)); }
 
@@ -216,9 +226,9 @@ inline FSerializer &Serialize(FSerializer &arc, const char *key, binangle &obj, 
 
 inline double HorizToPitch(double horiz) { return atan2(horiz, 128) * (180. / pi::pi()); }
 inline double HorizToPitch(fixed_t q16horiz) { return atan2(q16horiz, IntToFixed(128)) * (180. / pi::pi()); }
-inline fixed_t PitchToHoriz(double pitch) { return xs_CRoundToInt(IntToFixed(128) * tan(pitch * (pi::pi() / 180.))); }
-inline int32_t PitchToBAM(double pitch) { return xs_CRoundToInt(clamp(pitch * (1073741823.5 / 45.), -INT32_MAX, INT32_MAX)); }
-inline constexpr double BAMToPitch(int32_t bam) { return bam * (45. / 1073741823.5); }
+inline fixed_t PitchToHoriz(double pitch) { return xs_CRoundToInt(clamp<double>(IntToFixed(128) * tan(pitch * (pi::pi() / 180.)), INT32_MIN, INT32_MAX)); }
+inline int32_t PitchToBAM(double pitch) { return xs_CRoundToInt(clamp<double>(pitch * (0x80000000u / 90.), INT32_MIN, INT32_MAX)); }
+inline constexpr double BAMToPitch(int32_t bam) { return bam * (90. / 0x80000000u); }
 
 
 //---------------------------------------------------------------------------
@@ -230,9 +240,9 @@ inline constexpr double BAMToPitch(int32_t bam) { return bam * (45. / 1073741823
 class fixedhoriz
 {
 	fixed_t value;
-	
+
 	constexpr fixedhoriz(fixed_t v) : value(v) {}
-	
+
 	friend constexpr fixedhoriz q16horiz(fixed_t v);
 	friend constexpr fixedhoriz buildhoriz(int v);
 	friend fixedhoriz buildfhoriz(double v);
@@ -240,7 +250,7 @@ class fixedhoriz
 	friend fixedhoriz bamhoriz(int32_t v);
 
 	friend FSerializer &Serialize(FSerializer &arc, const char *key, fixedhoriz &obj, fixedhoriz *defval);
-	
+
 public:
 	fixedhoriz() = default;
 	fixedhoriz(const fixedhoriz &other) = default;
@@ -251,7 +261,7 @@ public:
 	constexpr fixed_t asq16() const { return value; }
 	double aspitch() const { return HorizToPitch(value); }
 	int32_t asbam() const { return PitchToBAM(aspitch()); }
-	
+
 	bool operator< (fixedhoriz other) const
 	{
 		return value < other.value;
@@ -292,7 +302,7 @@ public:
 		value -= other.value;
 		return *this;
 	}
-	
+
 	constexpr fixedhoriz operator- () const
 	{
 		return fixedhoriz(-value);
@@ -362,22 +372,47 @@ inline binangle bvectangbam(int32_t x, int32_t y)
 //
 //---------------------------------------------------------------------------
 
-inline int32_t interpolatedvalue(int32_t oval, int32_t val, double const smoothratio, int const scale = 16)
+inline constexpr int32_t interpolatedvalue(int32_t oval, int32_t val, double const smoothratio, int const scale = 16)
+{
+	return oval + MulScale(val - oval, int(smoothratio), scale);
+}
+
+inline constexpr int32_t interpolatedvalue(int32_t oval, int32_t val, int const smoothratio, int const scale = 16)
 {
 	return oval + MulScale(val - oval, smoothratio, scale);
 }
 
-inline double interpolatedvaluef(double oval, double val, double const smoothratio, int const scale = 16)
+inline constexpr double interpolatedvaluef(double oval, double val, double const smoothratio, int const scale = 16)
 {
 	return oval + MulScaleF(val - oval, smoothratio, scale);
 }
 
-inline int32_t interpolatedangle(int32_t oang, int32_t ang, double const smoothratio, int const scale = 16)
+inline constexpr int32_t interpolatedangle(int32_t oang, int32_t ang, double const smoothratio, int const scale = 16)
+{
+	return oang + MulScale(((ang + 1024 - oang) & 2047) - 1024, int(smoothratio), scale);
+}
+
+inline constexpr int32_t interpolatedangle(int32_t oang, int32_t ang, int const smoothratio, int const scale = 16)
 {
 	return oang + MulScale(((ang + 1024 - oang) & 2047) - 1024, smoothratio, scale);
 }
 
-inline binangle interpolatedangle(binangle oang, binangle ang, double const smoothratio, int const scale = 16)
+inline constexpr binangle interpolatedangle(binangle oang, binangle ang, double const smoothratio, int const scale = 16)
+{
+	return bamang(oang.asbam() + MulScale(((ang.asbam() + 0x80000000 - oang.asbam()) & 0xFFFFFFFF) - 0x80000000, int(smoothratio), scale));
+}
+
+inline constexpr binangle interpolatedangle(binangle oang, binangle ang, int const smoothratio, int const scale = 16)
 {
 	return bamang(oang.asbam() + MulScale(((ang.asbam() + 0x80000000 - oang.asbam()) & 0xFFFFFFFF) - 0x80000000, smoothratio, scale));
+}
+
+inline constexpr fixedhoriz interpolatedhorizon(fixedhoriz oval, fixedhoriz val, double const smoothratio, int const scale = 16)
+{
+	return q16horiz(oval.asq16() + MulScale((val - oval).asq16(), int(smoothratio), scale));
+}
+
+inline constexpr fixedhoriz interpolatedhorizon(fixedhoriz oval, fixedhoriz val, int const smoothratio, int const scale = 16)
+{
+	return q16horiz(oval.asq16() + MulScale((val - oval).asq16(), smoothratio, scale));
 }

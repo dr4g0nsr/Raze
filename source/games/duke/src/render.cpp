@@ -42,7 +42,7 @@ Modifications for JonoF's port by Jonathon Fowler (jf@jonof.id.au)
 extern PalEntry GlobalMapFog;
 extern float GlobalFogDensity;
 
-EXTERN_CVAR(Bool, testnewrenderer)
+EXTERN_CVAR(Bool, vid_renderer)
 
 BEGIN_DUKE_NS
 
@@ -64,26 +64,24 @@ BEGIN_DUKE_NS
 //
 //---------------------------------------------------------------------------
 
-/*static*/ int tempsectorz[MAXSECTORS];
-/*static*/ int tempsectorpicnum[MAXSECTORS];
-//short tempcursectnum;
-
-void renderView(spritetype* playersprite, int sectnum, int x, int y, int z, binangle a, fixedhoriz h, binangle rotscrnang, int smoothratio)
+void renderView(DDukeActor* playersprite, sectortype* sect, int x, int y, int z, binangle a, fixedhoriz h, binangle rotscrnang, double smoothratio, bool sceneonly)
 {
-	if (!testnewrenderer)
+	if (!vid_renderer)
 	{
 		// do screen rotation.
-		renderSetRollAngle(rotscrnang.asbuildf());
+		renderSetRollAngle((float)rotscrnang.asbuildf());
 
 		se40code(x, y, z, a, h, smoothratio);
 		renderMirror(x, y, z, a, h, smoothratio);
-		renderDrawRoomsQ16(x, y, z, a.asq16(), h.asq16(), sectnum);
+		renderDrawRoomsQ16(x, y, z, a.asq16(), h.asq16(), sect, false);
 		fi.animatesprites(pm_tsprite, pm_spritesortcnt, x, y, a.asbuild(), smoothratio);
+		if (!sceneonly) drawweapon(smoothratio);
 		renderDrawMasks();
 	}
 	else
 	{
-		render_drawrooms(playersprite, { x, y, z }, sectnum, a, h, rotscrnang, smoothratio);
+		if (!sceneonly) drawweapon(smoothratio);
+		render_drawrooms(playersprite, { x, y, z }, sectnum(sect), a, h, rotscrnang, smoothratio);
 	}
 }
 
@@ -101,33 +99,34 @@ void GameInterface::UpdateCameras(double smoothratio)
 		return;
 
 	auto p = &ps[screenpeek];
-	auto sp = camsprite->s;
-
 	if (p->newOwner != nullptr) camsprite->SetOwner(p->newOwner);
 
 	if (camsprite->GetOwner() && dist(p->GetActor(), camsprite) < VIEWSCREEN_ACTIVE_DISTANCE)
 	{
-		auto tex = tileGetTexture(sp->picnum);
-		TileFiles.MakeCanvas(TILE_VIEWSCR, tex->GetDisplayWidth(), tex->GetDisplayHeight());
+		auto tex = tileGetTexture(camsprite->spr.picnum);
+		TileFiles.MakeCanvas(TILE_VIEWSCR, (int)tex->GetDisplayWidth(), (int)tex->GetDisplayHeight());
 
 		auto canvas = renderSetTarget(TILE_VIEWSCR);
 		if (!canvas) return;
 
 		screen->RenderTextureView(canvas, [=](IntRect& rect)
 			{
-				auto camera = camsprite->GetOwner()->s;
+				auto camera = camsprite->GetOwner();
 				auto ang = buildang(camera->interpolatedang(smoothratio));
 				display_mirror = 1; // should really be 'display external view'.
-				if (!testnewrenderer)
+				if (!vid_renderer)
 				{
 					// Note: no ROR or camera here - Polymost has no means to detect these things before rendering the scene itself.
-					renderDrawRoomsQ16(camera->x, camera->y, camera->z, ang.asq16(), IntToFixed(camera->shade), camera->sectnum); // why 'shade'...?
-					fi.animatesprites(pm_tsprite, pm_spritesortcnt, camera->x, camera->y, ang.asbuild(), smoothratio);
+					renderDrawRoomsQ16(camera->spr.pos.X, camera->spr.pos.Y, camera->spr.pos.Z, ang.asq16(), IntToFixed(camera->spr.shade), camera->sector(), false); // why 'shade'...?
+					fi.animatesprites(pm_tsprite, pm_spritesortcnt, camera->spr.pos.X, camera->spr.pos.Y, ang.asbuild(), (int)smoothratio);
 					renderDrawMasks();
 				}
 				else
 				{
-					render_camtex(camera, camera->pos, camera->sectnum, ang, buildhoriz(camera->shade), buildang(0), tex, rect, smoothratio);
+					auto cstat = camera->spr.cstat;
+					camera->spr.cstat = CSTAT_SPRITE_INVISIBLE;
+					render_camtex(camera, camera->spr.pos, camera->sector(), ang, buildhoriz(camera->spr.shade), buildang(0), tex, rect, smoothratio);
+					camera->spr.cstat = cstat;
 				}
 				display_mirror = 0;
 			});
@@ -135,19 +134,19 @@ void GameInterface::UpdateCameras(double smoothratio)
 	}
 }
 
-void GameInterface::EnterPortal(spritetype* viewer, int type)
+void GameInterface::EnterPortal(DCoreActor* viewer, int type)
 {
 	if (type == PORTAL_WALL_MIRROR) display_mirror++;
 }
 
-void GameInterface::LeavePortal(spritetype* viewer, int type) 
+void GameInterface::LeavePortal(DCoreActor* viewer, int type) 
 {
 	if (type == PORTAL_WALL_MIRROR) display_mirror--;
 }
 
-bool GameInterface::GetGeoEffect(GeoEffect* eff, int viewsector)
+bool GameInterface::GetGeoEffect(GeoEffect* eff, sectortype* viewsector)
 {
-	if (isRR() && sector[viewsector].lotag == 848)
+	if (isRR() && viewsector->lotag == 848)
 	{
 		eff->geocnt = geocnt;
 		eff->geosector = geosector;
@@ -253,19 +252,17 @@ static int getdrugmode(player_struct *p, int oyrepeat)
 //
 //---------------------------------------------------------------------------
 
-void displayrooms(int snum, double smoothratio)
+void displayrooms(int snum, double smoothratio, bool sceneonly)
 {
 	int cposx, cposy, cposz, fz, cz;
-	short sect;
 	binangle cang, rotscrnang;
 	fixedhoriz choriz;
 	struct player_struct* p;
-	int tiltcs = 0; // JBF 20030807
 
 	p = &ps[snum];
 	pm_smoothratio = (int)smoothratio;
 
-	if (automapMode == am_full || p->cursectnum == -1)
+	if (automapMode == am_full || !p->insector())
 		return;
 
 	// Do not light up the fog in RRRA's E2L1. Ideally this should apply to all foggy levels but all others use lookup table hacks for their fog.
@@ -274,12 +271,12 @@ void displayrooms(int snum, double smoothratio)
 		p->visibility = ud.const_visibility;
 	}
 
-	g_visibility = p->visibility;
+	g_visibility = ud.const_visibility;
+	g_relvisibility = p->visibility - ud.const_visibility;
 
 	videoSetCorrectedAspect();
 
-	sect = p->cursectnum;
-	if (sect < 0 || sect >= MAXSECTORS) return;
+	auto sect = p->cursector;
 
 	GlobalMapFog = fogactive ? 0x999999 : 0;
 	GlobalFogDensity = fogactive ? 350.f : 0.f;
@@ -287,24 +284,28 @@ void displayrooms(int snum, double smoothratio)
 	DoInterpolations(smoothratio / 65536.);
 
 	setgamepalette(BASEPAL);
-	if (!testnewrenderer) gi->UpdateCameras(smoothratio);	// Only Polymost does this here. The new renderer calls this internally.
+	if (!vid_renderer) gi->UpdateCameras(smoothratio);	// Only Polymost does this here. The new renderer calls this internally.
 
 	if (ud.cameraactor)
 	{
-		spritetype* s = ud.cameraactor->s;
+		auto act = ud.cameraactor;
 
-		if (s->yvel < 0) s->yvel = -100;
-		else if (s->yvel > 199) s->yvel = 300;
+		if (act->spr.yvel < 0) act->spr.yvel = -100;
+		else if (act->spr.yvel > 199) act->spr.yvel = 300;
 
-		cang = buildang(interpolatedangle(ud.cameraactor->tempang, s->ang, smoothratio));
+		cang = buildang(interpolatedangle(ud.cameraactor->tempang, act->spr.ang, smoothratio));
 
-		auto bh = buildhoriz(s->yvel);
-		renderView(s, s->sectnum, s->x, s->y, s->z - (4 << 8), cang, bh, buildang(0), smoothratio);
+		auto bh = buildhoriz(act->spr.yvel);
+		auto cstat = act->spr.cstat;
+		act->spr.cstat = CSTAT_SPRITE_INVISIBLE;
+		renderView(act, act->sector(), act->spr.pos.X, act->spr.pos.Y, act->spr.pos.Z - (4 << 8), cang, bh, buildang(0), smoothratio, sceneonly);
+		act->spr.cstat = cstat;
+
 	}
 	else
 	{
 		// Fixme: This should get the aspect ratio from the backend, not the current viewport size.
-		int i = DivScale(1, isRR() ? 64 : p->GetActor()->s->yrepeat + 28, 22);
+		int i = DivScale(1, isRR() ? 64 : p->GetActor()->spr.yrepeat + 28, 22);
 		int viewingaspect = !isRRRA() || !p->DrugMode ? xs_CRoundToInt(double(i) * tan(r_fov * (pi::pi() / 360.))) : getdrugmode(p, i);
 		renderSetAspect(MulScale(viewingaspect, viewingrange, 16), yxaspect);
 
@@ -315,6 +316,7 @@ void displayrooms(int snum, double smoothratio)
 		// set screen rotation.
 		rotscrnang = !SyncInput() ? p->angle.rotscrnang : p->angle.interpolatedrotscrn(smoothratio);
 
+#if 0
 		if ((snum == myconnectindex) && (numplayers > 1))
 		{
 			cposx = interpolatedvalue(omyx, myx, smoothratio);
@@ -322,7 +324,7 @@ void displayrooms(int snum, double smoothratio)
 			cposz = interpolatedvalue(omyz, myz, smoothratio);
 			if (SyncInput())
 			{
-				choriz = q16horiz(interpolatedvalue((omyhoriz + omyhorizoff).asq16(), (myhoriz + myhorizoff).asq16(), smoothratio));
+				choriz = interpolatedhorizon(omyhoriz + omyhorizoff, myhoriz + myhorizoff, smoothratio);
 				cang = interpolatedangle(omyang, myang, smoothratio);
 			}
 			else
@@ -333,10 +335,11 @@ void displayrooms(int snum, double smoothratio)
 			sect = mycursectnum;
 		}
 		else
+#endif
 		{
-			cposx = interpolatedvalue(p->oposx, p->posx, smoothratio);
-			cposy = interpolatedvalue(p->oposy, p->posy, smoothratio);
-			cposz = interpolatedvalue(p->oposz, p->posz, smoothratio);;
+			cposx = interpolatedvalue(p->opos.X, p->pos.X, smoothratio);
+			cposy = interpolatedvalue(p->opos.Y, p->pos.Y, smoothratio);
+			cposz = interpolatedvalue(p->opos.Z, p->pos.Z, smoothratio);;
 			if (SyncInput())
 			{
 				// Original code for when the values are passed through the sync struct
@@ -351,35 +354,37 @@ void displayrooms(int snum, double smoothratio)
 			}
 		}
 
-		spritetype* viewer;
+		DDukeActor* viewer;
+		bool camview = false;
 		if (p->newOwner != nullptr)
 		{
-			auto spr = p->newOwner->s;
-			cang = buildang(spr->interpolatedang(smoothratio));
-			choriz = buildhoriz(spr->shade);
-			cposx = spr->pos.x;
-			cposy = spr->pos.y;
-			cposz = spr->pos.z;
-			sect = spr->sectnum;
+			auto act = p->newOwner;
+			cang = buildang(act->interpolatedang(smoothratio));
+			choriz = buildhoriz(act->spr.shade);
+			cposx = act->spr.pos.X;
+			cposy = act->spr.pos.Y;
+			cposz = act->spr.pos.Z;
+			sect = act->sector();
 			rotscrnang = buildang(0);
 			smoothratio = MaxSmoothRatio;
-			viewer = spr;
+			viewer = act;
+			camview = true;
 		}
 		else if (p->over_shoulder_on == 0)
 		{
 			if (cl_viewbob) cposz += interpolatedvalue(p->opyoff, p->pyoff, smoothratio);
-			viewer = p->GetActor()->s;
+			viewer = p->GetActor();
 		}
 		else
 		{
 			cposz -= isRR() ? 3840 : 3072;
 
-			if (!calcChaseCamPos(&cposx, &cposy, &cposz, p->GetActor()->s, &sect, cang, choriz, smoothratio))
+			viewer = p->GetActor();
+			if (!calcChaseCamPos(&cposx, &cposy, &cposz, viewer, &sect, cang, choriz, smoothratio))
 			{
 				cposz += isRR() ? 3840 : 3072;
-				calcChaseCamPos(&cposx, &cposy, &cposz, p->GetActor()->s, &sect, cang, choriz, smoothratio);
+				calcChaseCamPos(&cposx, &cposy, &cposz, viewer, &sect, cang, choriz, smoothratio);
 			}
-			viewer = p->GetActor()->s;
 		}
 
 		cz = p->GetActor()->ceilingz;
@@ -391,7 +396,7 @@ void displayrooms(int snum, double smoothratio)
 			cang += buildang((2 - ((earthquaketime) & 2)) << 2);
 		}
 
-		if (p->GetActor()->s->pal == 1) cposz -= (18 << 8);
+		if (p->GetActor()->spr.pal == 1) cposz -= (18 << 8);
 
 		else if (p->spritebridge == 0 && p->newOwner == nullptr)
 		{
@@ -399,24 +404,27 @@ void displayrooms(int snum, double smoothratio)
 			else if (cposz > (p->truefz - (4 << 8))) cposz = fz - (4 << 8);
 		}
 
-		if (sect >= 0)
+		if (sect)
 		{
-			getzsofslope(sect, cposx, cposy, &cz, &fz);
+			getzsofslopeptr(sect, cposx, cposy, &cz, &fz);
 			if (cposz < cz + (4 << 8)) cposz = cz + (4 << 8);
 			if (cposz > fz - (4 << 8)) cposz = fz - (4 << 8);
 		}
 
 		choriz = clamp(choriz, q16horiz(gi->playerHorizMin()), q16horiz(gi->playerHorizMax()));
 
-		if (isRR() && sector[sect].lotag == 848 && !testnewrenderer)
+		auto cstat = viewer->spr.cstat;
+		if (camview) viewer->spr.cstat = CSTAT_SPRITE_INVISIBLE;
+		if (isRR() && sect->lotag == 848 && !vid_renderer)
 		{
-			renderSetRollAngle(rotscrnang.asbuildf());
-			geometryEffect(cposx, cposy, cposz, cang, choriz, sect, smoothratio);
+			renderSetRollAngle((float)rotscrnang.asbuildf());
+			geometryEffect(cposx, cposy, cposz, cang, choriz, sectnum(sect), (int)smoothratio);
 		}
 		else
 		{
-			renderView(viewer, sect, cposx, cposy, cposz, cang, choriz, rotscrnang, smoothratio);
+			renderView(viewer, sect, cposx, cposy, cposz, cang, choriz, rotscrnang, smoothratio, sceneonly);
 		}
+		viewer->spr.cstat = cstat;
 	}
 	//GLInterface.SetMapFog(false);
 	RestoreInterpolations();
@@ -434,11 +442,11 @@ void displayrooms(int snum, double smoothratio)
 
 bool GameInterface::GenerateSavePic()
 {
-	displayrooms(myconnectindex, MaxSmoothRatio);
+	displayrooms(myconnectindex, MaxSmoothRatio, true);
 	return true;
 }
 
-void GameInterface::processSprites(spritetype* tsprite, int& spritesortcnt, int viewx, int viewy, int viewz, binangle viewang, double smoothRatio)
+void GameInterface::processSprites(tspritetype* tsprite, int& spritesortcnt, int viewx, int viewy, int viewz, binangle viewang, double smoothRatio)
 {
 	fi.animatesprites(tsprite, spritesortcnt, viewx, viewy, viewang.asbuild(), int(smoothRatio));
 }

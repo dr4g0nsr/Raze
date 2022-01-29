@@ -90,6 +90,7 @@ FGameConfigFile::FGameConfigFile ()
 		SetValueForKey ("Path", local_app_support + "/NBlood", true);
 		SetValueForKey("Path", local_app_support + "/JFSW", true);
 		SetValueForKey("Path", local_app_support + "/VoidSW", true);
+		SetValueForKey("Path", local_app_support + "/Raze/*", true);
 
 #elif !defined(__unix__)
 		SetValueForKey ("Path", "$PROGDIR", true);
@@ -198,6 +199,35 @@ void FGameConfigFile::DoAutoloadSetup (/*FIWadManager *iwad_man*/)
 		isInitialized = true;
 	}
 
+	CreateSectionAtStart("Exhumed.Autoload");
+	CreateSectionAtStart("WW2GI.Autoload");
+	CreateSectionAtStart("Nam.Autoload");
+	CreateSectionAtStart("Exhumed.Autoload");
+	CreateSectionAtStart("Redneck.Route66.Autoload");
+	CreateSectionAtStart("Redneck.RidesAgain.Autoload");
+	CreateSectionAtStart("Redneck.Redneck.Autoload");
+	CreateSectionAtStart("Redneck.Autoload");
+	CreateSectionAtStart("ShadowWarrior.TwinDragon.Autoload");
+	CreateSectionAtStart("ShadowWarrior.Wanton.Autoload");
+	CreateSectionAtStart("ShadowWarrior.ShadowWarrior.Autoload");
+	CreateSectionAtStart("ShadowWarrior.Autoload");
+	CreateSectionAtStart("Blood.Cryptic.Autoload");
+	CreateSectionAtStart("Blood.Blood.Autoload");
+	CreateSectionAtStart("Blood.Autoload");
+	CreateSectionAtStart("Duke.WorldTour.Autoload");
+	CreateSectionAtStart("Duke.NWinter.Autoload");
+	CreateSectionAtStart("Duke.Vacation.15.Autoload");
+	CreateSectionAtStart("Duke.Vacation.13.Autoload");
+	CreateSectionAtStart("Duke.Vacation.Autoload");
+	CreateSectionAtStart("Duke.DukeDC.15.Autoload");
+	CreateSectionAtStart("Duke.DukeDC.13.Autoload");
+	CreateSectionAtStart("Duke.DukeDC.Autoload");
+	CreateSectionAtStart("Duke.Duke.15.Autoload");
+	CreateSectionAtStart("Duke.Duke.13.Autoload");
+	CreateSectionAtStart("Duke.Duke.Autoload");
+	CreateSectionAtStart("Duke.PParadise.Autoload");
+	CreateSectionAtStart("Duke.Autoload");
+
 	CreateSectionAtStart("Global.Autoload");
 
 	// The same goes for auto-exec files.
@@ -211,17 +241,7 @@ void FGameConfigFile::DoAutoloadSetup (/*FIWadManager *iwad_man*/)
 	CreateStandardAutoExec("DukeNukem3D.DukeDC.AutoLoad", true);
 	CreateStandardAutoExec("DukeNukem3D.NWinter.AutoLoad", true);
 	CreateStandardAutoExec("DukeNukem3D.Vacation.AutoLoad", true);
-
-	CreateStandardAutoExec("ShadowWarrior.AutoLoad", true);
-	CreateStandardAutoExec("Redneck.RidesAgain.AutoLoad", true);
-	CreateStandardAutoExec("Redneck.Redneck.AutoLoad", true);
-	CreateStandardAutoExec("WW2GI.AutoLoad", true);
-	CreateStandardAutoExec("Nam.AutoLoad", true);
-	CreateStandardAutoExec("DukeNukem3D.AutoLoad", true);
-	CreateStandardAutoExec("DukeNukem3D.DN3D.AutoLoad", true);
-	CreateStandardAutoExec("DukeNukem3D.DukeDC.AutoLoad", true);
-	CreateStandardAutoExec("DukeNukem3D.NWinter.AutoLoad", true);
-	CreateStandardAutoExec("DukeNukem3D.Vacation.AutoLoad", true);
+	CreateStandardAutoExec("DukeNukem3D.PParadise.AutoLoad", true);
 
 	// Move search paths back to the top.
 	MoveSectionToStart("SoundfontSearch.Directories");
@@ -278,7 +298,7 @@ void FGameConfigFile::DoGameSetup (const char *gamename)
 	sublen = countof(section) - 1 - mysnprintf (section, countof(section), "%s.", gamename);
 	subsection = section + countof(section) - sublen - 1;
 	section[countof(section) - 1] = '\0';
-	
+
 	strncpy (subsection, "UnknownConsoleVariables", sublen);
 	if (SetSection (section))
 	{
@@ -307,7 +327,6 @@ void FGameConfigFile::DoGameSetup (const char *gamename)
 	strncpy (subsection, "ConsoleAliases", sublen);
 	if (SetSection (section))
 	{
-		const char *name = NULL;
 		while (NextInSection (key, value))
 		{
 			FStringf cmd("alias %s \"%s\"", key, value);

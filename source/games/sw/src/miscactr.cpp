@@ -110,160 +110,141 @@ STATE s_ToiletGirlUzi[16] =
     {TOILETGIRL_FIRE_R0 + 1, 0 | SF_QUICK_CALL, InitEnemyUzi, &s_ToiletGirlUzi[0]},
 };
 
-int
-SetupToiletGirl(short SpriteNum)
+int  SetupToiletGirl(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u;
     ANIMATOR DoActorDecide;
 
-    if (TEST(sp->cstat, CSTAT_SPRITE_RESTORE))
+    if (!(actor->spr.cstat & CSTAT_SPRITE_RESTORE))
     {
-        u = User[SpriteNum].Data();
-        ASSERT(u);
-    }
-    else
-    {
-        u = SpawnUser(SpriteNum,TOILETGIRL_R0,s_ToiletGirlStand);
-        u->Health = 60;
+        SpawnUser(actor, TOILETGIRL_R0, s_ToiletGirlStand);
+        actor->user.Health = 60;
     }
 
 
-    EnemyDefaults(SpriteNum, NULL, NULL);
+    EnemyDefaults(actor, nullptr, nullptr);
 
-    ChangeState(SpriteNum,s_ToiletGirlStand);
-    u->Attrib = &ToiletGirlAttrib;
-    u->StateEnd = s_ToiletGirlStand;
-    u->Rot = 0;
-    u->RotNum = 0;
+    ChangeState(actor,s_ToiletGirlStand);
+    actor->user.Attrib = &ToiletGirlAttrib;
+    actor->user.StateEnd = s_ToiletGirlStand;
+    actor->user.Rot = 0;
+    actor->user.RotNum = 0;
 
-    sp->xrepeat = 38;
-    sp->yrepeat = 32;
-    sp->xvel = sp->yvel = sp->zvel = 0;
-    sp->lotag = TOILETGIRL_R0;
-    u->FlagOwner = 0;
-    u->ID = TOILETGIRL_R0;
+    actor->spr.xrepeat = 38;
+    actor->spr.yrepeat = 32;
+    actor->spr.xvel = actor->spr.yvel = actor->spr.zvel = 0;
+    actor->spr.lotag = TOILETGIRL_R0;
+    actor->user.FlagOwner = 0;
+    actor->user.ID = TOILETGIRL_R0;
 
-    RESET(u->Flags, SPR_XFLIP_TOGGLE);
+    actor->user.Flags &= ~(SPR_XFLIP_TOGGLE);
 
     return 0;
 }
 
-int DoToiletGirl(short SpriteNum)
+int DoToiletGirl(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
     bool ICanSee = false;
 
-    DoActorPickClosePlayer(SpriteNum);
-    ICanSee = FAFcansee(sp->x,sp->y,SPRITEp_MID(sp),sp->sectnum,u->tgt_sp->x,u->tgt_sp->y,SPRITEp_MID(u->tgt_sp),u->tgt_sp->sectnum);
+    DoActorPickClosePlayer(actor);
+    ICanSee = FAFcansee(actor->spr.pos.X,actor->spr.pos.Y,ActorZOfMiddle(actor),actor->sector(),actor->user.targetActor->spr.pos.X,actor->user.targetActor->spr.pos.Y,ActorZOfMiddle(actor->user.targetActor),actor->user.targetActor->sector());
 
-    if (u->FlagOwner != 1)
+    if (actor->user.FlagOwner != 1)
     {
-        if (RANDOM_RANGE(1000) > 980)
+        if (RandomRange(1000) > 980)
         {
             short choose_snd;
 
             choose_snd = RANDOM_P2(1024<<4)>>4;
 
-            if (!SoundValidAndActive(sp, CHAN_ToiletFart))
+            if (!SoundValidAndActive(actor, CHAN_ToiletFart))
             {
                 if (choose_snd > 750)
-                    PlaySound(DIGI_TOILETGIRLFART1, sp, v3df_dontpan, CHAN_ToiletFart);
+                    PlaySound(DIGI_TOILETGIRLFART1, actor, v3df_dontpan, CHAN_ToiletFart);
                 else if (choose_snd > 350)
-                    PlaySound(DIGI_TOILETGIRLFART2, sp, v3df_dontpan, CHAN_ToiletFart);
+                    PlaySound(DIGI_TOILETGIRLFART2, actor, v3df_dontpan, CHAN_ToiletFart);
                 else
-                    PlaySound(DIGI_TOILETGIRLFART3, sp, v3df_dontpan, CHAN_ToiletFart);
+                    PlaySound(DIGI_TOILETGIRLFART3, actor, v3df_dontpan, CHAN_ToiletFart);
             }
         }
     }
-    else if ((u->WaitTics -= ACTORMOVETICS) <= 0 && ICanSee)
+    else if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0 && ICanSee)
     {
-        if (!SoundValidAndActive(sp, CHAN_AnimeMad))
+        if (!SoundValidAndActive(actor, CHAN_AnimeMad))
         {
-            if (RANDOM_RANGE(1000<<8)>>8 > 500)
-                PlaySound(DIGI_ANIMEMAD1, sp, v3df_dontpan, CHAN_AnimeMad);
+            if (RandomRange(1000<<8)>>8 > 500)
+                PlaySound(DIGI_ANIMEMAD1, actor, v3df_dontpan, CHAN_AnimeMad);
             else
-                PlaySound(DIGI_ANIMEMAD2, sp, v3df_dontpan, CHAN_AnimeMad);
+                PlaySound(DIGI_ANIMEMAD2, actor, v3df_dontpan, CHAN_AnimeMad);
         }
-        ChangeState(SpriteNum,s_ToiletGirlUzi);
-        u->WaitTics = SEC(1)+SEC(RANDOM_RANGE(3<<8)>>8);
-        u->FlagOwner = 0;
+        ChangeState(actor,s_ToiletGirlUzi);
+        actor->user.WaitTics = SEC(1)+SEC(RandomRange(3<<8)>>8);
+        actor->user.FlagOwner = 0;
     }
 
-    //(*u->ActorActionFunc) (SpriteNum);
-
-
     // stay on floor unless doing certain things
-    if (!TEST(u->Flags, SPR_JUMPING | SPR_FALLING | SPR_CLIMBING))
+    if (!(actor->user.Flags & (SPR_JUMPING | SPR_FALLING | SPR_CLIMBING)))
     {
-        KeepActorOnFloor(SpriteNum);
+        KeepActorOnFloor(actor);
     }
 
     // take damage from environment
-    DoActorSectorDamage(SpriteNum);
-    sp->xvel = sp->yvel = sp->zvel = 0;
+    DoActorSectorDamage(actor);
+    actor->spr.xvel = actor->spr.yvel = actor->spr.zvel = 0;
 
     return 0;
 }
 
-int NullToiletGirl(short SpriteNum)
+int NullToiletGirl(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
     bool ICanSee = false;
 
-    DoActorPickClosePlayer(SpriteNum);
-    ICanSee = FAFcansee(sp->x,sp->y,SPRITEp_MID(sp),sp->sectnum,u->tgt_sp->x,u->tgt_sp->y,u->tgt_sp->z,u->tgt_sp->sectnum);
+    DoActorPickClosePlayer(actor);
+    ICanSee = FAFcansee(actor->spr.pos.X,actor->spr.pos.Y,ActorZOfMiddle(actor),actor->sector(),actor->user.targetActor->spr.pos.X,actor->user.targetActor->spr.pos.Y,actor->user.targetActor->spr.pos.Z,actor->user.targetActor->sector());
 
-    if (!TEST(u->Flags,SPR_CLIMBING))
-        KeepActorOnFloor(SpriteNum);
+    if (!(actor->user.Flags & SPR_CLIMBING))
+        KeepActorOnFloor(actor);
 
-    if (u->FlagOwner != 1)
+    if (actor->user.FlagOwner != 1)
     {
     }
-    else if ((u->WaitTics -= ACTORMOVETICS) <= 0 && ICanSee)
+    else if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0 && ICanSee)
     {
-        if (!SoundValidAndActive(sp, CHAN_AnimeMad))
+        if (!SoundValidAndActive(actor, CHAN_AnimeMad))
         {
-            if (RANDOM_RANGE(1000<<8)>>8 > 500)
-                PlaySound(DIGI_ANIMEMAD1, sp, v3df_dontpan, CHAN_AnimeMad);
+            if (RandomRange(1000<<8)>>8 > 500)
+                PlaySound(DIGI_ANIMEMAD1, actor, v3df_dontpan, CHAN_AnimeMad);
             else
-                PlaySound(DIGI_ANIMEMAD2, sp, v3df_dontpan, CHAN_AnimeMad);
+                PlaySound(DIGI_ANIMEMAD2, actor, v3df_dontpan, CHAN_AnimeMad);
         }
-        ChangeState(SpriteNum,s_ToiletGirlUzi);
-        u->WaitTics = SEC(1)+SEC(RANDOM_RANGE(3<<8)>>8);
-        u->FlagOwner = 0;
+        ChangeState(actor,s_ToiletGirlUzi);
+        actor->user.WaitTics = SEC(1)+SEC(RandomRange(3<<8)>>8);
+        actor->user.FlagOwner = 0;
     }
 
     return 0;
 }
 
-int ToiletGirlUzi(short SpriteNum)
+int ToiletGirlUzi(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
+    if (!(actor->user.Flags & SPR_CLIMBING))
+        KeepActorOnFloor(actor);
 
-    if (!TEST(u->Flags,SPR_CLIMBING))
-        KeepActorOnFloor(SpriteNum);
-
-    if ((u->WaitTics -= ACTORMOVETICS) <= 0)
+    if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0)
     {
-        u->WaitTics = RANDOM_RANGE(240)+120;
-        ChangeState(SpriteNum,s_ToiletGirlStand);
-        u->FlagOwner = 0;
+        actor->user.WaitTics = RandomRange(240)+120;
+        ChangeState(actor,s_ToiletGirlStand);
+        actor->user.FlagOwner = 0;
     }
 
     return 0;
 }
 
-int ToiletGirlPain(short SpriteNum)
+int ToiletGirlPain(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
+    NullToiletGirl(actor);
 
-    NullToiletGirl(SpriteNum);
-
-    if ((u->WaitTics -= ACTORMOVETICS) <= 0)
-        ChangeState(SpriteNum,s_ToiletGirlStand);
+    if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0)
+        ChangeState(actor,s_ToiletGirlStand);
 
     return 0;
 }
@@ -350,165 +331,149 @@ STATE s_WashGirlUzi[16] =
     {WASHGIRL_FIRE_R0 + 1, 0 | SF_QUICK_CALL, InitEnemyUzi, &s_WashGirlUzi[0]},
 };
 
-int
-SetupWashGirl(short SpriteNum)
+int SetupWashGirl(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u;
     ANIMATOR DoActorDecide;
 
-    if (TEST(sp->cstat, CSTAT_SPRITE_RESTORE))
+    if (!(actor->spr.cstat & CSTAT_SPRITE_RESTORE))
     {
-        u = User[SpriteNum].Data();
-        ASSERT(u);
-    }
-    else
-    {
-        u = SpawnUser(SpriteNum,WASHGIRL_R0,s_WashGirlStand);
-        u->Health = 60;
+        SpawnUser(actor, WASHGIRL_R0,s_WashGirlStand);
+        actor->user.Health = 60;
     }
 
-    EnemyDefaults(SpriteNum, NULL, NULL);
+    EnemyDefaults(actor, nullptr, nullptr);
 
-    ChangeState(SpriteNum,s_WashGirlStand);
-    u->Attrib = &WashGirlAttrib;
-    u->StateEnd = s_WashGirlStand;
-    u->Rot = 0;
-    u->RotNum = 0;
+    ChangeState(actor,s_WashGirlStand);
+    actor->user.Attrib = &WashGirlAttrib;
+    actor->user.StateEnd = s_WashGirlStand;
+    actor->user.Rot = 0;
+    actor->user.RotNum = 0;
 
-    sp->xrepeat = 28;
-    sp->yrepeat = 24;
-    sp->xvel = sp->yvel = sp->zvel = 0;
-    sp->lotag = WASHGIRL_R0;
-    u->FlagOwner = 0;
-    u->ID = WASHGIRL_R0;
+    actor->spr.xrepeat = 28;
+    actor->spr.yrepeat = 24;
+    actor->spr.xvel = actor->spr.yvel = actor->spr.zvel = 0;
+    actor->spr.lotag = WASHGIRL_R0;
+    actor->user.FlagOwner = 0;
+    actor->user.ID = WASHGIRL_R0;
 
-    RESET(u->Flags, SPR_XFLIP_TOGGLE);
+    actor->user.Flags &= ~(SPR_XFLIP_TOGGLE);
 
     return 0;
 }
 
-int DoWashGirl(short SpriteNum)
+int DoWashGirl(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
     bool ICanSee = false;
 
-    DoActorPickClosePlayer(SpriteNum);
-    ICanSee = FAFcansee(sp->x,sp->y,SPRITEp_MID(sp),sp->sectnum,u->tgt_sp->x,u->tgt_sp->y,SPRITEp_MID(u->tgt_sp),u->tgt_sp->sectnum);
+    DoActorPickClosePlayer(actor);
+    ICanSee = FAFcansee(actor->spr.pos.X,actor->spr.pos.Y,ActorZOfMiddle(actor),actor->sector(),actor->user.targetActor->spr.pos.X,actor->user.targetActor->spr.pos.Y,ActorZOfMiddle(actor->user.targetActor),actor->user.targetActor->sector());
 
-    if (RANDOM_RANGE(1000) > 980 && u->ShellNum <= 0)
+    if (RandomRange(1000) > 980 && actor->user.ShellNum <= 0)
     {
-        if (!SoundValidAndActive(sp, CHAN_AnimeSing))
+        if (!SoundValidAndActive(actor, CHAN_AnimeSing))
         {
             if (RANDOM_P2(1024<<4)>>4 > 500)
-                PlaySound(DIGI_ANIMESING1, sp, v3df_dontpan, CHAN_AnimeSing);
+                PlaySound(DIGI_ANIMESING1, actor, v3df_dontpan, CHAN_AnimeSing);
             else
-                PlaySound(DIGI_ANIMESING2, sp, v3df_dontpan, CHAN_AnimeSing);
+                PlaySound(DIGI_ANIMESING2, actor, v3df_dontpan, CHAN_AnimeSing);
         }
 
-        ChangeState(SpriteNum,s_WashGirlStandScrub);
-        u->ShellNum = RANDOM_RANGE(2*120)+240;
+        ChangeState(actor,s_WashGirlStandScrub);
+        actor->user.ShellNum = RandomRange(2*120)+240;
     }
     else
     {
-        if (u->ShellNum > 0)
+        if (actor->user.ShellNum > 0)
         {
-            if ((u->ShellNum -= ACTORMOVETICS) < 0)
+            if ((actor->user.ShellNum -= ACTORMOVETICS) < 0)
             {
-                ChangeState(SpriteNum,s_WashGirlStand);
-                u->ShellNum = 0;
+                ChangeState(actor,s_WashGirlStand);
+                actor->user.ShellNum = 0;
             }
         }
     }
 
-    if (u->FlagOwner != 1)
+    if (actor->user.FlagOwner != 1)
     {
     }
-    else if ((u->WaitTics -= ACTORMOVETICS) <= 0 && ICanSee)
+    else if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0 && ICanSee)
     {
-        if (!SoundValidAndActive(sp, CHAN_AnimeMad))
+        if (!SoundValidAndActive(actor, CHAN_AnimeMad))
         {
-            if (RANDOM_RANGE(1000<<8)>>8 > 500)
-                PlaySound(DIGI_ANIMEMAD1, sp, v3df_dontpan, CHAN_AnimeMad);
+            if (RandomRange(1000<<8)>>8 > 500)
+                PlaySound(DIGI_ANIMEMAD1, actor, v3df_dontpan, CHAN_AnimeMad);
             else
-                PlaySound(DIGI_ANIMEMAD2, sp, v3df_dontpan, CHAN_AnimeMad);
+                PlaySound(DIGI_ANIMEMAD2, actor, v3df_dontpan, CHAN_AnimeMad);
         }
-        ChangeState(SpriteNum,s_WashGirlUzi);
-        u->WaitTics = SEC(1)+SEC(RANDOM_RANGE(3<<8)>>8);
-        u->FlagOwner = 0;
+        ChangeState(actor,s_WashGirlUzi);
+        actor->user.WaitTics = SEC(1)+SEC(RandomRange(3<<8)>>8);
+        actor->user.FlagOwner = 0;
     }
 
     // stay on floor unless doing certain things
-    if (!TEST(u->Flags, SPR_JUMPING | SPR_FALLING | SPR_CLIMBING))
+    if (!(actor->user.Flags & (SPR_JUMPING | SPR_FALLING | SPR_CLIMBING)))
     {
-        KeepActorOnFloor(SpriteNum);
+        KeepActorOnFloor(actor);
     }
 
     // take damage from environment
-    DoActorSectorDamage(SpriteNum);
-    sp->xvel = sp->yvel = sp->zvel = 0;
+    DoActorSectorDamage(actor);
+    actor->spr.xvel = actor->spr.yvel = actor->spr.zvel = 0;
 
     return 0;
 }
 
-int NullWashGirl(short SpriteNum)
+int NullWashGirl(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
     bool ICanSee = false;
 
-    DoActorPickClosePlayer(SpriteNum);
-    ICanSee = FAFcansee(sp->x,sp->y,SPRITEp_MID(sp),sp->sectnum,u->tgt_sp->x,u->tgt_sp->y,u->tgt_sp->z,u->tgt_sp->sectnum);
+    DoActorPickClosePlayer(actor);
+    ICanSee = FAFcansee(actor->spr.pos.X,actor->spr.pos.Y,ActorZOfMiddle(actor),actor->sector(),actor->user.targetActor->spr.pos.X,actor->user.targetActor->spr.pos.Y,actor->user.targetActor->spr.pos.Z,actor->user.targetActor->sector());
 
-    if (!TEST(u->Flags,SPR_CLIMBING))
-        KeepActorOnFloor(SpriteNum);
+    if (!(actor->user.Flags & SPR_CLIMBING))
+        KeepActorOnFloor(actor);
 
-    if (u->FlagOwner != 1)
+    if (actor->user.FlagOwner != 1)
     {
     }
-    else if ((u->WaitTics -= ACTORMOVETICS) <= 0 && ICanSee)
+    else if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0 && ICanSee)
     {
-        if (!SoundValidAndActive(sp, CHAN_AnimeMad))
+        if (!SoundValidAndActive(actor, CHAN_AnimeMad))
         {
-            if (RANDOM_RANGE(1000<<8)>>8 > 500)
-                PlaySound(DIGI_ANIMEMAD1, sp, v3df_dontpan, CHAN_AnimeMad);
+            if (RandomRange(1000<<8)>>8 > 500)
+                PlaySound(DIGI_ANIMEMAD1, actor, v3df_dontpan, CHAN_AnimeMad);
             else
-                PlaySound(DIGI_ANIMEMAD2, sp, v3df_dontpan, CHAN_AnimeMad);
+                PlaySound(DIGI_ANIMEMAD2, actor, v3df_dontpan, CHAN_AnimeMad);
         }
-        ChangeState(SpriteNum,s_WashGirlUzi);
-        u->WaitTics = SEC(1)+SEC(RANDOM_RANGE(3<<8)>>8);
-        u->FlagOwner = 0;
+        ChangeState(actor,s_WashGirlUzi);
+        actor->user.WaitTics = SEC(1)+SEC(RandomRange(3<<8)>>8);
+        actor->user.FlagOwner = 0;
     }
 
     return 0;
 }
 
-int WashGirlUzi(short SpriteNum)
+int WashGirlUzi(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
+    if (!(actor->user.Flags & SPR_CLIMBING))
+        KeepActorOnFloor(actor);
 
-    if (!TEST(u->Flags,SPR_CLIMBING))
-        KeepActorOnFloor(SpriteNum);
-
-    if ((u->WaitTics -= ACTORMOVETICS) <= 0)
+    if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0)
     {
-        u->WaitTics = RANDOM_RANGE(240)+120;
-        ChangeState(SpriteNum,s_WashGirlStand);
-        u->FlagOwner = 0;
+        actor->user.WaitTics = RandomRange(240)+120;
+        ChangeState(actor,s_WashGirlStand);
+        actor->user.FlagOwner = 0;
     }
 
     return 0;
 }
 
-int WashGirlPain(short SpriteNum)
+int WashGirlPain(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
+    NullWashGirl(actor);
 
-    NullWashGirl(SpriteNum);
-
-    if ((u->WaitTics -= ACTORMOVETICS) <= 0)
-        ChangeState(SpriteNum,s_WashGirlStand);
+    if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0)
+        ChangeState(actor,s_WashGirlStand);
 
     return 0;
 }
@@ -559,77 +524,62 @@ STATE s_TrashCanPain[7] =
     {TRASHCAN_PAIN_R0 + 6, TRASHCAN_PAIN_RATE, TrashCanPain, &s_TrashCanPain[0]}
 };
 
-int
-SetupTrashCan(short SpriteNum)
+int SetupTrashCan(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u;
     ANIMATOR DoActorDecide;
 
-    if (TEST(sp->cstat, CSTAT_SPRITE_RESTORE))
+    if (!(actor->spr.cstat & CSTAT_SPRITE_RESTORE))
     {
-        u = User[SpriteNum].Data();
-        ASSERT(u);
-    }
-    else
-    {
-        u = SpawnUser(SpriteNum,TRASHCAN,s_TrashCanStand);
-        u->Health = 60;
+        SpawnUser(actor, TRASHCAN,s_TrashCanStand);
+        actor->user.Health = 60;
     }
 
-    EnemyDefaults(SpriteNum, NULL, NULL);
+    EnemyDefaults(actor, nullptr, nullptr);
 
-    ChangeState(SpriteNum,s_TrashCanStand);
-    u->Attrib = &TrashCanAttrib;
-    u->StateEnd = s_TrashCanStand;
-    u->Rot = 0;
-    u->RotNum = 0;
+    ChangeState(actor,s_TrashCanStand);
+    actor->user.Attrib = &TrashCanAttrib;
+    actor->user.StateEnd = s_TrashCanStand;
+    actor->user.Rot = 0;
+    actor->user.RotNum = 0;
 
 
-    sp->xrepeat = 46;
-    sp->yrepeat = 42;
-    sp->xvel = sp->yvel = sp->zvel = 0;
-    u->ID = TRASHCAN;
+    actor->spr.xrepeat = 46;
+    actor->spr.yrepeat = 42;
+    actor->spr.xvel = actor->spr.yvel = actor->spr.zvel = 0;
+    actor->user.ID = TRASHCAN;
 
-    RESET(u->Flags, SPR_XFLIP_TOGGLE);
-    RESET(sp->extra, SPRX_PLAYER_OR_ENEMY);
+    actor->user.Flags &= ~(SPR_XFLIP_TOGGLE);
+    actor->spr.extra &= ~(SPRX_PLAYER_OR_ENEMY);
 
     return 0;
 }
 
-int DoTrashCan(short SpriteNum)
+int DoTrashCan(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
-
-    //(*u->ActorActionFunc) (SpriteNum);
-
     // stay on floor unless doing certain things
-    if (TEST(u->Flags,SPR_SLIDING))
-        DoActorSlide(SpriteNum);
+    if (actor->user.Flags & (SPR_SLIDING))
+        DoActorSlide(actor);
 
-    if (!TEST(u->Flags, SPR_JUMPING | SPR_FALLING | SPR_CLIMBING))
+    if (!(actor->user.Flags & (SPR_JUMPING | SPR_FALLING | SPR_CLIMBING)))
     {
-        KeepActorOnFloor(SpriteNum);
+        KeepActorOnFloor(actor);
     }
 
-    sp->xvel = sp->yvel = sp->zvel = 0;
+    actor->spr.xvel = actor->spr.yvel = actor->spr.zvel = 0;
 
     return 0;
 }
 
-int TrashCanPain(short SpriteNum)
+int TrashCanPain(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
+    if (actor->user.Flags & (SPR_SLIDING))
+        DoActorSlide(actor);
 
-    if (TEST(u->Flags,SPR_SLIDING))
-        DoActorSlide(SpriteNum);
+    if (!(actor->user.Flags & SPR_CLIMBING))
+        KeepActorOnFloor(actor);
 
-    if (!TEST(u->Flags,SPR_CLIMBING))
-        KeepActorOnFloor(SpriteNum);
-
-    if ((u->WaitTics -= ACTORMOVETICS) <= 0)
-        ChangeState(SpriteNum,s_TrashCanStand);
+    if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0)
+        ChangeState(actor,s_TrashCanStand);
 
     return 0;
 }
@@ -667,53 +617,42 @@ STATE s_PachinkoLightOperate[] =
     {PACHINKOLIGHT_R0 - 5, 12, PachinkoLightOperate, &s_PachinkoLightOperate[0]},
 };
 
-int
-SetupPachinkoLight(short SpriteNum)
+int SetupPachinkoLight(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u;
     ANIMATOR DoActorDecide;
 
-    if (TEST(sp->cstat, CSTAT_SPRITE_RESTORE))
+    if (!(actor->spr.cstat & CSTAT_SPRITE_RESTORE))
     {
-        u = User[SpriteNum].Data();
-        ASSERT(u);
-    }
-    else
-    {
-        u = SpawnUser(SpriteNum,PACHINKOLIGHT_R0,s_PachinkoLightStand);
-        u->Health = 1;
+        SpawnUser(actor, PACHINKOLIGHT_R0,s_PachinkoLightStand);
+        actor->user.Health = 1;
     }
 
-    EnemyDefaults(SpriteNum, NULL, NULL);
+    EnemyDefaults(actor, nullptr, nullptr);
 
-    ChangeState(SpriteNum,s_PachinkoLightStand);
-    u->Attrib = &PachinkoLightAttrib;
-    u->StateEnd = s_PachinkoLightStand;
-    u->Rot = 0;
-    u->RotNum = 0;
-    u->ID = PACHINKOLIGHT_R0;
+    ChangeState(actor,s_PachinkoLightStand);
+    actor->user.Attrib = &PachinkoLightAttrib;
+    actor->user.StateEnd = s_PachinkoLightStand;
+    actor->user.Rot = 0;
+    actor->user.RotNum = 0;
+    actor->user.ID = PACHINKOLIGHT_R0;
 
-    sp->xvel = sp->yvel = sp->zvel = 0;
-    sp->lotag = TAG_PACHINKOLIGHT;
-    sp->shade = -2;
-    u->spal = sp->pal;
+    actor->spr.xvel = actor->spr.yvel = actor->spr.zvel = 0;
+    actor->spr.lotag = TAG_PACHINKOLIGHT;
+    actor->spr.shade = -2;
+    actor->user.spal = actor->spr.pal;
 
-    RESET(u->Flags, SPR_XFLIP_TOGGLE);
-    RESET(sp->extra, SPRX_PLAYER_OR_ENEMY);
+    actor->user.Flags &= ~(SPR_XFLIP_TOGGLE);
+    actor->spr.extra &= ~(SPRX_PLAYER_OR_ENEMY);
 
     return 0;
 }
 
-int PachinkoLightOperate(short SpriteNum)
+int PachinkoLightOperate(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u = User[SpriteNum].Data();
-
-    if ((u->WaitTics -= ACTORMOVETICS) <= 0)
+    if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0)
     {
-        sp->shade = -2;
-        ChangeState(SpriteNum,s_PachinkoLightStand);
+        actor->spr.shade = -2;
+        ChangeState(actor,s_PachinkoLightStand);
     }
     return 0;
 }
@@ -768,87 +707,70 @@ STATE s_Pachinko1Operate[] =
     {PACHINKO1_R0 + 22, SF_QUICK_CALL, PachinkoCheckWin, &s_Pachinko1Stand[0]}
 };
 
-int
-SetupPachinko1(short SpriteNum)
+int SetupPachinko1(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u;
     ANIMATOR DoActorDecide;
 
-    if (TEST(sp->cstat, CSTAT_SPRITE_RESTORE))
+    if (!(actor->spr.cstat & CSTAT_SPRITE_RESTORE))
     {
-        u = User[SpriteNum].Data();
-        ASSERT(u);
-    }
-    else
-    {
-        u = SpawnUser(SpriteNum,PACHINKO1,s_Pachinko1Stand);
-        u->Health = 1;
+        SpawnUser(actor, PACHINKO1,s_Pachinko1Stand);
+        actor->user.Health = 1;
     }
 
-    EnemyDefaults(SpriteNum, NULL, NULL);
+    EnemyDefaults(actor, nullptr, nullptr);
 
-    ChangeState(SpriteNum,s_Pachinko1Stand);
-    u->Attrib = &Pachinko1Attrib;
-    u->StateEnd = s_Pachinko1Stand;
-    u->Rot = 0;
-    u->RotNum = 0;
-    u->ID = PACHINKO1;
+    ChangeState(actor,s_Pachinko1Stand);
+    actor->user.Attrib = &Pachinko1Attrib;
+    actor->user.StateEnd = s_Pachinko1Stand;
+    actor->user.Rot = 0;
+    actor->user.RotNum = 0;
+    actor->user.ID = PACHINKO1;
 
-    sp->yvel = sp->zvel = 0;
-    sp->lotag = PACHINKO1;
+    actor->spr.yvel = actor->spr.zvel = 0;
+    actor->spr.lotag = PACHINKO1;
 
-    RESET(u->Flags, SPR_XFLIP_TOGGLE);
-    RESET(sp->extra, SPRX_PLAYER_OR_ENEMY);
+    actor->user.Flags &= ~(SPR_XFLIP_TOGGLE);
+    actor->spr.extra &= ~(SPRX_PLAYER_OR_ENEMY);
 
     return 0;
 }
 
-int PachinkoCheckWin(short SpriteNum)
+int PachinkoCheckWin(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u = User[SpriteNum].Data();
+    actor->user.WaitTics = 0;  // Can operate it again now
 
-    u->WaitTics = 0;  // Can operate it again now
-
-    //Printf("bool1 = %d",TEST_BOOL1(sp));
     // You already won, no more from this machine!
-    if (TEST_BOOL1(sp)) return 0;
+    if (TEST_BOOL1(actor)) return 0;
 
     // Well? Did I win????!
-    /*short rnd = */RANDOM_RANGE(1000);
-    if (RANDOM_RANGE(1000) > 900 || Pachinko_Win_Cheat)
+    /*short rnd = */RandomRange(1000);
+    if (RandomRange(1000) > 900 || Pachinko_Win_Cheat)
     {
         int i;
-        SPRITEp tsp;
-        USERp tu;
 
         // Do a possible combo switch
-        if (ComboSwitchTest(TAG_COMBO_SWITCH_EVERYTHING, sp->hitag))
+        if (ComboSwitchTest(TAG_COMBO_SWITCH_EVERYTHING, actor->spr.hitag))
         {
-            DoMatchEverything(Player+myconnectindex, sp->hitag, ON);
+            DoMatchEverything(Player+myconnectindex, actor->spr.hitag, 1);
         }
 
-        ActorCoughItem(SpriteNum); // I WON! I WON!
-        PlaySound(DIGI_PALARM, sp, v3df_none);
+        ActorCoughItem(actor); // I WON! I WON!
+        PlaySound(DIGI_PALARM, actor, v3df_none);
 
         // Can't win any more now!
-        SET_BOOL1(sp);
+        SET_BOOL1(actor);
 
         // Turn on the pachinko lights
-        StatIterator it(STAT_ENEMY);
-        while ((i = it.NextIndex()) >= 0)
+        SWStatIterator it(STAT_ENEMY);
+        while (auto itActor = it.Next())
         {
-            tsp = &sprite[i];
-            tu = User[i].Data();
-
-            if (tsp->lotag == TAG_PACHINKOLIGHT)
+            if (itActor->spr.lotag == TAG_PACHINKOLIGHT)
             {
-                if (tsp->hitag == SP_TAG5(sp))
+                if (itActor->spr.hitag == SP_TAG5(actor))
                 {
-                    tsp->shade = -90; // Full brightness
-                    tu->WaitTics = SEC(3); // Flash
-                    ChangeState(i,s_PachinkoLightOperate);
+                    itActor->spr.shade = -90; // Full brightness
+                    itActor->user.WaitTics = SEC(3); // Flash
+                    ChangeState(itActor,s_PachinkoLightOperate);
                 }
             }
         }
@@ -869,21 +791,20 @@ int PachinkoCheckWin(short SpriteNum)
     return 0;
 }
 
-int Pachinko1Operate(short SpriteNum)
+int Pachinko1Operate(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
     short rnd;
 
-    rnd = RANDOM_RANGE(1000);
+    rnd = RandomRange(1000);
     if (rnd > 900)
     {
-        rnd = RANDOM_RANGE(1000);  // TEMP SOUNDS: Need pachinko sounds!
+        rnd = RandomRange(1000);  // TEMP SOUNDS: Need pachinko sounds!
         if (rnd > 700)
-            PlaySound(DIGI_PROLL1, sp, v3df_none);
+            PlaySound(DIGI_PROLL1, actor, v3df_none);
         else if (rnd > 400)
-            PlaySound(DIGI_PROLL2, sp, v3df_none);
+            PlaySound(DIGI_PROLL2, actor, v3df_none);
         else
-            PlaySound(DIGI_PROLL3, sp, v3df_none);
+            PlaySound(DIGI_PROLL3, actor, v3df_none);
     }
 
     return 0;
@@ -938,38 +859,30 @@ STATE s_Pachinko2Operate[] =
     {PACHINKO2_R0 + 22, SF_QUICK_CALL, PachinkoCheckWin, &s_Pachinko2Stand[0]}
 };
 
-int
-SetupPachinko2(short SpriteNum)
+int SetupPachinko2(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u;
     ANIMATOR DoActorDecide;
 
-    if (TEST(sp->cstat, CSTAT_SPRITE_RESTORE))
+    if (!(actor->spr.cstat & CSTAT_SPRITE_RESTORE))
     {
-        u = User[SpriteNum].Data();
-        ASSERT(u);
-    }
-    else
-    {
-        u = SpawnUser(SpriteNum,PACHINKO2,s_Pachinko2Stand);
-        u->Health = 1;
+        SpawnUser(actor, PACHINKO2,s_Pachinko2Stand);
+        actor->user.Health = 1;
     }
 
-    EnemyDefaults(SpriteNum, NULL, NULL);
+    EnemyDefaults(actor, nullptr, nullptr);
 
-    ChangeState(SpriteNum,s_Pachinko2Stand);
-    u->Attrib = &Pachinko2Attrib;
-    u->StateEnd = s_Pachinko2Stand;
-    u->Rot = 0;
-    u->RotNum = 0;
-    u->ID = PACHINKO2;
+    ChangeState(actor,s_Pachinko2Stand);
+    actor->user.Attrib = &Pachinko2Attrib;
+    actor->user.StateEnd = s_Pachinko2Stand;
+    actor->user.Rot = 0;
+    actor->user.RotNum = 0;
+    actor->user.ID = PACHINKO2;
 
-    sp->yvel = sp->zvel = 0;
-    sp->lotag = PACHINKO2;
+    actor->spr.yvel = actor->spr.zvel = 0;
+    actor->spr.lotag = PACHINKO2;
 
-    RESET(u->Flags, SPR_XFLIP_TOGGLE);
-    RESET(sp->extra, SPRX_PLAYER_OR_ENEMY);
+    actor->user.Flags &= ~(SPR_XFLIP_TOGGLE);
+    actor->spr.extra &= ~(SPRX_PLAYER_OR_ENEMY);
 
     return 0;
 }
@@ -1022,38 +935,30 @@ STATE s_Pachinko3Operate[] =
     {PACHINKO3_R0 + 22, SF_QUICK_CALL, PachinkoCheckWin, &s_Pachinko3Stand[0]}
 };
 
-int
-SetupPachinko3(short SpriteNum)
+int SetupPachinko3(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u;
     ANIMATOR DoActorDecide;
 
-    if (TEST(sp->cstat, CSTAT_SPRITE_RESTORE))
+    if (!(actor->spr.cstat & CSTAT_SPRITE_RESTORE))
     {
-        u = User[SpriteNum].Data();
-        ASSERT(u);
-    }
-    else
-    {
-        u = SpawnUser(SpriteNum,PACHINKO3,s_Pachinko3Stand);
-        u->Health = 1;
+        SpawnUser(actor, PACHINKO3,s_Pachinko3Stand);
+        actor->user.Health = 1;
     }
 
-    EnemyDefaults(SpriteNum, NULL, NULL);
+    EnemyDefaults(actor, nullptr, nullptr);
 
-    ChangeState(SpriteNum,s_Pachinko3Stand);
-    u->Attrib = &Pachinko3Attrib;
-    u->StateEnd = s_Pachinko3Stand;
-    u->Rot = 0;
-    u->RotNum = 0;
-    u->ID = PACHINKO3;
+    ChangeState(actor,s_Pachinko3Stand);
+    actor->user.Attrib = &Pachinko3Attrib;
+    actor->user.StateEnd = s_Pachinko3Stand;
+    actor->user.Rot = 0;
+    actor->user.RotNum = 0;
+    actor->user.ID = PACHINKO3;
 
-    sp->yvel = sp->zvel = 0;
-    sp->lotag = PACHINKO3;
+    actor->spr.yvel = actor->spr.zvel = 0;
+    actor->spr.lotag = PACHINKO3;
 
-    RESET(u->Flags, SPR_XFLIP_TOGGLE);
-    RESET(sp->extra, SPRX_PLAYER_OR_ENEMY);
+    actor->user.Flags &= ~(SPR_XFLIP_TOGGLE);
+    actor->spr.extra &= ~(SPRX_PLAYER_OR_ENEMY);
 
     return 0;
 }
@@ -1107,38 +1012,30 @@ STATE s_Pachinko4Operate[] =
     {PACHINKO4_R0 + 22, SF_QUICK_CALL, PachinkoCheckWin, &s_Pachinko4Stand[0]}
 };
 
-int
-SetupPachinko4(short SpriteNum)
+int SetupPachinko4(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u;
     ANIMATOR DoActorDecide;
 
-    if (TEST(sp->cstat, CSTAT_SPRITE_RESTORE))
+    if (!(actor->spr.cstat & CSTAT_SPRITE_RESTORE))
     {
-        u = User[SpriteNum].Data();
-        ASSERT(u);
-    }
-    else
-    {
-        u = SpawnUser(SpriteNum,PACHINKO4,s_Pachinko4Stand);
-        u->Health = 1;
+        SpawnUser(actor, PACHINKO4,s_Pachinko4Stand);
+        actor->user.Health = 1;
     }
 
-    EnemyDefaults(SpriteNum, NULL, NULL);
+    EnemyDefaults(actor, nullptr, nullptr);
 
-    ChangeState(SpriteNum,s_Pachinko4Stand);
-    u->Attrib = &Pachinko4Attrib;
-    u->StateEnd = s_Pachinko4Stand;
-    u->Rot = 0;
-    u->RotNum = 0;
-    u->ID = PACHINKO4;
+    ChangeState(actor,s_Pachinko4Stand);
+    actor->user.Attrib = &Pachinko4Attrib;
+    actor->user.StateEnd = s_Pachinko4Stand;
+    actor->user.Rot = 0;
+    actor->user.RotNum = 0;
+    actor->user.ID = PACHINKO4;
 
-    sp->yvel = sp->zvel = 0;
-    sp->lotag = PACHINKO4;
+    actor->spr.yvel = actor->spr.zvel = 0;
+    actor->spr.lotag = PACHINKO4;
 
-    RESET(u->Flags, SPR_XFLIP_TOGGLE);
-    RESET(sp->extra, SPRX_PLAYER_OR_ENEMY);
+    actor->user.Flags &= ~(SPR_XFLIP_TOGGLE);
+    actor->spr.extra &= ~(SPRX_PLAYER_OR_ENEMY);
 
     return 0;
 }
@@ -1220,159 +1117,140 @@ STATE s_CarGirlUzi[16] =
     {CARGIRL_FIRE_R0 + 1, 0 | SF_QUICK_CALL, InitEnemyUzi, &s_CarGirlUzi[0]},
 };
 
-int
-SetupCarGirl(short SpriteNum)
+int SetupCarGirl(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u;
     ANIMATOR DoActorDecide;
 
-    if (TEST(sp->cstat, CSTAT_SPRITE_RESTORE))
+    if (!(actor->spr.cstat & CSTAT_SPRITE_RESTORE))
     {
-        u = User[SpriteNum].Data();
-        ASSERT(u);
-    }
-    else
-    {
-        u = SpawnUser(SpriteNum,CARGIRL_R0,s_CarGirlStand);
-        u->Health = 60;
+        SpawnUser(actor, CARGIRL_R0,s_CarGirlStand);
+        actor->user.Health = 60;
     }
 
 
-    EnemyDefaults(SpriteNum, NULL, NULL);
+    EnemyDefaults(actor, nullptr, nullptr);
 
-    ChangeState(SpriteNum,s_CarGirlStand);
-    u->Attrib = &CarGirlAttrib;
-    u->StateEnd = s_CarGirlStand;
-    u->Rot = 0;
-    u->RotNum = 0;
+    ChangeState(actor,s_CarGirlStand);
+    actor->user.Attrib = &CarGirlAttrib;
+    actor->user.StateEnd = s_CarGirlStand;
+    actor->user.Rot = 0;
+    actor->user.RotNum = 0;
 
-    sp->xrepeat = 29;
-    sp->yrepeat = 25;
-    sp->xvel = sp->yvel = sp->zvel = 0;
-    sp->lotag = CARGIRL_R0;
-    u->FlagOwner = 0;
-    u->ID = CARGIRL_R0;
+    actor->spr.xrepeat = 29;
+    actor->spr.yrepeat = 25;
+    actor->spr.xvel = actor->spr.yvel = actor->spr.zvel = 0;
+    actor->spr.lotag = CARGIRL_R0;
+    actor->user.FlagOwner = 0;
+    actor->user.ID = CARGIRL_R0;
 
-    RESET(u->Flags, SPR_XFLIP_TOGGLE);
-    SET(sp->cstat, CSTAT_SPRITE_XFLIP);
+    actor->user.Flags &= ~(SPR_XFLIP_TOGGLE);
+    actor->spr.cstat |= (CSTAT_SPRITE_XFLIP);
 
     return 0;
 }
 
-int DoCarGirl(short SpriteNum)
+int DoCarGirl(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
     bool ICanSee = false;
 
-    DoActorPickClosePlayer(SpriteNum);
-    ICanSee = FAFcansee(sp->x,sp->y,SPRITEp_MID(sp),sp->sectnum,u->tgt_sp->x,u->tgt_sp->y,SPRITEp_MID(u->tgt_sp),u->tgt_sp->sectnum);
+    DoActorPickClosePlayer(actor);
+    ICanSee = FAFcansee(actor->spr.pos.X,actor->spr.pos.Y,ActorZOfMiddle(actor),actor->sector(),actor->user.targetActor->spr.pos.X,actor->user.targetActor->spr.pos.Y,ActorZOfMiddle(actor->user.targetActor),actor->user.targetActor->sector());
 
-    if (u->FlagOwner == 1)
+    if (actor->user.FlagOwner == 1)
     {
-        if ((u->WaitTics -= ACTORMOVETICS) <= 0 && ICanSee)
+        if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0 && ICanSee)
         {
-            if (!SoundValidAndActive(sp, CHAN_AnimeMad))
+            if (!SoundValidAndActive(actor, CHAN_AnimeMad))
             {
                 short choose;
-                choose = RANDOM_RANGE(1000);
+                choose = RandomRange(1000);
 
                 if (choose > 750)
-                    PlaySound(DIGI_LANI049, sp, v3df_dontpan, CHAN_AnimeMad);
+                    PlaySound(DIGI_LANI049, actor, v3df_dontpan, CHAN_AnimeMad);
                 else if (choose > 500)
-                    PlaySound(DIGI_LANI051, sp, v3df_dontpan, CHAN_AnimeMad);
+                    PlaySound(DIGI_LANI051, actor, v3df_dontpan, CHAN_AnimeMad);
                 else if (choose > 250)
-                    PlaySound(DIGI_LANI052, sp, v3df_dontpan, CHAN_AnimeMad);
+                    PlaySound(DIGI_LANI052, actor, v3df_dontpan, CHAN_AnimeMad);
                 else
-                    PlaySound(DIGI_LANI054, sp, v3df_dontpan, CHAN_AnimeMad);
+                    PlaySound(DIGI_LANI054, actor, v3df_dontpan, CHAN_AnimeMad);
             }
-            ChangeState(SpriteNum,s_CarGirlUzi);
-            u->WaitTics = SEC(3)+SEC(RANDOM_RANGE(2<<8)>>8);
-            u->FlagOwner = 0;
+            ChangeState(actor,s_CarGirlUzi);
+            actor->user.WaitTics = SEC(3)+SEC(RandomRange(2<<8)>>8);
+            actor->user.FlagOwner = 0;
         }
     }
 
-    //(*u->ActorActionFunc) (SpriteNum);
-
-
     // stay on floor unless doing certain things
-    if (!TEST(u->Flags, SPR_JUMPING | SPR_FALLING | SPR_CLIMBING))
+    if (!(actor->user.Flags & (SPR_JUMPING | SPR_FALLING | SPR_CLIMBING)))
     {
-        KeepActorOnFloor(SpriteNum);
+        KeepActorOnFloor(actor);
     }
 
     // take damage from environment
-    DoActorSectorDamage(SpriteNum);
-    sp->xvel = sp->yvel = sp->zvel = 0;
+    DoActorSectorDamage(actor);
+    actor->spr.xvel = actor->spr.yvel = actor->spr.zvel = 0;
 
     return 0;
 }
 
-int NullCarGirl(short SpriteNum)
+int NullCarGirl(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
     bool ICanSee = false;
 
-    DoActorPickClosePlayer(SpriteNum);
-    ICanSee = FAFcansee(sp->x,sp->y,SPRITEp_MID(sp),sp->sectnum,u->tgt_sp->x,u->tgt_sp->y,u->tgt_sp->z,u->tgt_sp->sectnum);
+    DoActorPickClosePlayer(actor);
+    ICanSee = FAFcansee(actor->spr.pos.X,actor->spr.pos.Y,ActorZOfMiddle(actor),actor->sector(),actor->user.targetActor->spr.pos.X,actor->user.targetActor->spr.pos.Y,actor->user.targetActor->spr.pos.Z,actor->user.targetActor->sector());
 
-    if (!TEST(u->Flags,SPR_CLIMBING))
-        KeepActorOnFloor(SpriteNum);
+    if (!(actor->user.Flags & SPR_CLIMBING))
+        KeepActorOnFloor(actor);
 
-    if (u->FlagOwner != 1)
+    if (actor->user.FlagOwner != 1)
     {
     }
-    else if ((u->WaitTics -= ACTORMOVETICS) <= 0 && ICanSee)
+    else if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0 && ICanSee)
     {
-        if (!SoundValidAndActive(sp, CHAN_AnimeMad))
+        if (!SoundValidAndActive(actor, CHAN_AnimeMad))
         {
             short choose;
-            choose = RANDOM_RANGE(1000);
+            choose = RandomRange(1000);
 
             if (choose > 750)
-                PlaySound(DIGI_LANI049, sp, v3df_dontpan, CHAN_AnimeMad);
+                PlaySound(DIGI_LANI049, actor, v3df_dontpan, CHAN_AnimeMad);
             else if (choose > 500)
-                PlaySound(DIGI_LANI051, sp, v3df_dontpan, CHAN_AnimeMad);
+                PlaySound(DIGI_LANI051, actor, v3df_dontpan, CHAN_AnimeMad);
             else if (choose > 250)
-                PlaySound(DIGI_LANI052, sp, v3df_dontpan, CHAN_AnimeMad);
+                PlaySound(DIGI_LANI052, actor, v3df_dontpan, CHAN_AnimeMad);
             else
-                PlaySound(DIGI_LANI054, sp, v3df_dontpan, CHAN_AnimeMad);
+                PlaySound(DIGI_LANI054, actor, v3df_dontpan, CHAN_AnimeMad);
         }
-        ChangeState(SpriteNum,s_CarGirlUzi);
-        u->WaitTics = SEC(3)+SEC(RANDOM_RANGE(2<<8)>>8);
-        u->FlagOwner = 0;
+        ChangeState(actor,s_CarGirlUzi);
+        actor->user.WaitTics = SEC(3)+SEC(RandomRange(2<<8)>>8);
+        actor->user.FlagOwner = 0;
     }
 
     return 0;
 }
 
-int CarGirlUzi(short SpriteNum)
+int CarGirlUzi(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
+    if (!(actor->user.Flags & SPR_CLIMBING))
+        KeepActorOnFloor(actor);
 
-    if (!TEST(u->Flags,SPR_CLIMBING))
-        KeepActorOnFloor(SpriteNum);
-
-    if ((u->WaitTics -= ACTORMOVETICS) <= 0)
+    if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0)
     {
-        u->WaitTics = RANDOM_RANGE(240)+120;
-        ChangeState(SpriteNum,s_CarGirlStand);
-        u->FlagOwner = 0;
+        actor->user.WaitTics = RandomRange(240)+120;
+        ChangeState(actor,s_CarGirlStand);
+        actor->user.FlagOwner = 0;
     }
 
     return 0;
 }
 
-int CarGirlPain(short SpriteNum)
+int CarGirlPain(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
+    NullCarGirl(actor);
 
-    NullCarGirl(SpriteNum);
-
-    if ((u->WaitTics -= ACTORMOVETICS) <= 0)
-        ChangeState(SpriteNum,s_CarGirlStand);
+    if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0)
+        ChangeState(actor,s_CarGirlStand);
 
     return 0;
 }
@@ -1440,158 +1318,139 @@ STATE s_MechanicGirlDrill[2] =
 };
 
 
-int
-SetupMechanicGirl(short SpriteNum)
+int SetupMechanicGirl(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u;
     ANIMATOR DoActorDecide;
 
-    if (TEST(sp->cstat, CSTAT_SPRITE_RESTORE))
+    if (!(actor->spr.cstat & CSTAT_SPRITE_RESTORE))
     {
-        u = User[SpriteNum].Data();
-        ASSERT(u);
-    }
-    else
-    {
-        u = SpawnUser(SpriteNum,MECHANICGIRL_R0,s_MechanicGirlStand);
-        u->Health = 60;
+        SpawnUser(actor, MECHANICGIRL_R0,s_MechanicGirlStand);
+        actor->user.Health = 60;
     }
 
 
-    EnemyDefaults(SpriteNum, NULL, NULL);
+    EnemyDefaults(actor, nullptr, nullptr);
 
-    ChangeState(SpriteNum,s_MechanicGirlStand);
-    u->Attrib = &MechanicGirlAttrib;
-    u->StateEnd = s_MechanicGirlStand;
-    u->Rot = 0;
-    u->RotNum = 0;
+    ChangeState(actor,s_MechanicGirlStand);
+    actor->user.Attrib = &MechanicGirlAttrib;
+    actor->user.StateEnd = s_MechanicGirlStand;
+    actor->user.Rot = 0;
+    actor->user.RotNum = 0;
 
-    sp->xrepeat = 27;
-    sp->yrepeat = 26;
-    sp->xvel = sp->yvel = sp->zvel = 0;
-    sp->lotag = MECHANICGIRL_R0;
-    u->FlagOwner = 0;
-    u->ID = MECHANICGIRL_R0;
+    actor->spr.xrepeat = 27;
+    actor->spr.yrepeat = 26;
+    actor->spr.xvel = actor->spr.yvel = actor->spr.zvel = 0;
+    actor->spr.lotag = MECHANICGIRL_R0;
+    actor->user.FlagOwner = 0;
+    actor->user.ID = MECHANICGIRL_R0;
 
-    RESET(u->Flags, SPR_XFLIP_TOGGLE);
+    actor->user.Flags &= ~(SPR_XFLIP_TOGGLE);
 
     return 0;
 }
 
-int DoMechanicGirl(short SpriteNum)
+int DoMechanicGirl(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
     bool ICanSee = false;
 
-    DoActorPickClosePlayer(SpriteNum);
-    ICanSee = FAFcansee(sp->x,sp->y,SPRITEp_MID(sp),sp->sectnum,u->tgt_sp->x,u->tgt_sp->y,SPRITEp_MID(u->tgt_sp),u->tgt_sp->sectnum);
+    DoActorPickClosePlayer(actor);
+    ICanSee = FAFcansee(actor->spr.pos.X,actor->spr.pos.Y,ActorZOfMiddle(actor),actor->sector(),actor->user.targetActor->spr.pos.X,actor->user.targetActor->spr.pos.Y,ActorZOfMiddle(actor->user.targetActor),actor->user.targetActor->sector());
 
-    if (u->FlagOwner == 1)
+    if (actor->user.FlagOwner == 1)
     {
-        if ((u->WaitTics -= ACTORMOVETICS) <= 0 && ICanSee)
+        if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0 && ICanSee)
         {
-            if (!SoundValidAndActive(sp, CHAN_AnimeMad))
+            if (!SoundValidAndActive(actor, CHAN_AnimeMad))
             {
                 short choose;
-                choose = RANDOM_RANGE(1000);
+                choose = RandomRange(1000);
 
                 if (choose > 750)
-                    PlaySound(DIGI_LANI073, sp, v3df_dontpan, CHAN_AnimeMad);
+                    PlaySound(DIGI_LANI073, actor, v3df_dontpan, CHAN_AnimeMad);
                 else if (choose > 500)
-                    PlaySound(DIGI_LANI075, sp, v3df_dontpan, CHAN_AnimeMad);
+                    PlaySound(DIGI_LANI075, actor, v3df_dontpan, CHAN_AnimeMad);
                 else if (choose > 250)
-                    PlaySound(DIGI_LANI077, sp, v3df_dontpan, CHAN_AnimeMad);
+                    PlaySound(DIGI_LANI077, actor, v3df_dontpan, CHAN_AnimeMad);
                 else
-                    PlaySound(DIGI_LANI079, sp, v3df_dontpan, CHAN_AnimeMad);
+                    PlaySound(DIGI_LANI079, actor, v3df_dontpan, CHAN_AnimeMad);
             }
-            ChangeState(SpriteNum,s_MechanicGirlDrill);
-            u->WaitTics = SEC(1)+SEC(RANDOM_RANGE(2<<8)>>8);
-            u->FlagOwner = 0;
+            ChangeState(actor,s_MechanicGirlDrill);
+            actor->user.WaitTics = SEC(1)+SEC(RandomRange(2<<8)>>8);
+            actor->user.FlagOwner = 0;
         }
     }
 
-    //(*u->ActorActionFunc) (SpriteNum);
-
-
     // stay on floor unless doing certain things
-    if (!TEST(u->Flags, SPR_JUMPING | SPR_FALLING | SPR_CLIMBING))
+    if (!(actor->user.Flags & (SPR_JUMPING | SPR_FALLING | SPR_CLIMBING)))
     {
-        KeepActorOnFloor(SpriteNum);
+        KeepActorOnFloor(actor);
     }
 
     // take damage from environment
-    DoActorSectorDamage(SpriteNum);
-    sp->xvel = sp->yvel = sp->zvel = 0;
+    DoActorSectorDamage(actor);
+    actor->spr.xvel = actor->spr.yvel = actor->spr.zvel = 0;
 
     return 0;
 }
 
-int NullMechanicGirl(short SpriteNum)
+int NullMechanicGirl(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
     bool ICanSee = false;
 
-    DoActorPickClosePlayer(SpriteNum);
-    ICanSee = FAFcansee(sp->x,sp->y,SPRITEp_MID(sp),sp->sectnum,u->tgt_sp->x,u->tgt_sp->y,u->tgt_sp->z,u->tgt_sp->sectnum);
+    DoActorPickClosePlayer(actor);
+    ICanSee = FAFcansee(actor->spr.pos.X,actor->spr.pos.Y,ActorZOfMiddle(actor),actor->sector(),actor->user.targetActor->spr.pos.X,actor->user.targetActor->spr.pos.Y,actor->user.targetActor->spr.pos.Z,actor->user.targetActor->sector());
 
-    if (!TEST(u->Flags,SPR_CLIMBING))
-        KeepActorOnFloor(SpriteNum);
+    if (!(actor->user.Flags & SPR_CLIMBING))
+        KeepActorOnFloor(actor);
 
-    if (u->FlagOwner != 1)
+    if (actor->user.FlagOwner != 1)
     {
     }
-    else if ((u->WaitTics -= ACTORMOVETICS) <= 0 && ICanSee)
+    else if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0 && ICanSee)
     {
-        if (!SoundValidAndActive(sp, CHAN_AnimeMad))
+        if (!SoundValidAndActive(actor, CHAN_AnimeMad))
         {
             short choose;
-            choose = RANDOM_RANGE(1000);
+            choose = RandomRange(1000);
 
             if (choose > 750)
-                PlaySound(DIGI_LANI073, sp, v3df_dontpan, CHAN_AnimeMad);
+                PlaySound(DIGI_LANI073, actor, v3df_dontpan, CHAN_AnimeMad);
             else if (choose > 500)
-                PlaySound(DIGI_LANI075, sp, v3df_dontpan, CHAN_AnimeMad);
+                PlaySound(DIGI_LANI075, actor, v3df_dontpan, CHAN_AnimeMad);
             else if (choose > 250)
-                PlaySound(DIGI_LANI077, sp, v3df_dontpan, CHAN_AnimeMad);
+                PlaySound(DIGI_LANI077, actor, v3df_dontpan, CHAN_AnimeMad);
             else
-                PlaySound(DIGI_LANI079, sp, v3df_dontpan, CHAN_AnimeMad);
+                PlaySound(DIGI_LANI079, actor, v3df_dontpan, CHAN_AnimeMad);
         }
-        ChangeState(SpriteNum,s_MechanicGirlDrill);
-        u->WaitTics = SEC(1)+SEC(RANDOM_RANGE(2<<8)>>8);
-        u->FlagOwner = 0;
+        ChangeState(actor,s_MechanicGirlDrill);
+        actor->user.WaitTics = SEC(1)+SEC(RandomRange(2<<8)>>8);
+        actor->user.FlagOwner = 0;
     }
 
     return 0;
 }
 
-int MechanicGirlDrill(short SpriteNum)
+int MechanicGirlDrill(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
+    if (!(actor->user.Flags & SPR_CLIMBING))
+        KeepActorOnFloor(actor);
 
-    if (!TEST(u->Flags,SPR_CLIMBING))
-        KeepActorOnFloor(SpriteNum);
-
-    if ((u->WaitTics -= ACTORMOVETICS) <= 0)
+    if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0)
     {
-        u->WaitTics = RANDOM_RANGE(240)+120;
-        ChangeState(SpriteNum,s_MechanicGirlStand);
-        u->FlagOwner = 0;
+        actor->user.WaitTics = RandomRange(240)+120;
+        ChangeState(actor,s_MechanicGirlStand);
+        actor->user.FlagOwner = 0;
     }
 
     return 0;
 }
 
-int MechanicGirlPain(short SpriteNum)
+int MechanicGirlPain(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
+    NullMechanicGirl(actor);
 
-    NullMechanicGirl(SpriteNum);
-
-    if ((u->WaitTics -= ACTORMOVETICS) <= 0)
-        ChangeState(SpriteNum,s_MechanicGirlStand);
+    if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0)
+        ChangeState(actor,s_MechanicGirlStand);
 
     return 0;
 }
@@ -1659,168 +1518,149 @@ STATE s_SailorGirlThrow[] =
 
 short alreadythrew;
 
-int
-SetupSailorGirl(short SpriteNum)
+int SetupSailorGirl(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u;
     ANIMATOR DoActorDecide;
 
-    if (TEST(sp->cstat, CSTAT_SPRITE_RESTORE))
+    if (!(actor->spr.cstat & CSTAT_SPRITE_RESTORE))
     {
-        u = User[SpriteNum].Data();
-        ASSERT(u);
-    }
-    else
-    {
-        u = SpawnUser(SpriteNum,SAILORGIRL_R0,s_SailorGirlStand);
-        u->Health = 60;
+        SpawnUser(actor, SAILORGIRL_R0,s_SailorGirlStand);
+        actor->user.Health = 60;
     }
 
 
-    EnemyDefaults(SpriteNum, NULL, NULL);
+    EnemyDefaults(actor, nullptr, nullptr);
 
-    ChangeState(SpriteNum,s_SailorGirlStand);
-    u->Attrib = &SailorGirlAttrib;
-    u->StateEnd = s_SailorGirlStand;
-    u->Rot = 0;
-    u->RotNum = 0;
+    ChangeState(actor,s_SailorGirlStand);
+    actor->user.Attrib = &SailorGirlAttrib;
+    actor->user.StateEnd = s_SailorGirlStand;
+    actor->user.Rot = 0;
+    actor->user.RotNum = 0;
 
-    sp->xrepeat = 28;
-    sp->yrepeat = 26;
-    sp->xvel = sp->yvel = sp->zvel = 0;
-    sp->lotag = SAILORGIRL_R0;
-    u->FlagOwner = 0;
-    u->ID = SAILORGIRL_R0;
+    actor->spr.xrepeat = 28;
+    actor->spr.yrepeat = 26;
+    actor->spr.xvel = actor->spr.yvel = actor->spr.zvel = 0;
+    actor->spr.lotag = SAILORGIRL_R0;
+    actor->user.FlagOwner = 0;
+    actor->user.ID = SAILORGIRL_R0;
 
-    RESET(u->Flags, SPR_XFLIP_TOGGLE);
+    actor->user.Flags &= ~(SPR_XFLIP_TOGGLE);
     alreadythrew = 0;
 
     return 0;
 }
 
-int DoSailorGirl(short SpriteNum)
+int DoSailorGirl(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
     bool ICanSee = false;
 
-    DoActorPickClosePlayer(SpriteNum);
-    ICanSee = FAFcansee(sp->x,sp->y,SPRITEp_MID(sp),sp->sectnum,u->tgt_sp->x,u->tgt_sp->y,SPRITEp_MID(u->tgt_sp),u->tgt_sp->sectnum);
+    DoActorPickClosePlayer(actor);
+    ICanSee = FAFcansee(actor->spr.pos.X,actor->spr.pos.Y,ActorZOfMiddle(actor),actor->sector(),actor->user.targetActor->spr.pos.X,actor->user.targetActor->spr.pos.Y,ActorZOfMiddle(actor->user.targetActor),actor->user.targetActor->sector());
 
-    if (u->FlagOwner == 1)
+    if (actor->user.FlagOwner == 1)
     {
-        if ((u->WaitTics -= ACTORMOVETICS) <= 0 && ICanSee)
+        if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0 && ICanSee)
         {
-            if (!SoundValidAndActive(sp, CHAN_AnimeMad))
+            if (!SoundValidAndActive(actor, CHAN_AnimeMad))
             {
                 short choose;
-                choose = RANDOM_RANGE(1000);
+                choose = RandomRange(1000);
 
                 if (choose > 750 && alreadythrew < 3)
                 {
-                    ActorCoughItem(SpriteNum);
+                    ActorCoughItem(actor);
                     alreadythrew++;
-                    PlaySound(DIGI_LANI060, sp, v3df_dontpan, CHAN_AnimeMad);
+                    PlaySound(DIGI_LANI060, actor, v3df_dontpan, CHAN_AnimeMad);
                 }
                 else if (choose > 500)
-                    PlaySound(DIGI_LANI063, sp, v3df_dontpan, CHAN_AnimeMad);
+                    PlaySound(DIGI_LANI063, actor, v3df_dontpan, CHAN_AnimeMad);
                 else if (choose > 250)
-                    PlaySound(DIGI_LANI065, sp, v3df_dontpan, CHAN_AnimeMad);
+                    PlaySound(DIGI_LANI065, actor, v3df_dontpan, CHAN_AnimeMad);
                 else
-                    PlaySound(DIGI_LANI066, sp, v3df_dontpan, CHAN_AnimeMad);
+                    PlaySound(DIGI_LANI066, actor, v3df_dontpan, CHAN_AnimeMad);
             }
-            ChangeState(SpriteNum,s_SailorGirlThrow);
-            u->WaitTics = SEC(1)+SEC(RANDOM_RANGE(3<<8)>>8);
-            u->FlagOwner = 0;
+            ChangeState(actor,s_SailorGirlThrow);
+            actor->user.WaitTics = SEC(1)+SEC(RandomRange(3<<8)>>8);
+            actor->user.FlagOwner = 0;
         }
     }
 
-    //(*u->ActorActionFunc) (SpriteNum);
-
-
     // stay on floor unless doing certain things
-    if (!TEST(u->Flags, SPR_JUMPING | SPR_FALLING | SPR_CLIMBING))
+    if (!(actor->user.Flags & (SPR_JUMPING | SPR_FALLING | SPR_CLIMBING)))
     {
-        KeepActorOnFloor(SpriteNum);
+        KeepActorOnFloor(actor);
     }
 
     // take damage from environment
-    DoActorSectorDamage(SpriteNum);
-    sp->xvel = sp->yvel = sp->zvel = 0;
+    DoActorSectorDamage(actor);
+    actor->spr.xvel = actor->spr.yvel = actor->spr.zvel = 0;
 
     return 0;
 }
 
-int NullSailorGirl(short SpriteNum)
+int NullSailorGirl(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
     bool ICanSee = false;
     static short alreadythrew = 0;
 
-    DoActorPickClosePlayer(SpriteNum);
-    ICanSee = FAFcansee(sp->x,sp->y,SPRITEp_MID(sp),sp->sectnum,u->tgt_sp->x,u->tgt_sp->y,u->tgt_sp->z,u->tgt_sp->sectnum);
+    DoActorPickClosePlayer(actor);
+    ICanSee = FAFcansee(actor->spr.pos.X,actor->spr.pos.Y,ActorZOfMiddle(actor),actor->sector(),actor->user.targetActor->spr.pos.X,actor->user.targetActor->spr.pos.Y,actor->user.targetActor->spr.pos.Z,actor->user.targetActor->sector());
 
-    if (!TEST(u->Flags,SPR_CLIMBING))
-        KeepActorOnFloor(SpriteNum);
+    if (!(actor->user.Flags & SPR_CLIMBING))
+        KeepActorOnFloor(actor);
 
-    if (u->FlagOwner != 1)
+    if (actor->user.FlagOwner != 1)
     {
     }
-    else if ((u->WaitTics -= ACTORMOVETICS) <= 0 && ICanSee)
+    else if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0 && ICanSee)
     {
-        if (!SoundValidAndActive(sp, CHAN_AnimeMad))
+        if (!SoundValidAndActive(actor, CHAN_AnimeMad))
         {
             short choose;
-            choose = RANDOM_RANGE(1000);
+            choose = RandomRange(1000);
 
             if (choose > 750 && alreadythrew < 3)
             {
-                ActorCoughItem(SpriteNum);
+                ActorCoughItem(actor);
                 alreadythrew++;
-                PlaySound(DIGI_LANI060, sp, v3df_dontpan, CHAN_AnimeMad);
+                PlaySound(DIGI_LANI060, actor, v3df_dontpan, CHAN_AnimeMad);
             }
             else if (choose > 500)
-                PlaySound(DIGI_LANI063, sp, v3df_dontpan, CHAN_AnimeMad);
+                PlaySound(DIGI_LANI063, actor, v3df_dontpan, CHAN_AnimeMad);
             else if (choose > 250)
-                PlaySound(DIGI_LANI065, sp, v3df_dontpan, CHAN_AnimeMad);
+                PlaySound(DIGI_LANI065, actor, v3df_dontpan, CHAN_AnimeMad);
             else
-                PlaySound(DIGI_LANI066, sp, v3df_dontpan, CHAN_AnimeMad);
+                PlaySound(DIGI_LANI066, actor, v3df_dontpan, CHAN_AnimeMad);
         }
-        ChangeState(SpriteNum,s_SailorGirlThrow);
-        u->WaitTics = SEC(1)+SEC(RANDOM_RANGE(3<<8)>>8);
-        u->FlagOwner = 0;
+        ChangeState(actor,s_SailorGirlThrow);
+        actor->user.WaitTics = SEC(1)+SEC(RandomRange(3<<8)>>8);
+        actor->user.FlagOwner = 0;
     }
 
     return 0;
 }
 
-int SailorGirlThrow(short SpriteNum)
+int SailorGirlThrow(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
+    if (!(actor->user.Flags & SPR_CLIMBING))
+        KeepActorOnFloor(actor);
 
-    if (!TEST(u->Flags,SPR_CLIMBING))
-        KeepActorOnFloor(SpriteNum);
-
-    if ((u->WaitTics -= ACTORMOVETICS) <= 0)
+    if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0)
     {
-        u->WaitTics = RANDOM_RANGE(240)+120;
-        ChangeState(SpriteNum,s_SailorGirlStand);
-        u->FlagOwner = 0;
+        actor->user.WaitTics = RandomRange(240)+120;
+        ChangeState(actor,s_SailorGirlStand);
+        actor->user.FlagOwner = 0;
     }
 
     return 0;
 }
 
-int SailorGirlPain(short SpriteNum)
+int SailorGirlPain(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
+    NullSailorGirl(actor);
 
-    NullSailorGirl(SpriteNum);
-
-    if ((u->WaitTics -= ACTORMOVETICS) <= 0)
-        ChangeState(SpriteNum,s_SailorGirlStand);
+    if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0)
+        ChangeState(actor,s_SailorGirlStand);
 
     return 0;
 }
@@ -1872,173 +1712,154 @@ STATE s_PruneGirlPain[2] =
     {PRUNEGIRL_PAIN_R0 + 0, 0|SF_QUICK_CALL, InitActorDecide, &s_PruneGirlPain[0]}
 };
 
-int
-SetupPruneGirl(short SpriteNum)
+int SetupPruneGirl(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u;
     ANIMATOR DoActorDecide;
 
-    if (TEST(sp->cstat, CSTAT_SPRITE_RESTORE))
+    if (!(actor->spr.cstat & CSTAT_SPRITE_RESTORE))
     {
-        u = User[SpriteNum].Data();
-        ASSERT(u);
-    }
-    else
-    {
-        u = SpawnUser(SpriteNum,PRUNEGIRL_R0,s_PruneGirlStand);
-        u->Health = 60;
+        SpawnUser(actor, PRUNEGIRL_R0,s_PruneGirlStand);
+        actor->user.Health = 60;
     }
 
 
-    EnemyDefaults(SpriteNum, NULL, NULL);
+    EnemyDefaults(actor, nullptr, nullptr);
 
-    ChangeState(SpriteNum,s_PruneGirlStand);
-    u->Attrib = &PruneGirlAttrib;
-    u->StateEnd = s_PruneGirlStand;
-    u->Rot = 0;
-    u->RotNum = 0;
+    ChangeState(actor,s_PruneGirlStand);
+    actor->user.Attrib = &PruneGirlAttrib;
+    actor->user.StateEnd = s_PruneGirlStand;
+    actor->user.Rot = 0;
+    actor->user.RotNum = 0;
 
-    sp->xrepeat = 33;
-    sp->yrepeat = 28;
-    sp->xvel = sp->yvel = sp->zvel = 0;
-    sp->lotag = PRUNEGIRL_R0;
-    u->FlagOwner = 0;
-    u->ID = PRUNEGIRL_R0;
+    actor->spr.xrepeat = 33;
+    actor->spr.yrepeat = 28;
+    actor->spr.xvel = actor->spr.yvel = actor->spr.zvel = 0;
+    actor->spr.lotag = PRUNEGIRL_R0;
+    actor->user.FlagOwner = 0;
+    actor->user.ID = PRUNEGIRL_R0;
 
-    RESET(u->Flags, SPR_XFLIP_TOGGLE);
+    actor->user.Flags &= ~(SPR_XFLIP_TOGGLE);
 
     return 0;
 }
 
-int DoPruneGirl(short SpriteNum)
+int DoPruneGirl(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
     bool ICanSee = false;
 
-    DoActorPickClosePlayer(SpriteNum);
-    ICanSee = FAFcansee(sp->x,sp->y,SPRITEp_MID(sp),sp->sectnum,u->tgt_sp->x,u->tgt_sp->y,SPRITEp_MID(u->tgt_sp),u->tgt_sp->sectnum);
+    DoActorPickClosePlayer(actor);
+    ICanSee = FAFcansee(actor->spr.pos.X,actor->spr.pos.Y,ActorZOfMiddle(actor),actor->sector(),actor->user.targetActor->spr.pos.X,actor->user.targetActor->spr.pos.Y,ActorZOfMiddle(actor->user.targetActor),actor->user.targetActor->sector());
 
-    if (u->FlagOwner == 1)
+    if (actor->user.FlagOwner == 1)
     {
-        if ((u->WaitTics -= ACTORMOVETICS) <= 0 && ICanSee)
+        if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0 && ICanSee)
         {
-            if (!SoundValidAndActive(sp, CHAN_AnimeMad))
+            if (!SoundValidAndActive(actor, CHAN_AnimeMad))
             {
                 short choose;
-                choose = STD_RANDOM_RANGE(1000);
+                choose = StdRandomRange(1000);
 
                 if (choose > 750)
-                    PlaySound(DIGI_LANI089, sp, v3df_dontpan, CHAN_AnimeMad);
+                    PlaySound(DIGI_LANI089, actor, v3df_dontpan, CHAN_AnimeMad);
                 else if (choose > 500)
-                    PlaySound(DIGI_LANI091, sp, v3df_dontpan, CHAN_AnimeMad);
+                    PlaySound(DIGI_LANI091, actor, v3df_dontpan, CHAN_AnimeMad);
                 else if (choose > 250)
-                    PlaySound(DIGI_LANI093, sp, v3df_dontpan, CHAN_AnimeMad);
+                    PlaySound(DIGI_LANI093, actor, v3df_dontpan, CHAN_AnimeMad);
                 else
-                    PlaySound(DIGI_LANI095, sp, v3df_dontpan, CHAN_AnimeMad);
+                    PlaySound(DIGI_LANI095, actor, v3df_dontpan, CHAN_AnimeMad);
             }
-            u->WaitTics = SEC(1)+SEC(RANDOM_RANGE(3<<8)>>8);
-            u->FlagOwner = 0;
+            actor->user.WaitTics = SEC(1)+SEC(RandomRange(3<<8)>>8);
+            actor->user.FlagOwner = 0;
         }
     }
     else
     {
-        if (!SoundValidAndActive(sp, CHAN_CoyHandle))
+        if (!SoundValidAndActive(actor, CHAN_CoyHandle))
         {
             short choose;
-            choose = STD_RANDOM_RANGE(1000);
+            choose = StdRandomRange(1000);
 
             if (choose > 990)
-                PlaySound(DIGI_PRUNECACKLE, sp, v3df_dontpan, CHAN_CoyHandle);
+                PlaySound(DIGI_PRUNECACKLE, actor, v3df_dontpan, CHAN_CoyHandle);
             else if (choose > 985)
-                PlaySound(DIGI_PRUNECACKLE2, sp, v3df_dontpan, CHAN_CoyHandle);
+                PlaySound(DIGI_PRUNECACKLE2, actor, v3df_dontpan, CHAN_CoyHandle);
             else if (choose > 980)
-                PlaySound(DIGI_PRUNECACKLE3, sp, v3df_dontpan, CHAN_CoyHandle);
+                PlaySound(DIGI_PRUNECACKLE3, actor, v3df_dontpan, CHAN_CoyHandle);
             else if (choose > 975)
-                PlaySound(DIGI_LANI091, sp, v3df_dontpan, CHAN_CoyHandle);
+                PlaySound(DIGI_LANI091, actor, v3df_dontpan, CHAN_CoyHandle);
         }
     }
 
-    //(*u->ActorActionFunc) (SpriteNum);
-
-
     // stay on floor unless doing certain things
-    if (!TEST(u->Flags, SPR_JUMPING | SPR_FALLING | SPR_CLIMBING))
+    if (!(actor->user.Flags & (SPR_JUMPING | SPR_FALLING | SPR_CLIMBING)))
     {
-        KeepActorOnFloor(SpriteNum);
+        KeepActorOnFloor(actor);
     }
 
     // take damage from environment
-    DoActorSectorDamage(SpriteNum);
-    sp->xvel = sp->yvel = sp->zvel = 0;
+    DoActorSectorDamage(actor);
+    actor->spr.xvel = actor->spr.yvel = actor->spr.zvel = 0;
 
     return 0;
 }
 
-int NullPruneGirl(short SpriteNum)
+int NullPruneGirl(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
     bool ICanSee = false;
 
-    DoActorPickClosePlayer(SpriteNum);
-    ICanSee = FAFcansee(sp->x,sp->y,SPRITEp_MID(sp),sp->sectnum,u->tgt_sp->x,u->tgt_sp->y,u->tgt_sp->z,u->tgt_sp->sectnum);
+    DoActorPickClosePlayer(actor);
+    ICanSee = FAFcansee(actor->spr.pos.X,actor->spr.pos.Y,ActorZOfMiddle(actor),actor->sector(),actor->user.targetActor->spr.pos.X,actor->user.targetActor->spr.pos.Y,actor->user.targetActor->spr.pos.Z,actor->user.targetActor->sector());
 
-    if (!TEST(u->Flags,SPR_CLIMBING))
-        KeepActorOnFloor(SpriteNum);
+    if (!(actor->user.Flags & SPR_CLIMBING))
+        KeepActorOnFloor(actor);
 
-    if (u->FlagOwner != 1)
+    if (actor->user.FlagOwner != 1)
     {
     }
-    else if ((u->WaitTics -= ACTORMOVETICS) <= 0 && ICanSee)
+    else if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0 && ICanSee)
     {
-        if (!SoundValidAndActive(sp, CHAN_AnimeMad))
+        if (!SoundValidAndActive(actor, CHAN_AnimeMad))
         {
             short choose;
-            choose = RANDOM_RANGE(1000);
+            choose = RandomRange(1000);
 
             if (choose > 750)
-                PlaySound(DIGI_LANI089, sp, v3df_dontpan, CHAN_AnimeMad);
+                PlaySound(DIGI_LANI089, actor, v3df_dontpan, CHAN_AnimeMad);
             else if (choose > 500)
-                PlaySound(DIGI_LANI091, sp, v3df_dontpan, CHAN_AnimeMad);
+                PlaySound(DIGI_LANI091, actor, v3df_dontpan, CHAN_AnimeMad);
             else if (choose > 250)
-                PlaySound(DIGI_LANI093, sp, v3df_dontpan, CHAN_AnimeMad);
+                PlaySound(DIGI_LANI093, actor, v3df_dontpan, CHAN_AnimeMad);
             else
-                PlaySound(DIGI_LANI095, sp, v3df_dontpan, CHAN_AnimeMad);
+                PlaySound(DIGI_LANI095, actor, v3df_dontpan, CHAN_AnimeMad);
         }
-        u->WaitTics = SEC(1)+SEC(RANDOM_RANGE(3<<8)>>8);
-        u->FlagOwner = 0;
+        actor->user.WaitTics = SEC(1)+SEC(RandomRange(3<<8)>>8);
+        actor->user.FlagOwner = 0;
     }
 
     return 0;
 }
 
-int PruneGirlUzi(short SpriteNum)
+int PruneGirlUzi(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
+    if (!(actor->user.Flags & SPR_CLIMBING))
+        KeepActorOnFloor(actor);
 
-    if (!TEST(u->Flags,SPR_CLIMBING))
-        KeepActorOnFloor(SpriteNum);
-
-    if ((u->WaitTics -= ACTORMOVETICS) <= 0)
+    if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0)
     {
-        u->WaitTics = RANDOM_RANGE(240)+120;
-        ChangeState(SpriteNum,s_PruneGirlStand);
-        u->FlagOwner = 0;
+        actor->user.WaitTics = RandomRange(240)+120;
+        ChangeState(actor,s_PruneGirlStand);
+        actor->user.FlagOwner = 0;
     }
 
     return 0;
 }
 
-int PruneGirlPain(short SpriteNum)
+int PruneGirlPain(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
+    NullPruneGirl(actor);
 
-    NullPruneGirl(SpriteNum);
-
-    if ((u->WaitTics -= ACTORMOVETICS) <= 0)
-        ChangeState(SpriteNum,s_PruneGirlStand);
+    if ((actor->user.WaitTics -= ACTORMOVETICS) <= 0)
+        ChangeState(actor,s_PruneGirlStand);
 
     return 0;
 }
@@ -2048,51 +1869,39 @@ int PruneGirlPain(short SpriteNum)
 
 static saveable_code saveable_miscactr_code[] =
 {
-    SAVE_CODE(SetupToiletGirl),
     SAVE_CODE(DoToiletGirl),
     SAVE_CODE(NullToiletGirl),
     SAVE_CODE(ToiletGirlUzi),
     SAVE_CODE(ToiletGirlPain),
 
-    SAVE_CODE(SetupWashGirl),
     SAVE_CODE(DoWashGirl),
     SAVE_CODE(NullWashGirl),
     SAVE_CODE(WashGirlUzi),
     SAVE_CODE(WashGirlPain),
 
-    SAVE_CODE(SetupTrashCan),
     SAVE_CODE(DoTrashCan),
     SAVE_CODE(TrashCanPain),
 
-    SAVE_CODE(SetupPachinkoLight),
     SAVE_CODE(PachinkoLightOperate),
 
-    SAVE_CODE(SetupPachinko1),
-    SAVE_CODE(SetupPachinko2),
-    SAVE_CODE(SetupPachinko3),
-    SAVE_CODE(SetupPachinko4),
     SAVE_CODE(PachinkoCheckWin),
     SAVE_CODE(Pachinko1Operate),
 
-    SAVE_CODE(SetupCarGirl),
     SAVE_CODE(DoCarGirl),
     SAVE_CODE(NullCarGirl),
     SAVE_CODE(CarGirlUzi),
     SAVE_CODE(CarGirlPain),
 
-    SAVE_CODE(SetupMechanicGirl),
     SAVE_CODE(DoMechanicGirl),
     SAVE_CODE(NullMechanicGirl),
     SAVE_CODE(MechanicGirlDrill),
     SAVE_CODE(MechanicGirlPain),
 
-    SAVE_CODE(SetupSailorGirl),
     SAVE_CODE(DoSailorGirl),
     SAVE_CODE(NullSailorGirl),
     SAVE_CODE(SailorGirlThrow),
     SAVE_CODE(SailorGirlPain),
 
-    SAVE_CODE(SetupPruneGirl),
     SAVE_CODE(DoPruneGirl),
     SAVE_CODE(NullPruneGirl),
     SAVE_CODE(PruneGirlUzi),

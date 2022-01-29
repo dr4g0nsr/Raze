@@ -40,278 +40,200 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 
 BEGIN_SW_NS
 
-short DoVatorMatch(PLAYERp pp, short match);
+void DoVatorMatch(PLAYER* pp, short match);
 bool TestVatorMatchActive(short match);
-void InterpSectorSprites(short sectnum, bool state);
-int InitBloodSpray(short, bool, short);
 
-void ReverseVator(short SpriteNum)
+void ReverseVator(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = u->SpriteP;
-
     // if paused go ahead and start it up again
-    if (u->Tics)
+    if (actor->user.Tics)
     {
-        u->Tics = 0;
-        SetVatorActive(SpriteNum);
+        actor->user.Tics = 0;
+        SetVatorActive(actor);
         return;
     }
 
     // moving toward to OFF pos
-    if (u->z_tgt == u->oz)
+    if (actor->user.z_tgt == actor->user.oz)
     {
-        if (sp->z == u->oz)
-            u->z_tgt = u->sz;
-        else if (u->sz == u->oz)
-            u->z_tgt = sp->z;
+        if (actor->spr.pos.Z == actor->user.oz)
+            actor->user.z_tgt = actor->user.pos.Z;
+        else if (actor->user.pos.Z == actor->user.oz)
+            actor->user.z_tgt = actor->spr.pos.Z;
     }
-    else if (u->z_tgt == u->sz)
+    else if (actor->user.z_tgt == actor->user.pos.Z)
     {
-        if (sp->z == u->oz)
-            u->z_tgt = sp->z;
-        else if (u->sz == u->oz)
-            u->z_tgt = u->sz;
+        if (actor->spr.pos.Z == actor->user.oz)
+            actor->user.z_tgt = actor->spr.pos.Z;
+        else if (actor->user.pos.Z == actor->user.oz)
+            actor->user.z_tgt = actor->user.pos.Z;
     }
 
-    u->vel_rate = -u->vel_rate;
+    actor->user.vel_rate = -actor->user.vel_rate;
 }
 
-bool
-VatorSwitch(short match, short setting)
+bool VatorSwitch(short match, short setting)
 {
-    SPRITEp sp;
-    int i;
     bool found = false;
 
-    StatIterator it(STAT_DEFAULT);
-    while ((i = it.NextIndex()) >= 0)
+    SWStatIterator it(STAT_DEFAULT);
+    while (auto actor = it.Next())
     {
-        sp = &sprite[i];
-
-        if (sp->lotag == TAG_SPRITE_SWITCH_VATOR && sp->hitag == match)
+        if (actor->spr.lotag == TAG_SPRITE_SWITCH_VATOR && actor->spr.hitag == match)
         {
             found = true;
-            AnimateSwitch(sp, setting);
+            AnimateSwitch(actor, setting);
         }
     }
 
     return found;
 }
 
-void SetVatorActive(short SpriteNum)
+void SetVatorActive(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = u->SpriteP;
-    SECTORp sectp = &sector[sp->sectnum];
+    sectortype* sectp = actor->sector();
 
-    if (TEST(sp->cstat, CSTAT_SPRITE_YFLIP))
-        StartInterpolation(sp->sectnum, Interp_Sect_Ceilingz);
+    if (actor->spr.cstat & (CSTAT_SPRITE_YFLIP))
+        StartInterpolation(actor->sector(), Interp_Sect_Ceilingz);
     else
-        StartInterpolation(sp->sectnum, Interp_Sect_Floorz);
+        StartInterpolation(actor->sector(), Interp_Sect_Floorz);
 
-    InterpSectorSprites(sp->sectnum, true);
+    InterpSectorSprites(actor->sector(), true);
 
     // play activate sound
-    DoSoundSpotMatch(SP_TAG2(sp), 1, SOUND_OBJECT_TYPE);
+    DoSoundSpotMatch(SP_TAG2(actor), 1, SOUND_OBJECT_TYPE);
 
-    SET(u->Flags, SPR_ACTIVE);
-    u->Tics = 0;
+    actor->user.Flags |= (SPR_ACTIVE);
+    actor->user.Tics = 0;
 
     // moving to the ON position
-    if (u->z_tgt == sp->z)
-        VatorSwitch(SP_TAG2(sp), ON);
+    if (actor->user.z_tgt == actor->spr.pos.Z)
+        VatorSwitch(SP_TAG2(actor), true);
     else
     // moving to the OFF position
-    if (u->z_tgt == u->sz)
-        VatorSwitch(SP_TAG2(sp), OFF);
+    if (actor->user.z_tgt == actor->user.pos.Z)
+        VatorSwitch(SP_TAG2(actor), false);
 }
 
-void SetVatorInactive(short SpriteNum)
+void SetVatorInactive(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = u->SpriteP;
-    SECTORp sectp = &sector[sp->sectnum];
+    sectortype* sectp = actor->sector();
 
-    if (TEST(sp->cstat, CSTAT_SPRITE_YFLIP))
-        StopInterpolation(sp->sectnum, Interp_Sect_Ceilingz);
+    if (actor->spr.cstat & (CSTAT_SPRITE_YFLIP))
+        StopInterpolation(actor->sector(), Interp_Sect_Ceilingz);
     else
-        StopInterpolation(sp->sectnum, Interp_Sect_Floorz);
+        StopInterpolation(actor->sector(), Interp_Sect_Floorz);
 
-    InterpSectorSprites(sp->sectnum, false);
+    InterpSectorSprites(actor->sector(), false);
 
     // play inactivate sound
-    DoSoundSpotMatch(SP_TAG2(sp), 2, SOUND_OBJECT_TYPE);
+    DoSoundSpotMatch(SP_TAG2(actor), 2, SOUND_OBJECT_TYPE);
 
-    RESET(u->Flags, SPR_ACTIVE);
+    actor->user.Flags &= ~(SPR_ACTIVE);
 }
 
 // called for operation from the space bar
-short DoVatorOperate(PLAYERp pp, short sectnum)
+void DoVatorOperate(PLAYER* pp, sectortype* sect)
 {
-    SPRITEp fsp;
     short match;
-    int i;
 
-    SectIterator it(sectnum);
-    while ((i = it.NextIndex()) >= 0)
+    SWSectIterator it(sect);
+    while (auto actor = it.Next())
     {
-        fsp = &sprite[i];
-
-        if (fsp->statnum == STAT_VATOR && SP_TAG1(fsp) == SECT_VATOR && SP_TAG3(fsp) == 0)
+        if (actor->spr.statnum == STAT_VATOR && SP_TAG1(actor) == SECT_VATOR && SP_TAG3(actor) == 0)
         {
-            sectnum = fsp->sectnum;
+            auto fsect = actor->sector();
 
             // single play only vator
             // bool 8 must be set for message to display
-            if (TEST_BOOL4(fsp) && (gNet.MultiGameType == MULTI_GAME_COMMBAT || gNet.MultiGameType == MULTI_GAME_AI_BOTS))
+            if (TEST_BOOL4(actor) && (gNet.MultiGameType == MULTI_GAME_COMMBAT || gNet.MultiGameType == MULTI_GAME_AI_BOTS))
             {
-                if (pp && TEST_BOOL11(fsp)) PutStringInfo(pp,"This only opens in single play.");
+                if (pp && TEST_BOOL11(actor)) PutStringInfo(pp,"This only opens in single play.");
                 continue;
             }
 
-            match = SP_TAG2(fsp);
+            match = SP_TAG2(actor);
             if (match > 0)
             {
-                if (TestVatorMatchActive(match))
-                    return -1;
-                else
-                    return DoVatorMatch(pp, match);
+                if (!TestVatorMatchActive(match))
+                    DoVatorMatch(pp, match);
+                return;
             }
 
-            if (pp && SectUser[sectnum].Data() && SectUser[sectnum]->stag == SECT_LOCK_DOOR && SectUser[sectnum]->number)
+            if (pp && fsect->hasU() && fsect->stag == SECT_LOCK_DOOR && fsect->number)
             {
                 short key_num;
 
-                key_num = SectUser[sectnum]->number;
+                key_num = fsect->number;
 
-#if 0
-                if (pp->HasKey[key_num - 1])
-                {
-                    int i;
-                    for (i=0; i<numsectors; i++)
-                    {
-                        if (SectUser[i] && SectUser[i]->stag == SECT_LOCK_DOOR && SectUser[i]->number == key_num)
-                            SectUser[i]->number = 0;  // unlock all doors of this type
-                    }
-                    UnlockKeyLock(key_num);
-                }
-                else
-#endif
                 {
                     PutStringInfo(pp, quoteMgr.GetQuote(QUOTE_DOORMSG + key_num - 1));
-                    return false;
+                    return;
                 }
             }
 
-            SetVatorActive(i);
+            SetVatorActive(actor);
             break;
         }
     }
-
-    return i;
 }
 
 // called from switches and triggers
 // returns first vator found
-short
-DoVatorMatch(PLAYERp pp, short match)
+void DoVatorMatch(PLAYER* pp, short match)
 {
-    USERp fu;
-    SPRITEp fsp;
-    short sectnum;
-    short first_vator = -1;
-
-    int i;
-
-    //VatorSwitch(match, ON);
-
-    StatIterator it(STAT_VATOR);
-    while ((i = it.NextIndex()) >= 0)
+    SWStatIterator it(STAT_VATOR);
+    while (auto actor = it.Next())
     {
-        fsp = &sprite[i];
-
-        if (SP_TAG1(fsp) == SECT_VATOR && SP_TAG2(fsp) == match)
+        if (SP_TAG1(actor) == SECT_VATOR && SP_TAG2(actor) == match)
         {
-            fu = User[i].Data();
-
-            if (first_vator == -1)
-                first_vator = i;
-
             // single play only vator
             // bool 8 must be set for message to display
-            if (TEST_BOOL4(fsp) && (gNet.MultiGameType == MULTI_GAME_COMMBAT || gNet.MultiGameType == MULTI_GAME_AI_BOTS))
+            if (TEST_BOOL4(actor) && (gNet.MultiGameType == MULTI_GAME_COMMBAT || gNet.MultiGameType == MULTI_GAME_AI_BOTS))
             {
-                if (pp && TEST_BOOL11(fsp)) PutStringInfo(pp, GStrings("TXTS_SPONLY"));
+                if (pp && TEST_BOOL11(actor)) PutStringInfo(pp, GStrings("TXTS_SPONLY"));
                 continue;
             }
 
             // lock code
-            sectnum = fsp->sectnum;
-            if (pp && SectUser[sectnum].Data() && SectUser[sectnum]->stag == SECT_LOCK_DOOR && SectUser[sectnum]->number)
+            auto fsect = actor->sector();
+            if (pp && fsect->hasU() && fsect->stag == SECT_LOCK_DOOR && fsect->number)
             {
-                short key_num;
+                int key_num = fsect->number;
 
-                key_num = SectUser[sectnum]->number;
-
-#if 0
-                if (pp->HasKey[key_num - 1])
-                {
-                    int i;
-                    for (i=0; i<numsectors; i++)
-                    {
-                        if (SectUser[i] && SectUser[i]->stag == SECT_LOCK_DOOR && SectUser[i]->number == key_num)
-                            SectUser[i]->number = 0;  // unlock all doors of this type
-                    }
-                    UnlockKeyLock(key_num);
-                }
-                else
-#endif
                 {
                     PutStringInfo(pp, quoteMgr.GetQuote(QUOTE_DOORMSG + key_num - 1));
-                    return -1;
+                    return;
                 }
             }
 
             // remember the player than activated it
-            fu->PlayerP = pp;
+            actor->user.PlayerP = pp;
 
-            if (TEST(fu->Flags, SPR_ACTIVE))
+            if (actor->user.Flags & (SPR_ACTIVE))
             {
-                ReverseVator(i);
+                ReverseVator(actor);
                 continue;
             }
 
-            SetVatorActive(i);
+            SetVatorActive(actor);
         }
     }
-
-    return first_vator;
 }
 
 
-bool
-TestVatorMatchActive(short match)
+bool TestVatorMatchActive(short match)
 {
-    USERp fu;
-    SPRITEp fsp;
-
-    int i;
-
-    StatIterator it(STAT_VATOR);
-    while ((i = it.NextIndex()) >= 0)
+    SWStatIterator it(STAT_VATOR);
+    while (auto actor = it.Next())
     {
-        fsp = &sprite[i];
-
-        if (SP_TAG1(fsp) == SECT_VATOR && SP_TAG2(fsp) == match)
+        if (SP_TAG1(actor) == SECT_VATOR && SP_TAG2(actor) == match)
         {
-            fu = User[i].Data();
-
             // Does not have to be inactive to be operated
-            if (TEST_BOOL6(fsp))
+            if (TEST_BOOL6(actor))
                 continue;
 
-            if (TEST(fu->Flags, SPR_ACTIVE) || fu->Tics)
+            if (actor->user.Flags & (SPR_ACTIVE) || actor->user.Tics)
                 return true;
         }
     }
@@ -319,49 +241,39 @@ TestVatorMatchActive(short match)
     return false;
 }
 
-void InterpSectorSprites(short sectnum, bool state)
+void InterpSectorSprites(sectortype* sect, bool state)
 {
-    SPRITEp sp;
-    int i;
-
-    SectIterator it(sectnum);
-    while ((i = it.NextIndex()) >= 0)
+    SWSectIterator it(sect);
+    while (auto actor = it.Next())
     {
-        sp = &sprite[i];
-
-        if (User[i].Data())
+        if (actor->hasU())
         {
-            if (TEST(User[i]->Flags, SPR_SKIP4) && sp->statnum <= STAT_SKIP4_INTERP_END)
+            if (actor->user.Flags & (SPR_SKIP4) && actor->spr.statnum <= STAT_SKIP4_INTERP_END)
                 continue;
 
-            if (TEST(User[i]->Flags, SPR_SKIP2) && sp->statnum <= STAT_SKIP2_INTERP_END)
+            if (actor->user.Flags & (SPR_SKIP2) && actor->spr.statnum <= STAT_SKIP2_INTERP_END)
                 continue;
         }
 
         if (state)
-            StartInterpolation(i, Interp_Sprite_Z);
+            StartInterpolation(actor, Interp_Sprite_Z);
         else
-            StopInterpolation(i, Interp_Sprite_Z);
+            StopInterpolation(actor, Interp_Sprite_Z);
     }
 }
 
-void MoveSpritesWithSector(short sectnum, int z_amt, bool type)
+void MoveSpritesWithSector(sectortype* sect, int z_amt, bool type)
 {
-    SPRITEp sp;
-    int i;
     bool both = false;
+    if ( sect->hasU())
+        both = !!(sect->flags & SECTFU_VATOR_BOTH);
 
-    if (SectUser[sectnum].Data())
-        both = !!TEST(SectUser[sectnum]->flags, SECTFU_VATOR_BOTH);
-
-    SectIterator it(sectnum);
-    while ((i = it.NextIndex()) >= 0)
+    SWSectIterator it(sect);
+    while (auto actor = it.Next())
     {
-        sp = &sprite[i];
-
-        if (User[i].Data())
+        if (actor->hasU())
         {
-            switch (sp->statnum)
+            switch (actor->spr.statnum)
             {
             case STAT_ITEM:
             case STAT_NO_STATE:
@@ -371,28 +283,28 @@ void MoveSpritesWithSector(short sectnum, int z_amt, bool type)
             case STAT_STATIC_FIRE:
                 break;
             default:
-                goto cont;
+                continue;
             }
         }
         else
         {
-            switch (sp->statnum)
+            switch (actor->spr.statnum)
             {
             case STAT_STAR_QUEUE:
             case STAT_HOLE_QUEUE:
 //              case STAT_WALLBLOOD_QUEUE:
 //              case STAT_FLOORBLOOD_QUEUE:
-                goto cont;
+                continue;
             }
         }
 
-        if (TEST(sp->extra, SPRX_STAY_PUT_VATOR))
+        if ((actor->spr.extra & SPRX_STAY_PUT_VATOR))
             continue;
 
         if (both)
         {
             // sprite started close to floor
-            if (TEST(sp->cstat, CSTAT_SPRITE_CLOSE_FLOOR))
+            if (actor->spr.cstat & (CSTAT_SPRITE_CLOSE_FLOOR))
             {
                 // this is a ceiling
                 if (type == 1)
@@ -406,44 +318,40 @@ void MoveSpritesWithSector(short sectnum, int z_amt, bool type)
             }
         }
 
-        sp->z += z_amt;
-
-cont:
-        continue;
+        actor->spr.pos.Z += z_amt;
     }
 }
 
-int DoVatorMove(short SpriteNum, int *lptr)
+int DoVatorMove(DSWActor* actor, int *lptr)
 {
-    USERp u = User[SpriteNum].Data();
     int zval;
     int move_amt;
 
     zval = *lptr;
 
     // if LESS THAN goal
-    if (zval < u->z_tgt)
+    if (zval < actor->user.z_tgt)
     {
         // move it DOWN
-        zval += (synctics * u->jump_speed);
+        zval += (synctics * actor->user.jump_speed);
 
-        u->jump_speed += u->vel_rate * synctics;
+        actor->user.jump_speed += actor->user.vel_rate * synctics;
 
         // if the other way make it equal
-        if (zval > u->z_tgt)
-            zval = u->z_tgt;
+        if (zval > actor->user.z_tgt)
+            zval = actor->user.z_tgt;
     }
 
     // if GREATER THAN goal
-    if (zval > u->z_tgt)
+    if (zval > actor->user.z_tgt)
     {
         // move it UP
-        zval -= (synctics * u->jump_speed);
+        zval -= (synctics * actor->user.jump_speed);
 
-        u->jump_speed += u->vel_rate * synctics;
+        actor->user.jump_speed += actor->user.vel_rate * synctics;
 
-        if (zval < u->z_tgt)
-            zval = u->z_tgt;
+        if (zval < actor->user.z_tgt)
+            zval = actor->user.z_tgt;
     }
 
     move_amt = zval - *lptr;
@@ -453,121 +361,114 @@ int DoVatorMove(short SpriteNum, int *lptr)
 }
 
 
-int DoVator(short SpriteNum)
+int DoVator(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = u->SpriteP;
-    SECTORp sectp = &sector[sp->sectnum];
+    sectortype* sectp = actor->sector();
     int *lptr;
     int amt;
 
-    // u->sz        - where the sector z started
-    // u->z_tgt     - current target z
-    // u->oz        - original z - where it initally starts off
-    // sp->z        - z of the sprite
-    // u->vel_rate  - velocity
+    // actor->user.sz        - where the sector z started
+    // actor->user.z_tgt     - current target z
+    // actor->user.oz        - original z - where it initally starts off
+    // actor->spr.z        - z of the sprite
+    // actor->user.vel_rate  - velocity
 
-    if (TEST(sp->cstat, CSTAT_SPRITE_YFLIP))
+    if (actor->spr.cstat & (CSTAT_SPRITE_YFLIP))
     {
-        lptr = &sectp->ceilingz;
-        amt = DoVatorMove(SpriteNum, lptr);
-        MoveSpritesWithSector(sp->sectnum, amt, true); // ceiling
+        lptr = sectp->ceilingzptr();
+        amt = DoVatorMove(actor, lptr);
+        MoveSpritesWithSector(actor->sector(), amt, true); // ceiling
     }
     else
     {
-        lptr = &sectp->floorz;
-        amt = DoVatorMove(SpriteNum, lptr);
-        MoveSpritesWithSector(sp->sectnum, amt, false); // floor
+        lptr = sectp->floorzptr();
+        amt = DoVatorMove(actor, lptr);
+        MoveSpritesWithSector(actor->sector(), amt, false); // floor
     }
 
     // EQUAL this entry has finished
-    if (*lptr == u->z_tgt)
+    if (*lptr == actor->user.z_tgt)
     {
         // in the ON position
-        if (u->z_tgt == sp->z)
+        if (actor->user.z_tgt == actor->spr.pos.Z)
         {
             // change target
-            u->z_tgt = u->sz;
-            u->vel_rate = -u->vel_rate;
+            actor->user.z_tgt = actor->user.pos.Z;
+            actor->user.vel_rate = -actor->user.vel_rate;
 
-            SetVatorInactive(SpriteNum);
+            SetVatorInactive(actor);
 
             // if tag6 and nothing blocking door
-            if (SP_TAG6(sp) && !TEST_BOOL8(sp))
-                DoMatchEverything(u->PlayerP, SP_TAG6(sp), -1);
+            if (SP_TAG6(actor) && !TEST_BOOL8(actor))
+                DoMatchEverything(actor->user.PlayerP, SP_TAG6(actor), -1);
         }
         else
         // in the OFF position
-        if (u->z_tgt == u->sz)
+        if (actor->user.z_tgt == actor->user.pos.Z)
         {
-            short match = SP_TAG2(sp);
+            short match = SP_TAG2(actor);
 
             // change target
-            u->jump_speed = u->vel_tgt;
-            u->vel_rate = labs(u->vel_rate);
-            u->z_tgt = sp->z;
+            actor->user.jump_speed = actor->user.vel_tgt;
+            actor->user.vel_rate = short(abs(actor->user.vel_rate));
+            actor->user.z_tgt = actor->spr.pos.Z;
 
-            RESET_BOOL8(sp);
-            SetVatorInactive(SpriteNum);
+            RESET_BOOL8(actor);
+            SetVatorInactive(actor);
 
-            // set owner swith back to OFF
+            // set Owner swith back to OFF
             // only if ALL vators are inactive
             if (!TestVatorMatchActive(match))
             {
                 //VatorSwitch(match, OFF);
             }
 
-            if (SP_TAG6(sp) && TEST_BOOL5(sp))
-                DoMatchEverything(u->PlayerP, SP_TAG6(sp), -1);
+            if (SP_TAG6(actor) && TEST_BOOL5(actor))
+                DoMatchEverything(actor->user.PlayerP, SP_TAG6(actor), -1);
         }
 
         // operate only once
-        if (TEST_BOOL2(sp))
+        if (TEST_BOOL2(actor))
         {
-            SetVatorInactive(SpriteNum);
-            KillSprite(SpriteNum);
+            SetVatorInactive(actor);
+            KillActor(actor);
             return 0;
         }
 
         // setup to go back to the original z
-        if (*lptr != u->oz)
+        if (*lptr != actor->user.oz)
         {
-            if (u->WaitTics)
-                u->Tics = u->WaitTics;
+            if (actor->user.WaitTics)
+                actor->user.Tics = actor->user.WaitTics;
         }
     }
-    else // if (*lptr == u->z_tgt)
+    else // if (*lptr == actor->user.z_tgt)
     {
         // if heading for the OFF (original) position and should NOT CRUSH
-        if (TEST_BOOL3(sp) && u->z_tgt == u->oz)
+        if (TEST_BOOL3(actor) && actor->user.z_tgt == actor->user.oz)
         {
             int i;
-            SPRITEp bsp;
-            USERp bu;
             bool found = false;
 
-            SectIterator it(sp->sectnum);
-            while ((i = it.NextIndex()) >= 0)
+            SWSectIterator it(actor->sector());
+            while (auto itActor = it.Next())
             {
-                bsp = &sprite[i];
-                bu = User[i].Data();
-
-                if (bsp->statnum == STAT_ENEMY)
+                if (itActor->spr.statnum == STAT_ENEMY)
                 {
-                    if (labs(sectp->ceilingz - sectp->floorz) < SPRITEp_SIZE_Z(bsp))
+                    if (labs(sectp->ceilingz - sectp->floorz) < ActorSizeZ(itActor))
                     {
-                        InitBloodSpray(i, true, -1);
-                        UpdateSinglePlayKills(i);
-                        KillSprite(i);
+                        InitBloodSpray(itActor, true, -1);
+                        UpdateSinglePlayKills(itActor);
+                        KillActor(itActor);
                         continue;
                     }
                 }
 
-                if (bu && TEST(bsp->cstat, CSTAT_SPRITE_BLOCK) && TEST(bsp->extra, SPRX_PLAYER_OR_ENEMY))
+                if (itActor->hasU() && (itActor->spr.cstat & CSTAT_SPRITE_BLOCK) && (itActor->spr.extra & SPRX_PLAYER_OR_ENEMY))
                 {
                     // found something blocking so reverse to ON position
-                    ReverseVator(SpriteNum);
-                    SET_BOOL8(sp); // tell vator that something blocking door
+                    ReverseVator(actor);
+                    SET_BOOL8(actor); // tell vator that something blocking door
                     found = true;
                     break;
                 }
@@ -576,18 +477,18 @@ int DoVator(short SpriteNum)
             if (!found)
             {
                 short pnum;
-                PLAYERp pp;
+                PLAYER* pp;
                 // go ahead and look for players clip box bounds
                 TRAVERSE_CONNECT(pnum)
                 {
                     pp = Player + pnum;
 
-                    if (pp->lo_sectp == &sector[sp->sectnum] ||
-                        pp->hi_sectp == &sector[sp->sectnum])
+                    if (pp->lo_sectp == actor->sector() ||
+                        pp->hi_sectp == actor->sector())
                     {
-                        ReverseVator(SpriteNum);
+                        ReverseVator(actor);
 
-                        u->vel_rate = -u->vel_rate;
+                        actor->user.vel_rate = -actor->user.vel_rate;
                         found = true;
                     }
                 }
@@ -595,21 +496,16 @@ int DoVator(short SpriteNum)
         }
         else
         {
-            int i;
-            SPRITEp bsp;
-
-            SectIterator it(sp->sectnum);
-            while ((i = it.NextIndex()) >= 0)
+            SWSectIterator it(actor->sector());
+            while (auto itActor = it.Next())
             {
-                bsp = &sprite[i];
-
-                if (bsp->statnum == STAT_ENEMY)
+                if (itActor->spr.statnum == STAT_ENEMY)
                 {
-                    if (labs(sectp->ceilingz - sectp->floorz) < SPRITEp_SIZE_Z(bsp))
+                    if (labs(sectp->ceilingz - sectp->floorz) < ActorSizeZ(itActor))
                     {
-                        InitBloodSpray(i, true, -1);
-                        UpdateSinglePlayKills(i);
-                        KillSprite(i);
+                        InitBloodSpray(itActor, true, -1);
+                        UpdateSinglePlayKills(itActor);
+                        KillActor(itActor);
                         continue;
                     }
                 }
@@ -622,53 +518,51 @@ int DoVator(short SpriteNum)
     return 0;
 }
 
-int DoVatorAuto(short SpriteNum)
+int DoVatorAuto(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = u->SpriteP;
-    SECTORp sectp = &sector[sp->sectnum];
+    sectortype* sectp = actor->sector();
     int *lptr;
     int amt;
 
-    if (TEST(sp->cstat, CSTAT_SPRITE_YFLIP))
+    if (actor->spr.cstat & (CSTAT_SPRITE_YFLIP))
     {
-        lptr = &sectp->ceilingz;
-        amt = DoVatorMove(SpriteNum, lptr);
-        MoveSpritesWithSector(sp->sectnum, amt, true); // ceiling
+        lptr = sectp->ceilingzptr();
+        amt = DoVatorMove(actor, lptr);
+        MoveSpritesWithSector(actor->sector(), amt, true); // ceiling
     }
     else
     {
-        lptr = &sectp->floorz;
-        amt = DoVatorMove(SpriteNum, lptr);
-        MoveSpritesWithSector(sp->sectnum, amt, false); // floor
+        lptr = sectp->floorzptr();
+        amt = DoVatorMove(actor, lptr);
+        MoveSpritesWithSector(actor->sector(), amt, false); // floor
     }
 
     // EQUAL this entry has finished
-    if (*lptr == u->z_tgt)
+    if (*lptr == actor->user.z_tgt)
     {
         // in the UP position
-        if (u->z_tgt == sp->z)
+        if (actor->user.z_tgt == actor->spr.pos.Z)
         {
             // change target
-            u->z_tgt = u->sz;
-            u->vel_rate = -u->vel_rate;
-            u->Tics = u->WaitTics;
+            actor->user.z_tgt = actor->user.pos.Z;
+            actor->user.vel_rate = -actor->user.vel_rate;
+            actor->user.Tics = actor->user.WaitTics;
 
-            if (SP_TAG6(sp))
-                DoMatchEverything(u->PlayerP, SP_TAG6(sp), -1);
+            if (SP_TAG6(actor))
+                DoMatchEverything(actor->user.PlayerP, SP_TAG6(actor), -1);
         }
         else
         // in the DOWN position
-        if (u->z_tgt == u->sz)
+        if (actor->user.z_tgt == actor->user.pos.Z)
         {
             // change target
-            u->jump_speed = u->vel_tgt;
-            u->vel_rate = labs(u->vel_rate);
-            u->z_tgt = sp->z;
-            u->Tics = u->WaitTics;
+            actor->user.jump_speed = actor->user.vel_tgt;
+            actor->user.vel_rate = short(abs(actor->user.vel_rate));
+            actor->user.z_tgt = actor->spr.pos.Z;
+            actor->user.Tics = actor->user.WaitTics;
 
-            if (SP_TAG6(sp) && TEST_BOOL5(sp))
-                DoMatchEverything(NULL, SP_TAG6(sp), -1);
+            if (SP_TAG6(actor) && TEST_BOOL5(actor))
+                DoMatchEverything(nullptr, SP_TAG6(actor), -1);
         }
     }
 
@@ -680,16 +574,6 @@ int DoVatorAuto(short SpriteNum)
 
 static saveable_code saveable_vator_code[] =
 {
-    SAVE_CODE(ReverseVator),
-    SAVE_CODE(VatorSwitch),
-    SAVE_CODE(SetVatorActive),
-    SAVE_CODE(SetVatorInactive),
-    SAVE_CODE(DoVatorOperate),
-    SAVE_CODE(DoVatorMatch),
-    SAVE_CODE(TestVatorMatchActive),
-    SAVE_CODE(InterpSectorSprites),
-    SAVE_CODE(MoveSpritesWithSector),
-    SAVE_CODE(DoVatorMove),
     SAVE_CODE(DoVator),
     SAVE_CODE(DoVatorAuto),
 };
@@ -701,6 +585,6 @@ saveable_module saveable_vator =
     SIZ(saveable_vator_code),
 
     // data
-    NULL,0
+    nullptr,0
 };
 END_SW_NS

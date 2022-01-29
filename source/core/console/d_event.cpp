@@ -54,7 +54,7 @@
 
 bool G_Responder (event_t *ev)
 {
-	if (gamestate == GS_INTRO || gamestate == GS_INTERMISSION)
+	if (gamestate == GS_INTRO || gamestate == GS_CUTSCENE)
 	{
 		return ScreenJobResponder(ev);
 	}
@@ -65,7 +65,7 @@ bool G_Responder (event_t *ev)
 		return true;
 
 	if (gamestate == GS_LEVEL && automapMode != am_off && AM_Responder(ev, false)) return true;
-	
+
 	switch (ev->type)
 	{
 	case EV_KeyDown:

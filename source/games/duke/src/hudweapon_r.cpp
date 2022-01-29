@@ -71,7 +71,7 @@ void displaymasks_r(int snum, int p, double smoothratio)
 	{
 		//int pin = 0;
 		// to get the proper clock value with regards to interpolation we have add a smoothratio based offset to the value.
-		double interpclock = PlayClock + (TICSPERFRAME/65536.) * smoothratio;
+		double interpclock = PlayClock + (+TICSPERFRAME/65536.) * smoothratio;
 		int pin = RS_STRETCH;
 		hud_drawsprite((320 - (tileWidth(SCUBAMASK) >> 1) - 15), (200 - (tileHeight(SCUBAMASK) >> 1) + bsinf(interpclock, -10)), 49152, 0, SCUBAMASK, 0, p, 2 + 16 + pin);
 		hud_drawsprite((320 - tileWidth(SCUBAMASK + 4)), (200 - tileHeight(SCUBAMASK + 4)), 65536, 0, SCUBAMASK + 4, 0, p, 2 + 16 + pin);
@@ -110,13 +110,13 @@ void displayweapon_r(int snum, double smoothratio)
 	int cw;
 	int i, j;
 	double weapon_sway, weapon_xoffset, gun_pos, looking_arc, look_anghalf, hard_landing, TiltStatus;
-	char o,pal;
-	signed char shade;
+	int pal;
+	int8_t shade;
 
 	auto p = &ps[snum];
 	auto kb = &p->kickback_pic;
 
-	o = 0;
+	int o = 0;
 
 	if (cl_hudinterpolation)
 	{
@@ -137,22 +137,22 @@ void displayweapon_r(int snum, double smoothratio)
 	looking_arc = p->angle.looking_arc(smoothratio);
 	hard_landing *= 8.;
 
-	gun_pos -= fabs(p->GetActor()->s->xrepeat < 8 ? bsinf(weapon_sway * 4., -9) : bsinf(weapon_sway * 0.5, -10));
+	gun_pos -= fabs(p->GetActor()->spr.xrepeat < 8 ? bsinf(weapon_sway * 4., -9) : bsinf(weapon_sway * 0.5, -10));
 	gun_pos -= hard_landing;
 
 	weapon_xoffset = (160)-90;
 	weapon_xoffset -= bcosf(weapon_sway * 0.5) * (1. / 1536.);
 	weapon_xoffset -= 58 + p->weapon_ang;
 
-	if (shadedsector[p->cursectnum] == 1)
+	if (p->insector() && p->cursector->shadedsector == 1)
 		shade = 16;
 	else
-		shade = p->GetActor()->s->shade;
+		shade = p->GetActor()->spr.shade;
 	if(shade > 24) shade = 24;
 
-	pal = p->GetActor()->s->pal == 1 ? 1 : pal = sector[p->cursectnum].floorpal;
+	pal = !p->insector()? 0 : p->GetActor()->spr.pal == 1? 1 : p->cursector->floorpal;
 
-	if(p->newOwner != nullptr || ud.cameraactor != nullptr || p->over_shoulder_on > 0 || (p->GetActor()->s->pal != 1 && p->GetActor()->s->extra <= 0))
+	if(p->newOwner != nullptr || ud.cameraactor != nullptr || p->over_shoulder_on > 0 || (p->GetActor()->spr.pal != 1 && p->GetActor()->spr.extra <= 0))
 		return;
 
 	if(p->last_weapon >= 0)
@@ -162,7 +162,7 @@ void displayweapon_r(int snum, double smoothratio)
 	j = 14-p->quick_kick;
 	if(j != 14)
 	{
-		if(p->GetActor()->s->pal == 1)
+		if(p->GetActor()->spr.pal == 1)
 			pal = 1;
 		else
 			pal = p->palookup;
@@ -289,19 +289,19 @@ void displayweapon_r(int snum, double smoothratio)
 		return;
 	}
 
-	if (p->GetActor()->s->xrepeat < 8)
+	if (p->GetActor()->spr.xrepeat < 8)
 	{
 		static int fistsign;
 		if (p->jetpack_on == 0)
 		{
-			i = p->GetActor()->s->xvel;
+			i = p->GetActor()->spr.xvel;
 			looking_arc += 32 - (i >> 1);
 			fistsign += i >> 1;
 		}
-		cw = weapon_xoffset;
+		double owo = weapon_xoffset;
 		weapon_xoffset += bsinf(fistsign, -10);
 		hud_draw(weapon_xoffset + 250 - look_anghalf, looking_arc + 258 - abs(bsinf(fistsign, -8)),	FIST, shade, o);
-		weapon_xoffset = cw;
+		weapon_xoffset = owo;
 		weapon_xoffset -= bsinf(fistsign, -10);
 		hud_draw(weapon_xoffset + 40 - look_anghalf, looking_arc + 200 + abs(bsinf(fistsign, -8)), FIST, shade, o | 4);
 	}
@@ -318,11 +318,11 @@ void displayweapon_r(int snum, double smoothratio)
 
 		auto displaycrowbar = [&]
 		{
-			static const short kb_frames[] = { 0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7 };
-			static const short kb_ox[] = { 310,342,364,418,350,316,282,288,0,0 };
-			static const short kb_oy[] = { 300,362,320,268,248,248,277,420,0,0 };
+			static const uint8_t kb_frames[] = { 0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7 };
+			static const uint16_t kb_ox[] = { 310,342,364,418,350,316,282,288,0,0 };
+			static const uint16_t kb_oy[] = { 300,362,320,268,248,248,277,420,0,0 };
 			double x;
-			short y;
+			int y;
 			x = weapon_xoffset + ((kb_ox[kb_frames[*kb]] >> 1) - 12);
 			y = 200 - (244 - kb_oy[kb_frames[*kb]]);
 			hud_drawpal(x - look_anghalf, looking_arc + y - gun_pos,
@@ -337,11 +337,11 @@ void displayweapon_r(int snum, double smoothratio)
 
 		auto displayslingblade = [&]
 		{
-			static const short kb_frames[] = { 0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7 };
-			static const short kb_ox[] = { 580,676,310,491,356,210,310,614 };
-			static const short kb_oy[] = { 369,363,300,323,371,400,300,440 };
+			static const uint8_t kb_frames[] = { 0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7 };
+			static const uint16_t kb_ox[] = { 580,676,310,491,356,210,310,614 };
+			static const uint16_t kb_oy[] = { 369,363,300,323,371,400,300,440 };
 			double x;
-			short y;
+			int y;
 			x = weapon_xoffset + ((kb_ox[kb_frames[*kb]] >> 1) - 12);
 			y = 210 - (244 - kb_oy[kb_frames[*kb]]);
 			hud_drawpal(x - look_anghalf + 20, looking_arc + y - gun_pos - 80,
@@ -491,13 +491,13 @@ void displayweapon_r(int snum, double smoothratio)
 
 			{
 				double x;
-				short y;
-				static const short kb_frames3[] = { 0,0,1,1,2,2,5,5,6,6,7,7,8,8,0,0,0,0,0,0,0 };
-				static const short kb_frames2[] = { 0,0,3,3,4,4,5,5,6,6,7,7,8,8,0,0,20,20,21,21,21,21,20,20,20,20,0,0 };
-				static const short kb_frames[] = { 0,0,1,1,2,2,3,3,4,4,5,5,5,5,6,6,6,6,7,7,7,7,8,8,0,0,20,20,21,21,21,21,20,20,20,20,0,0 };
-				static const short kb_ox[] = { 300,300,300,300,300,330,320,310,305,306,302 };
-				static const short kb_oy[] = { 315,300,302,305,302,302,303,306,302,404,384 };
-				short tm;
+				int y;
+				static const uint8_t kb_frames3[] = { 0,0,1,1,2,2,5,5,6,6,7,7,8,8,0,0,0,0,0,0,0 };
+				static const uint8_t kb_frames2[] = { 0,0,3,3,4,4,5,5,6,6,7,7,8,8,0,0,20,20,21,21,21,21,20,20,20,20,0,0 };
+				static const uint8_t kb_frames[] = { 0,0,1,1,2,2,3,3,4,4,5,5,5,5,6,6,6,6,7,7,7,7,8,8,0,0,20,20,21,21,21,21,20,20,20,20,0,0 };
+				static const uint16_t kb_ox[] = { 300,300,300,300,300,330,320,310,305,306,302 };
+				static const uint16_t kb_oy[] = { 315,300,302,305,302,302,303,306,302,404,384 };
+				int tm;
 				tm = 180;
 				if (p->shotgun_state[1])
 				{
@@ -599,7 +599,7 @@ void displayweapon_r(int snum, double smoothratio)
 			if (*kb > 0)
 				gun_pos -= bsinf((*kb) << 7, -12);
 
-			if (*kb > 0 && p->GetActor()->s->pal != 1) weapon_xoffset += 1 - (rand() & 3);
+			if (*kb > 0 && p->GetActor()->spr.pal != 1) weapon_xoffset += 1 - (rand() & 3);
 
 			switch (*kb)
 			{
@@ -632,10 +632,10 @@ void displayweapon_r(int snum, double smoothratio)
 			if ((*kb) < 22)
 			{
 				static const uint8_t kb_frames[] = { 0,0,1,1,2,2,3,3,4,4,6,6,6,6,5,5,4,4,3,3,0,0 };
-				static const short kb_ox[] = { 194,190,185,208,215,215,216,216,201,170 };
-				static const short kb_oy[] = { 256,249,248,238,228,218,208,256,245,258 };
+				static const uint16_t kb_ox[] = { 194,190,185,208,215,215,216,216,201,170 };
+				static const uint16_t kb_oy[] = { 256,249,248,238,228,218,208,256,245,258 };
 				double x;
-				short y;
+				int y;
 
 				x = weapon_xoffset + (kb_ox[kb_frames[*kb]] - 12);
 				y = 244 - (244 - kb_oy[kb_frames[*kb]]);
@@ -648,13 +648,13 @@ void displayweapon_r(int snum, double smoothratio)
 			}
 			else
 			{
-				static const short kb_frames[] = { 0,0,1,1,2,2,2,2,2,2,2,2,2,2,2,1,1,0,0 };
-				static const short kb_ox[] = { 244,244,244 };
-				static const short kb_oy[] = { 256,249,248 };
+				static const uint8_t kb_frames[] = { 0,0,1,1,2,2,2,2,2,2,2,2,2,2,2,1,1,0,0 };
+				static const uint16_t kb_ox[] = { 244,244,244 };
+				static const uint16_t kb_oy[] = { 256,249,248 };
 				double x;
-				short dx;
-				short y;
-				short dy;
+				int dx;
+				int y;
+				int dy;
 
 				x = weapon_xoffset + (kb_ox[kb_frames[(*kb) - 22]] - 12);
 				y = 244 - (244 - kb_oy[kb_frames[(*kb) - 22]]);
@@ -789,7 +789,7 @@ void displayweapon_r(int snum, double smoothratio)
 			if (!(gs.displayflags & DUKE3D_NO_WIDESCREEN_PINNING)) pin = RS_ALIGN_R;
 			if ((*kb))
 			{
-				char cat_frames[] = { 0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
+				static const uint8_t cat_frames[] = { 0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
 				rdmyospal(weapon_xoffset + 260 - look_anghalf, looking_arc + 215 - gun_pos, FREEZE + cat_frames[*kb], -32, o |  pin, pal);
 			}
 			else rdmyospal(weapon_xoffset + 260 - look_anghalf, looking_arc + 215 - gun_pos, FREEZE, shade, o |  pin, pal);
@@ -812,7 +812,7 @@ void displayweapon_r(int snum, double smoothratio)
 			}
 			else
 			{
-				if (p->GetActor()->s->pal != 1)
+				if (p->GetActor()->spr.pal != 1)
 				{
 					weapon_xoffset += rand() & 3;
 					gun_pos += (rand() & 3);
@@ -825,8 +825,8 @@ void displayweapon_r(int snum, double smoothratio)
 				}
 				else
 				{
-					signed char kb_frames[] = { 1,1,1,1,1,2,2,2,2,2,3,3,3,3,3,0,0,0,0,0,0,0,0,0,0 };
-					short frm = kb_frames[*kb];
+					static const int8_t kb_frames[] = { 1,1,1,1,1,2,2,2,2,2,3,3,3,3,3,0,0,0,0,0,0,0,0,0,0 };
+					int frm = kb_frames[*kb];
 					rd2myospal(weapon_xoffset + 184 - look_anghalf,
 						looking_arc + 240 - gun_pos, SHRINKER + frm, shade, o, 0);
 				}

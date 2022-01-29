@@ -35,7 +35,7 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 class SWDRealmsScreen : SkippableScreenJob
 {
 	const DREALMSPAL = 1;
-	 
+
 	ScreenJob Init()
 	{
 		Super.Init(fadein | fadeout);
@@ -55,7 +55,7 @@ class SWDRealmsScreen : SkippableScreenJob
 	override void Draw(double sm)
 	{
 		let tex = TexMan.CheckForTexture("THREED_REALMS_PIC", TexMan.Type_Any);
-		int translation = Translation.MakeID(Translation_BasePalette, DREALMSPAL);
+		int translation = TexMan.UseGamePalette(tex) ? Translation.MakeID(Translation_BasePalette, DREALMSPAL) : 0;
 		Screen.DrawTexture(tex, false, 0, 0, DTA_FullscreenEx, FSMode_ScaleToFit43, DTA_TranslationIndex, translation, DTA_LegacyRenderStyle, STYLE_Normal);
 	}
 }
@@ -207,7 +207,7 @@ class SWSummaryScreen : SummaryScreenBase
 
 	override bool OnEvent(InputEvent ev)
 	{
-		if (ev.type == InputEvent.Type_KeyDown && !Raze.specialKeyEvent(ev)) 
+		if (ev.type == InputEvent.Type_KeyDown && !System.specialKeyEvent(ev)) 
 		{
 			if (animstate == 0) animstate = 1;
 		}
@@ -216,7 +216,7 @@ class SWSummaryScreen : SummaryScreenBase
 
 	override void Start()
 	{
-		Raze.StopAllSounds();
+		System.StopAllSounds();
 		SW.PlaySong(1);
 	}
 
@@ -351,7 +351,7 @@ class SWLoadScreen : ScreenJob
 	{
 		if (fadestate == visible) jobstate = finished;
 	}
-	 
+
 	override void Draw(double sr)
 	{
 		Screen.DrawTexture(TexMan.CheckForTexture("TITLE_PIC", TexMan.Type_Any), true, 0, 0, DTA_FullscreenEx, FSMode_ScaleToFit43, DTA_LegacyRenderStyle, STYLE_Normal);

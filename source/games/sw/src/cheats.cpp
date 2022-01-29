@@ -31,7 +31,6 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 #include "names2.h"
 #include "panel.h"
 #include "game.h"
-#include "mytypes.h"
 #include "misc.h"
 
 #include "gamecontrol.h"
@@ -52,9 +51,9 @@ extern bool FAF_DebugView;
 extern bool ToggleFlyMode;
 
 const char *CheatKeyType;
-void KeysCheat(PLAYERp pp, const char *cheat_string);
+void KeysCheat(PLAYER* pp, const char *cheat_string);
 
-static PLAYERp checkCheat(cheatseq_t* c)
+static PLAYER* checkCheat(cheatseq_t* c)
 {
 	if (::CheckCheatmode(true, true)) return nullptr;
     return &Player[screenpeek];
@@ -102,7 +101,7 @@ const char *GameInterface::GenericCheat(int player, int cheat)
 bool RestartCheat(cheatseq_t* c)
 {
     if (!checkCheat(c)) return false;
-	DeferedStartGame(currentLevel, -1);
+	DeferredStartGame(currentLevel, g_nextskill);
     return true;
 }
 
@@ -117,7 +116,7 @@ bool NextCheat(cheatseq_t* c)
     if (!checkCheat(c)) return false;
     if (!currentLevel) return true;
     auto map = FindNextMap(currentLevel);
-	if (map) DeferedStartGame(map, -1);
+	if (map) DeferredStartGame(map, g_nextskill);
     return true;
 }
 
@@ -126,13 +125,13 @@ bool PrevCheat(cheatseq_t* c)
     if (!checkCheat(c)) return false;
     if (!currentLevel) return true;
     auto map = FindMapByLevelNum(currentLevel->levelNumber - 1);
-	if (map) DeferedStartGame(map, -1);
+	if (map) DeferredStartGame(map, g_nextskill);
     return true;
 }
 
 bool MapCheat(cheatseq_t* c)
 {
-    PLAYERp pp;
+    PLAYER* pp;
     if (!(pp=checkCheat(c))) return false;
     gFullMap = !gFullMap;
     // Need to do this differently. The code here was completely broken.
@@ -143,7 +142,7 @@ bool MapCheat(cheatseq_t* c)
 
 bool WarpCheat(cheatseq_t* c)
 {
-    PLAYERp pp;
+    PLAYER* pp;
     if (!(pp = checkCheat(c))) return false;
     int level_num;
 
@@ -157,10 +156,10 @@ bool WarpCheat(cheatseq_t* c)
         if (level_num > 4 || level_num < 1)
             return false;
     }
-    if (TEST(pp->Flags, PF_DEAD))
+    if (pp->Flags & (PF_DEAD))
         return true;
 
-	DeferedStartGame(maprec, -1);
+    DeferredStartGame(maprec, g_nextskill);
     return true;
 }
 
@@ -196,19 +195,17 @@ static cheatseq_t swcheats[] = {
 static void WeaponCheat(int player)
 {
     auto p = &Player[player];
-    auto u = User[p->PlayerSprite].Data();
 
-    if (!TEST(p->Flags, PF_TWO_UZI))
+    if (!(p->Flags & PF_TWO_UZI))
     {
-        SET(p->Flags, PF_TWO_UZI);
-        SET(p->Flags, PF_PICKED_UP_AN_UZI);
+        p->Flags |= PF_TWO_UZI | PF_PICKED_UP_AN_UZI;
     }
 
     // ALL WEAPONS
     if (!SW_SHAREWARE) p->WpnFlags = 0xFFFFFFFF;
     else p->WpnFlags = 0x0000207F;  // Disallows high weapon cheat in shareware
 
-    for (int i = 0; i < SIZ(p->WpnAmmo); i++)
+    for (size_t i = 0; i < SIZ(p->WpnAmmo); i++)
     {
         p->WpnAmmo[i] = DamageData[i].max_ammo;
     }
@@ -217,7 +214,7 @@ static void WeaponCheat(int player)
     p->WpnRocketHeat = 5;
     p->WpnRocketNuke = 1;
 
-    PlayerUpdateWeapon(p, u->WeaponNum);
+    PlayerUpdateWeapon(p, p->actor->user.WeaponNum);
 }
 
 static void ItemCheat(int player)
@@ -234,15 +231,15 @@ static void ItemCheat(int player)
     for (int inv = 0; inv < MAX_INVENTORY; inv++)
     {
         p->InventoryPercent[inv] = 100;
-        p->InventoryAmount[inv] = InventoryData[inv].MaxInv;
+        p->InventoryAmount[inv] = (uint8_t)InventoryData[inv].MaxInv;
     }
 
     PlayerUpdateInventory(p, p->InventoryNum);
 
-    for (int i = 0; i < numsectors; i++)
+    for (auto& sect: sector)
     {
-        if (SectUser[i].Data() && SectUser[i]->stag == SECT_LOCK_DOOR)
-            SectUser[i]->number = 0;  // unlock all doors of this type
+        if (sect.hasU() && sect.stag == SECT_LOCK_DOOR)
+            sect.number = 0;  // unlock all doors of this type
     }
 }
 
@@ -266,9 +263,9 @@ static void cmd_Give(int player, uint8_t** stream, bool skip)
         break;
 
     case GIVE_HEALTH:
-        if (User[Player[player].PlayerSprite]->Health < Player[player].MaxHealth)
+        if (Player[player].actor->user.Health < Player[player].MaxHealth)
         {
-            User[Player[player].PlayerSprite]->Health += 25;
+            Player[player].actor->user.Health += 25;
             PutStringInfo(&Player[player], GStrings("TXTS_ADDEDHEALTH"));
         }
         break;
@@ -280,23 +277,22 @@ static void cmd_Give(int player, uint8_t** stream, bool skip)
     case GIVE_AMMO:
     {
         auto p = &Player[player];
-        auto u = User[p->PlayerSprite].Data();
 
         p->WpnShotgunAuto = 50;
         p->WpnRocketHeat = 5;
         p->WpnRocketNuke = 1;
 
-        for (int i = 0; i < SIZ(p->WpnAmmo); i++)
+        for (size_t i = 0; i < SIZ(p->WpnAmmo); i++)
         {
             p->WpnAmmo[i] = DamageData[i].max_ammo;
         }
 
-        PlayerUpdateWeapon(p, u->WeaponNum);
+        PlayerUpdateWeapon(p, p->actor->user.WeaponNum);
         break;
     }
 
     case GIVE_ARMOR:
-        if (User[Player[player].PlayerSprite]->Health < Player[player].MaxHealth)
+        if (Player[player].actor->user.Health < Player[player].MaxHealth)
         {
             Player[player].Armor = 100;
             PutStringInfo(&Player[player], GStrings("TXTB_FULLARM"));
@@ -321,7 +317,7 @@ static void cmd_Give(int player, uint8_t** stream, bool skip)
         for (int inv = 0; inv < MAX_INVENTORY; inv++)
         {
             p->InventoryPercent[inv] = 100;
-            p->InventoryAmount[inv] = InventoryData[inv].MaxInv;
+            p->InventoryAmount[inv] = (uint8_t)InventoryData[inv].MaxInv;
         }
 
         PlayerUpdateInventory(p, p->InventoryNum);

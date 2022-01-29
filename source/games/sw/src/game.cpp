@@ -32,6 +32,7 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 #include "names2.h"
 #include "panel.h"
 #include "game.h"
+#include "swactor.h"
 #include "interpso.h"
 #include "tags.h"
 #include "sector.h"
@@ -44,9 +45,11 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 #include "automap.h"
 #include "statusbar.h"
 #include "texturemanager.h"
+#include "st_start.h"
+#include "i_interface.h"
+#include "psky.h"
 
 
-#include "mytypes.h"
 
 #include "menus.h"
 
@@ -73,7 +76,7 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 #include "raze_sound.h"
 #include "secrets.h"
 
-#include "screenjob.h"
+#include "screenjob_.h"
 #include "inputstate.h"
 #include "gamestate.h"
 #include "d_net.h"
@@ -88,7 +91,61 @@ CVAR(Bool, sw_bunnyrockets, false, CVAR_SERVERINFO | CVAR_CHEAT);   // This is a
 
 BEGIN_SW_NS
 
-void pClearSpriteList(PLAYERp pp);
+IMPLEMENT_CLASS(DSWActor, false, true)
+IMPLEMENT_POINTERS_START(DSWActor)
+IMPLEMENT_POINTER(ownerActor)
+IMPLEMENT_POINTER(user.lowActor)
+IMPLEMENT_POINTER(user.lowActor)
+IMPLEMENT_POINTER(user.highActor)
+IMPLEMENT_POINTER(user.targetActor)
+IMPLEMENT_POINTER(user.flameActor)
+IMPLEMENT_POINTER(user.attachActor)
+IMPLEMENT_POINTER(user.WpnGoalActor)
+IMPLEMENT_POINTERS_END
+
+void MarkSOInterp();
+
+void markgcroots()
+{
+    MarkSOInterp();
+    GC::MarkArray(StarQueue, MAX_STAR_QUEUE);
+    GC::MarkArray(HoleQueue, MAX_HOLE_QUEUE);
+    GC::MarkArray(WallBloodQueue, MAX_WALLBLOOD_QUEUE);
+    GC::MarkArray(FloorBloodQueue, MAX_FLOORBLOOD_QUEUE);
+    GC::MarkArray(GenericQueue, MAX_GENERIC_QUEUE);
+    GC::MarkArray(LoWangsQueue, MAX_LOWANGS_QUEUE);
+    GC::MarkArray(BossSpriteNum, 3);
+    for (auto& pl : Player)
+    {
+        GC::Mark(pl.actor);
+        GC::Mark(pl.lowActor);
+        GC::Mark(pl.highActor);
+        GC::Mark(pl.remoteActor);
+        GC::Mark(pl.PlayerUnderActor);
+        GC::Mark(pl.KillerActor);
+        GC::Mark(pl.HitBy);
+        GC::Mark(pl.last_camera_act);
+    }
+    for (auto& so : SectorObject)
+    {
+       GC::Mark(so.controller);
+       GC::Mark(so.sp_child);
+       GC::MarkArray(so.so_actors, MAX_SO_SPRITE);
+       GC::Mark(so.match_event_actor);
+    }
+    for (int i = 0; i < AnimCnt; i++)
+    {
+        GC::Mark(Anim[i].animactor);
+    }
+    for (auto& mir : mirror)
+    {
+        GC::Mark(mir.cameraActor);
+        GC::Mark(mir.camspriteActor);
+    }
+}
+
+
+void pClearSpriteList(PLAYER* pp);
 
 extern int sw_snd_scratch;
 
@@ -104,7 +161,7 @@ short screenpeek = 0;
 
 int GodMode = false;
 short Skill = 2;
-short TotalKillable;
+int TotalKillable;
 
 const GAME_SET gs_defaults =
 {
@@ -158,10 +215,16 @@ static void SetTileNames()
     auto registerName = [](const char* name, int index)
     {
         TexMan.AddAlias(name, tileGetTexture(index));
+        TileFiles.addName(name, index);
     };
 #include "namelist.h"
 }
 #undef x
+
+void GameInterface::LoadGameTextures()
+{
+    LoadKVXFromScript("swvoxfil.txt");    // Load voxels from script file
+}
 
 //---------------------------------------------------------------------------
 //
@@ -171,7 +234,9 @@ static void SetTileNames()
 
 void GameInterface::app_init()
 {
-    GameTicRate = 40;
+    GC::AddMarkerFunc(markgcroots);
+
+    GameTicRate = TICS_PER_SEC / synctics;
     InitCheats();
     automapping = 1;
 
@@ -193,17 +258,6 @@ void GameInterface::app_init()
 
     registerosdcommands();
 
-    auto pal = fileSystem.LoadFile("3drealms.pal", 0);
-    if (pal.Size() >= 768)
-    {
-        for (auto& c : pal)
-            c <<= 2;
-
-        paletteSetColorTable(DREALMSPAL, pal.Data(), true, true);
-    }
-    InitPalette();
-    // sets numplayers, connecthead, connectpoint2, myconnectindex
-
 	numplayers = 1; myconnectindex = 0;
 	connecthead = 0; connectpoint2[0] = -1;
 
@@ -215,23 +269,18 @@ void GameInterface::app_init()
 
     //Connect();
     SortBreakInfo();
-    parallaxtype = 1;
-    SW_InitMultiPsky();
+    defineSky(DEFAULTPSKY, 1, nullptr);
 
     memset(Track, 0, sizeof(Track));
     memset(Player, 0, sizeof(Player));
     for (int i = 0; i < MAX_SW_PLAYERS; i++)
         INITLIST(&Player[i].PanelSpriteList);
 
-    LoadKVXFromScript("swvoxfil.txt");    // Load voxels from script file
-	LoadCustomInfoFromScript("engine/swcustom.txt");	// load the internal definitions. These also apply to the shareware version.
+    LoadCustomInfoFromScript("engine/swcustom.txt");	// load the internal definitions. These also apply to the shareware version.
     if (!SW_SHAREWARE)
         LoadCustomInfoFromScript("swcustom.txt");   // Load user customisation information
- 
-    LoadDefinitions();
-    InitFonts();
+
     SetTileNames();
-    TileFiles.SetBackup();
     userConfig.AddDefs.reset();
     InitFX();
 }
@@ -273,7 +322,7 @@ void InitLevelGlobals(void)
 
 
     for (auto& b : bosswasseen) b = false;
-    memset(BossSpriteNum,-1,sizeof(BossSpriteNum));
+    memset(BossSpriteNum,0,sizeof(BossSpriteNum));
 }
 
 //---------------------------------------------------------------------------
@@ -295,6 +344,25 @@ void InitLevelGlobals2(void)
 //
 //
 //---------------------------------------------------------------------------
+
+void spawnactors(SpawnSpriteDef& sprites)
+{
+    InitSpriteLists();
+    for (unsigned i = 0; i < sprites.sprites.Size(); i++)
+    {
+        if (sprites.sprites[i].statnum == MAXSTATUS)
+        {
+            continue;
+        }
+        auto sprt = &sprites.sprites[i];
+        auto actor = insertActor(sprt->sectp, sprt->statnum);
+        actor->spr = sprites.sprites[i];
+        if (sprites.sprext.Size()) actor->sprext = sprites.sprext[i];
+        else actor->sprext = {};
+        actor->spsmooth = {};
+    }
+}
+
 
 void InitLevel(MapRecord *maprec)
 {
@@ -329,17 +397,22 @@ void InitLevel(MapRecord *maprec)
     }
 
     int16_t ang;
-    engineLoadBoard(maprec->fileName, SW_SHAREWARE ? 1 : 0, &Player[0].pos, &ang, &Player[0].cursectnum);
     currentLevel = maprec;
+    int cursect;
+    SpawnSpriteDef sprites;
+    loadMap(maprec->fileName, SW_SHAREWARE ? 1 : 0, &Player[0].pos, &ang, &cursect, sprites);
+    spawnactors(sprites);
+    Player[0].cursector = &sector[cursect];
 
     SECRET_SetMapName(currentLevel->DisplayName(), currentLevel->name);
     STAT_NewLevel(currentLevel->fileName);
     Player[0].angle.ang = buildang(ang);
 
-    if (sector[0].extra != -1)
+    auto vissect = &sector[0]; // hack alert!
+    if (vissect->extra != -1)
     {
-        NormalVisibility = g_visibility = sector[0].extra;
-        sector[0].extra = 0;
+        NormalVisibility = g_visibility = vissect->extra;
+        vissect->extra = 0;
     }
     else
         NormalVisibility = g_visibility;
@@ -376,7 +449,6 @@ void InitLevel(MapRecord *maprec)
     PlaceActorsOnTracks();
     PostSetupSectorObject();
     SetupMirrorTiles();
-    initlava();
     CollectPortals();
 
     // reset NewGame
@@ -404,7 +476,7 @@ void InitRunLevel(void)
 
     if (currentLevel)
     {
-        PlaySong(currentLevel->labelName, currentLevel->music, currentLevel->cdSongId);
+        PlaySong(currentLevel->music, currentLevel->cdSongId);
     }
 
     InitPrediction(&Player[myconnectindex]);
@@ -428,7 +500,6 @@ void TerminateLevel(void)
     if (!currentLevel) return;
 
     int i, stat, pnum, ndx;
-    SECT_USERp* sectu;
 
     // Free any track points
     for (ndx = 0; ndx < MAX_TRACKS; ndx++)
@@ -436,8 +507,11 @@ void TerminateLevel(void)
         Track[ndx].FreeTrackPoints();
     }
 
-    // Clear the tracks
+    // Clear the tracks and other arrays holding pointers into the level data.
     memset(Track, 0, sizeof(Track));
+    memset(SineWaveFloor, 0, sizeof(SineWaveFloor));
+    memset(SineWall, 0, sizeof(SineWall));
+    memset(SpringBoard, 0, sizeof(SpringBoard));
 
     StopFX();
 
@@ -450,59 +524,66 @@ void TerminateLevel(void)
 
         pnum = stat - STAT_PLAYER0;
 
-        StatIterator it(stat);
-        if ((i = it.NextIndex()) >= 0)
+        SWStatIterator it(stat);
+        if (auto actor = it.Next())
         {
-            if (User[i].Data()) puser[pnum].CopyFromUser(User[i].Data());
+            if (actor->hasU()) puser[pnum].CopyFromUser(actor);
         }
     }
 
-    // Kill User memory and delete sprites
-    for (stat = 0; stat < MAXSTATUS; stat++)
+    // clear some pointers KillActor may operate upon.
+    SWSpriteIterator it;
+    while (auto actor = it.Next())
     {
-        StatIterator it(stat);
-        while ((i = it.NextIndex()) >= 0)
-        {
-            KillSprite(i);
-        }
+        actor->user.targetActor = nullptr;
+        actor->user.flameActor = nullptr;
     }
-
-    // Free SectUser memory
-    for (auto& su : SectUser) su.Clear();
+    // Kill User memory and delete sprites
+    it.Reset();
+    while (auto actor = it.Next())
+    {
+        KillActor(actor);
+    }
 
     TRAVERSE_CONNECT(pnum)
     {
-        PLAYERp pp = Player + pnum;
+        PLAYER* pp = &Player[pnum];
 
         // Free panel sprites for players
         pClearSpriteList(pp);
 
+        // clear *all* pointers in Player!
+        pp->remote = {};
+        pp->sop = pp->sop_remote = nullptr;
+        pp->LadderSector = nullptr;
         pp->cookieTime = 0;
+        pp->hi_sectp = pp->lo_sectp = nullptr;
+        pp->cursector = pp->lastcursector = pp->lv_sector = nullptr;
+        pp->sop_control = pp->sop_riding = nullptr;
+        pp->PanelSpriteList = {};
+
         memset(pp->cookieQuote, 0, sizeof(pp->cookieQuote));
-        pp->DoPlayerAction = NULL;
+        pp->DoPlayerAction = nullptr;
 
-        pp->SpriteP = NULL;
-        pp->PlayerSprite = -1;
+        pp->actor = nullptr;
 
-        pp->UnderSpriteP = NULL;
-        pp->PlayerUnderSprite = -1;
+        pp->PlayerUnderActor = nullptr;
 
         memset(pp->HasKey, 0, sizeof(pp->HasKey));
 
         //pp->WpnFlags = 0;
-        pp->CurWpn = NULL;
+        pp->CurWpn = nullptr;
 
         memset(pp->Wpn, 0, sizeof(pp->Wpn));
         memset(pp->InventoryTics, 0, sizeof(pp->InventoryTics));
 
-        pp->Killer = -1;
+        pp->KillerActor = nullptr;;
 
         INITLIST(&pp->PanelSpriteList);
     }
 }
 
 
-using namespace ShadowWarrior;
 static bool DidOrderSound;
 static int zero = 0;
 
@@ -511,7 +592,7 @@ static void PlayOrderSound()
     if (!DidOrderSound)
     {
         DidOrderSound = true;
-        int choose_snd = STD_RANDOM_RANGE(1000);
+        int choose_snd = StdRandomRange(1000);
         if (choose_snd > 500)
             PlaySound(DIGI_WANGORDER1, v3df_dontpan, CHAN_BODY, CHANF_UI);
         else
@@ -531,9 +612,9 @@ void GameInterface::LevelCompleted(MapRecord* map, int skill)
 
     SummaryInfo info{};
 
-    info.kills = Player->Kills;
+    info.kills = Player[screenpeek].Kills;
     info.maxkills = TotalKillable;
-    info.secrets = Player->SecretsFound;
+    info.secrets = Player[screenpeek].SecretsFound;
     info.maxsecrets = LevelSecrets;
     info.time = PlayClock / 120;
 
@@ -542,7 +623,7 @@ void GameInterface::LevelCompleted(MapRecord* map, int skill)
             if (map == nullptr)
             {
                 FinishAnim = false;
-                PlaySong(nullptr, ThemeSongs[0], ThemeTrack[0]);
+                PlaySong(ThemeSongs[0], ThemeTrack[0]);
                 if (isShareware())
                 {
                     PlayOrderSound();
@@ -588,6 +669,17 @@ void GameInterface::NewGame(MapRecord *map, int skill, bool)
 //
 //---------------------------------------------------------------------------
 
+int GameInterface::GetCurrentSkill()
+{
+    return Skill;
+}
+
+//---------------------------------------------------------------------------
+//
+//
+//
+//---------------------------------------------------------------------------
+
 void GameInterface::Ticker(void)
 {
     int i;
@@ -617,12 +709,12 @@ void GameInterface::Render()
     }
     else
     {
-        smoothratio = I_GetTimeFrac() * MaxSmoothRatio;
+        smoothratio = !cl_interpolate || cl_capfps ? MaxSmoothRatio : I_GetTimeFrac() * MaxSmoothRatio;
     }
 
     drawtime.Reset();
     drawtime.Clock();
-    drawscreen(Player + screenpeek, smoothratio);
+    drawscreen(Player + screenpeek, smoothratio, false);
     drawtime.Unclock();
 }
 
@@ -639,6 +731,13 @@ void GameInterface::ErrorCleanup()
     TerminateLevel();
     FinishAnim = false;
 }
+
+void GameInterface::ExitFromMenu()
+{
+    endoomName = !isShareware() ? "swreg.bin" : "shadsw.bin";
+    ST_Endoom();
+}
+
 //---------------------------------------------------------------------------
 //
 //
@@ -659,7 +758,7 @@ int RandomRange(int range)
         rand_num--;
 
     // shift values to give more precision
-    value = (rand_num << 14) / ((65535UL << 14) / range);
+    value = (rand_num << 14) / ((65535U << 14) / range);
 
     if (value >= (uint32_t)range)
         value = range - 1;
@@ -681,7 +780,7 @@ int StdRandomRange(int range)
     if (range <= 0)
         return 0;
 
-    rand_num = STD_RANDOM();
+    rand_num = rand();
 
     if (rand_num == RAND_MAX)
         rand_num--;
@@ -705,29 +804,6 @@ int StdRandomRange(int range)
 //
 //---------------------------------------------------------------------------
 
-#include "saveable.h"
-
-saveable_module saveable_build{};
-
-void Saveable_Init_Dynamic()
-{
-    static saveable_data saveable_build_data[] =
-    {
-        {sector, MAXSECTORS*sizeof(sectortype)},
-        {sprite, MAXSPRITES*sizeof(spritetype)},
-        {wall, MAXWALLS*sizeof(walltype)},
-    };
-
-    saveable_build.data = saveable_build_data;
-    saveable_build.numdata = NUM_SAVEABLE_ITEMS(saveable_build_data);
-}
-
-//---------------------------------------------------------------------------
-//
-//
-//
-//---------------------------------------------------------------------------
-
 ReservedSpace GameInterface::GetReservedScreenSpace(int viewsize)
 {
     return { 0, 48 };
@@ -740,13 +816,8 @@ ReservedSpace GameInterface::GetReservedScreenSpace(int viewsize)
 
 GameStats GameInterface::getStats()
 {
-	PLAYERp pp = Player + myconnectindex;
+	PLAYER* pp = Player + myconnectindex;
 	return { pp->Kills, TotalKillable, pp->SecretsFound, LevelSecrets, PlayClock / 120, 0 };
-}
-
-void GameInterface::FreeGameData()
-{
-    TerminateLevel();
 }
 
 void GameInterface::FreeLevelData()

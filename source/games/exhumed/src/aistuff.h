@@ -18,101 +18,85 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #pragma once 
 
-#include "compat.h"
 #include "freelistarray.h"
+#include "exhumedactor.h"
+
 
 BEGIN_PS_NS
 
+
 // anims
 
-struct Anim
-{
-    short nSeq;
-    short field_2;
-    short field_4;
-    short nSprite;
-
-    short AnimRunRec;
-    uint8_t AnimFlags;
-
-};
-
-enum { kMaxAnims = 400 };
-extern FreeListArray<Anim, kMaxAnims> AnimList;
-
 void InitAnims();
-void DestroyAnim(int nAnim);
-int BuildAnim(int nSprite, int val, int val2, int x, int y, int z, int nSector, int nRepeat, int nFlag);
-short GetAnimSprite(short nAnim);
+void DestroyAnim(DExhumedActor* nAnim);
+DExhumedActor* BuildAnim(DExhumedActor* actor, int val, int val2, int x, int y, int z, sectortype* pSector, int nRepeat, int nFlag);
 
-void FuncAnim(int, int, int);
-void BuildExplosion(short nSprite);
-int BuildSplash(int nSprite, int nSector);
+void FuncAnim(int, int, int, int);
+void BuildExplosion(DExhumedActor* actor);
+void BuildSplash(DExhumedActor* actor, sectortype* pSector);
+
 
 // anubis
 
-void InitAnubis();
-int BuildAnubis(int nSprite, int x, int y, int z, int nSector, int nAngle, uint8_t bIsDrummer);
-void FuncAnubis(int a, int b, int c);
+void BuildAnubis(DExhumedActor* nSprite, int x, int y, int z, sectortype* pSector, int nAngle, uint8_t bIsDrummer);
+void FuncAnubis(int, int a, int b, int c);
 
 // bubbles
 
-void InitBubbles();
-void BuildBubbleMachine(int nSprite);
+void BuildBubbleMachine(DExhumedActor* nSprite);
 void DoBubbleMachines();
 void DoBubbles(int nPlayer);
-void FuncBubble(int, int, int);
+void FuncBubble(int, int, int, int);
 
 // bullet
 
 // 32 bytes
 struct bulletInfo
 {
-    short nDamage; // 0
-    short field_2; // 2
+    int16_t nDamage; // 0
+    int16_t field_2; // 2
     int field_4;   // 4
-    short field_8; // 8
-    short nSeq; // 10
-    short field_C; // 12
-    short nFlags;
-    short nRadius; // damage radius
-    short xyRepeat;
+    int16_t field_8; // 8
+    int16_t nSeq; // 10
+    int16_t field_C; // 12
+    int16_t nFlags;
+    int16_t nRadius; // damage radius
+    int16_t xyRepeat;
 };
 
 extern bulletInfo BulletInfo[];
 
-extern short nRadialBullet;
-extern short lasthitsect;
+extern int nRadialBullet;
+extern sectortype* lasthitsect;
 extern int lasthitz;
 extern int lasthitx;
 extern int lasthity;
+extern TArray<DExhumedActor*> EnergyBlocks;
 
 void InitBullets();
 int GrabBullet();
-void DestroyBullet(short nRun);
-int MoveBullet(short nBullet);
-void SetBulletEnemy(short nBullet, short nEnemy);
-int BuildBullet(short nSprite, int nType, int ebx, int ecx, int val1, int nAngle, int val2, int val3);
-void IgniteSprite(int nSprite);
-void FuncBullet(int, int, int);
-void BackUpBullet(int *x, int *y, short nAngle);
+void DestroyBullet(int nRun);
+int MoveBullet(int nBullet);
+void SetBulletEnemy(int nBullet, DExhumedActor* nEnemy);
+DExhumedActor* BuildBullet(DExhumedActor* pActor, int nType, int val1, int nAngle, DExhumedActor* pTarget, int val3);
+
+void IgniteSprite(DExhumedActor* nSprite);
+void FuncBullet(int, int, int, int);
+void BackUpBullet(int *x, int *y, int nAngle);
 
 // fish
 
-void InitFishes();
-int BuildFish(int nSprite, int x, int y, int z, int nSector, int nAngle);
-void FuncFish(int, int, int);
+void BuildFish(DExhumedActor* nSprite, int x, int y, int z, sectortype* pSector, int nAngle);
+void FuncFish(int, int, int, int);
 void FuncFishLimb(int a, int b, int c);
 
 // grenade
 
 enum { kMaxGrenades = 50 };
 
-void InitGrenades();
-int BuildGrenade(int nPlayer);
-void DestroyGrenade(short nGrenade);
-int ThrowGrenade(short nPlayer, int edx, int ebx, int ecx, int push1);
-void FuncGrenade(int, int, int);
+void BuildGrenade(int nPlayer);
+void ThrowGrenade(int nPlayer, int edx, int ebx, int ecx, int push1);
+void FuncGrenade(int, int, int, int);
 
 // gun
 
@@ -132,30 +116,29 @@ enum
 
 struct Weapon
 {
-    short nSeq;
-    short b[12]; // seq offsets?
-    short nAmmoType;
-    short c;
-    short d; // default or min ammo? or ammo used per 'shot' ?
-    short bFireUnderwater;
-//	short pad[15];
+    int16_t nSeq;
+    int16_t b[12]; // seq offsets?
+    int16_t nAmmoType;
+    int16_t c;
+    int16_t d; // default or min ammo? or ammo used per 'shot' ?
+    int16_t bFireUnderwater;
 };
 
 extern Weapon WeaponInfo[];
-extern short nTemperature[];
+extern int16_t nTemperature[];
 
-void RestoreMinAmmo(short nPlayer);
-void FillWeapons(short nPlayer);
-void ResetPlayerWeapons(short nPlayer);
+void RestoreMinAmmo(int nPlayer);
+void FillWeapons(int nPlayer);
+void ResetPlayerWeapons(int nPlayer);
 void InitWeapons();
-void SetNewWeapon(short nPlayer, short nWeapon);
-void SetNewWeaponImmediate(short nPlayer, short nWeapon);
-void SetNewWeaponIfBetter(short nPlayer, short nWeapon);
-void SelectNewWeapon(short nPlayer);
-void StopFiringWeapon(short nPlayer);
-void FireWeapon(short nPlayer);
-void CheckClip(short nPlayer);
-void MoveWeapons(short nPlayer);
+void SetNewWeapon(int nPlayer, int nWeapon);
+void SetNewWeaponImmediate(int nPlayer, int nWeapon);
+void SetNewWeaponIfBetter(int nPlayer, int nWeapon);
+void SelectNewWeapon(int nPlayer);
+void StopFiringWeapon(int nPlayer);
+void FireWeapon(int nPlayer);
+void CheckClip(int nPlayer);
+void MoveWeapons(int nPlayer);
 void DrawWeapons(double smooth);
 
 // items
@@ -170,101 +153,94 @@ enum
     kItemMask,
 };
 
-extern short nItemMagic[];
+extern const int16_t nItemMagic[];
 
-void BuildItemAnim(short nSprite);
-void DestroyItemAnim(short nSprite);
+void BuildItemAnim(DExhumedActor* nSprite);
 void ItemFlash();
-void FillItems(short nPlayer);
-void UseItem(short nPlayer, short nItem);
-void UseCurItem(short nPlayer);
-int GrabItem(short nPlayer, short nItem);
-void DropMagic(short nSprite);
+void FillItems(int nPlayer);
+void UseItem(int nPlayer, int nItem);
+void UseCurItem(int nPlayer);
+int GrabItem(int nPlayer, int nItem);
+void DropMagic(DExhumedActor* actor);
 void InitItems();
-void StartRegenerate(short nSprite);
+void StartRegenerate(DExhumedActor* nSprite);
 void DoRegenerates();
 
 // lavadude
 
-void InitLava();
-int BuildLava(short nSprite, int x, int y, int z, short nSector, short nAngle, int nChannel);
-int BuildLavaLimb(int nSprite, int edx, int ebx);
-void FuncLavaLimb(int, int, int);
-void FuncLava(int, int, int);
+void BuildLava(DExhumedActor* nSprite, int x, int y, int z, sectortype* pSector, int nAngle, int nChannel);
+DExhumedActor* BuildLavaLimb(DExhumedActor* nSprite, int edx, int ebx);
+void FuncLavaLimb(int, int, int, int);
+void FuncLava(int, int, int, int);
 
 // lighting
 
-extern short nFlashDepth;
 
 void InitLights();
-void AddFlash(short nSector, int x, int y, int z, int val);
+void AddFlash(sectortype* pSector, int x, int y, int z, int val);
 void SetTorch(int nPlayer, int bTorchOnOff);
 void UndoFlashes();
 void DoLights();
-void AddFlow(int nSprite, int nSpeed, int b);
-void BuildFlash(short nPlayer, short nSector, int nVal);
-void AddGlow(short nSector, int nVal);
-void AddFlicker(short nSector, int nVal);
+void AddFlow(sectortype* pSect, int nSpeed, int b, int ang = -1);
+void AddFlow(walltype* pWall, int nSpeed, int b, int ang = -1);
+void BuildFlash(int nPlayer, int nVal);
+void AddGlow(sectortype* pSector, int nVal);
+void AddFlicker(sectortype* pSector, int nVal);
 
-extern short bTorch;
 
 // lion
 
-void InitLion();
-int BuildLion(short nSprite, int x, int y, int z, short nSector, short nAngle);
-void FuncLion(int, int, int);
+void BuildLion(DExhumedActor* nSprite, int x, int y, int z, sectortype* pSector, int nAngle);
+void FuncLion(int, int, int, int);
 
 // move
 
 // 16 bytes
 struct BlockInfo
 {
+    TObjPtr<DExhumedActor*> pActor;
     int x;
     int y;
     int field_8;
-    short nSprite;
 };
 extern BlockInfo sBlockInfo[];
 
-extern int hihit;
-extern short nChunkSprite[];
-extern short nBodySprite[];
+extern Collision hiHit;
+extern TObjPtr<DExhumedActor*> nChunkSprite[];
+extern TObjPtr<DExhumedActor*> nBodySprite[];
 
 signed int lsqrt(int a1);
 void MoveThings();
 void ResetMoveFifo();
 void InitChunks();
 void InitPushBlocks();
-void Gravity(short nSprite);
-short UpdateEnemy(short *nEnemy);
-int MoveCreature(short nSprite);
-int MoveCreatureWithCaution(int nSprite);
-void WheresMyMouth(int nPlayer, int *x, int *y, int *z, short *sectnum);
-int GetSpriteHeight(int nSprite);
-int GrabBody();
-int GrabBodyGunSprite();
-void CreatePushBlock(int nSector);
+void Gravity(DExhumedActor* actor);
+DExhumedActor* UpdateEnemy(DExhumedActor** ppEnemy);
+Collision MoveCreature(DExhumedActor* nSprite);
+Collision MoveCreatureWithCaution(DExhumedActor* actor);
+void WheresMyMouth(int nPlayer, vec3_t* pos, sectortype** sectnum);
+int GetActorHeight(DExhumedActor* nSprite);
+DExhumedActor* insertActor(sectortype* s, int st);
+DExhumedActor* GrabBody();
+DExhumedActor* GrabBodyGunSprite();
 void FuncCreatureChunk(int a, int, int nRun);
-int FindPlayer(int nSprite, int nDistance);
-int BuildCreatureChunk(int nVal, int nPic);
-void BuildNear(int x, int y, int walldist, int nSector);
-int BelowNear(short nSprite);
-int PlotCourseToSprite(int nSprite1, int nSprite2);
-void CheckSectorFloor(short nSector, int z, int *x, int *y);
-int GetAngleToSprite(int nSprite1, int nSprite2);
-int GetWallNormal(short nWall);
-int GetUpAngle(short nSprite1, int nVal, short nSprite2, int ecx);
-void MoveSector(short nSector, int nAngle, int *nXVel, int *nYVel);
-int AngleChase(int nSprite, int nSprite2, int ebx, int ecx, int push1);
-void SetQuake(short nSprite, int nVal);
+DExhumedActor* FindPlayer(DExhumedActor* nSprite, int nDistance, bool dontengage = false);
+
+DExhumedActor* BuildCreatureChunk(DExhumedActor* pSrc, int nPic, bool bSpecial = false);
+int PlotCourseToSprite(DExhumedActor* nSprite1, DExhumedActor* nSprite2);
+void CheckSectorFloor(sectortype* pSector, int z, int *x, int *y);
+int GetAngleToSprite(DExhumedActor* nSprite1, DExhumedActor* nSprite2);
+int GetWallNormal(walltype* nWall);
+int GetUpAngle(DExhumedActor* nSprite1, int nVal, DExhumedActor* nSprite2, int ecx);
+void MoveSector(sectortype* pSector, int nAngle, int *nXVel, int *nYVel);
+Collision AngleChase(DExhumedActor* nSprite, DExhumedActor* nSprite2, int ebx, int ecx, int push1);
+void SetQuake(DExhumedActor* nSprite, int nVal);
 
 // mummy
 
 enum { kMaxMummies = 150 };
 
-void InitMummy();
-int BuildMummy(int val, int x, int y, int z, int nSector, int nAngle);
-void FuncMummy(int nSector, int edx, int nRun);
+void BuildMummy(DExhumedActor* val, int x, int y, int z, sectortype* pSector, int nAngle);
 
 // object
 
@@ -273,13 +249,17 @@ enum kStatus
     kStatDestructibleSprite = 97,
     kStatAnubisDrum,
     kStatExplodeTrigger = 141,
-    kStatExplodeTarget = 152
+    kStatExplodeTarget = 152,
+    kStatBubbleMachine = 1022,
+
 };
 
-extern short nSmokeSparks;
-extern short nDronePitch;
+extern int nFlashDepth;
+extern int bTorch;
+extern int nSmokeSparks;
+extern int nDronePitch;
 extern int lFinaleStart;
-extern short nFinaleSpr;
+extern TObjPtr<DExhumedActor*> pFinaleSpr;
 
 void InitObjects();
 void InitElev();
@@ -291,79 +271,74 @@ void DoMovingSects();
 void DoFinale();
 void PostProcess();
 
-void FuncElev(int, int, int);
-void FuncWallFace(int, int, int);
-void FuncSlide(int, int, int);
-void FuncObject(int, int, int);
-void FuncTrap(int, int, int);
-void FuncEnergyBlock(int, int, int);
-void FuncSpark(int, int, int);
-void SnapBobs(short nSectorA, short nSectorB);
-short FindWallSprites(short nSector);
-void AddMovingSector(int nSector, int edx, int ebx, int ecx);
-int BuildWallSprite(int nSector);
-void ProcessTrailSprite(int nSprite, int nLotag, int nHitag);
-void AddSectorBob(int nSector, int nHitag, int bx);
-int BuildObject(int const nSprite, int nOjectType, int nHitag);
-int BuildArrow(int nSprite, int nVal);
-int BuildFireBall(int nSprite, int a, int b);
-void BuildDrip(int nSprite);
-int BuildEnergyBlock(short nSector);
-int BuildElevC(int arg1, int nChannel, int nSector, int nWallSprite, int arg5, int arg6, int nCount, ...);
-int BuildElevF(int nChannel, int nSector, int nWallSprite, int arg_4, int arg_5, int nCount, ...);
-int BuildWallFace(short nChannel, short nWall, int nCount, ...);
-int BuildSlide(int nChannel, int edx, int ebx, int ecx, int arg1, int arg2, int arg3);
+void FuncElev(int, int, int, int);
+void FuncWallFace(int, int, int, int);
+void FuncSlide(int, int, int, int);
+void FuncObject(int, int, int, int);
+void FuncTrap(int, int, int, int);
+void FuncEnergyBlock(int, int, int, int);
+void FuncSpark(int, int, int, int);
+void SnapBobs(sectortype* pSectorA, sectortype* pSectorB);
+DExhumedActor* FindWallSprites(sectortype* pSector);
+void AddMovingSector(sectortype* pSector, int edx, int ebx, int ecx);
+void ProcessTrailSprite(DExhumedActor* nSprite, int nLotag, int nHitag);
+void AddSectorBob(sectortype* pSector, int nHitag, int bx);
+DExhumedActor* BuildObject(DExhumedActor* nSprite, int nOjectType, int nHitag);
+int BuildArrow(DExhumedActor* nSprite, int nVal);
+int BuildFireBall(DExhumedActor*, int a, int b);
+void BuildDrip(DExhumedActor* nSprite);
+DExhumedActor* BuildEnergyBlock(sectortype* pSector);
+int BuildElevC(int arg1, int nChannel, sectortype* pSector, DExhumedActor* nWallSprite, int arg5, int arg6, int nCount, ...);
+int BuildElevF(int nChannel, sectortype* pSector, DExhumedActor* nWallSprite, int arg_4, int arg_5, int nCount, ...);
+int BuildWallFace(int nChannel, walltype* pWall, int nCount, ...);
+int BuildSlide(int nChannel, walltype* edx, walltype* ebx, walltype* ecx, walltype* arg1, walltype* arg2, walltype* arg3);
 
 // queen
 
 void InitQueens();
-int BuildQueen(int nSprite, int x, int y, int z, int nSector, int nAngle, int nVal);
-void FuncQueenEgg(int, int, int);
-void FuncQueenHead(int, int, int);
-void FuncQueen(int, int, int);
+void BuildQueen(DExhumedActor* nSprite, int x, int y, int z, sectortype* pSector, int nAngle, int nVal);
+void FuncQueenEgg(int, int, int, int);
+void FuncQueenHead(int, int, int, int);
+void FuncQueen(int, int, int, int);
 
 // ra
 
 struct RA
 {
-    short nAction;
-    short nFrame;
-    short nRun;
-    short nSprite;
-    short nTarget;
-    short field_A;
-    short field_C;
-    short nPlayer;
+	TObjPtr<DExhumedActor*> pActor;
+    TObjPtr<DExhumedActor*> pTarget;
+
+    int16_t nAction;
+    int16_t nFrame;
+    int16_t nRun;
+    int16_t nState;
+    int nPlayer;
 };
 
 // ra
 extern RA Ra[];
 
-void FreeRa(short nPlayer);
-int BuildRa(short nPlayer);
+void FreeRa(int nPlayer);
+void BuildRa(int nPlayer);
 void InitRa();
-void MoveRaToEnemy(short nPlayer);
-void FuncRa(int, int, int);
+void MoveRaToEnemy(int nPlayer);
+void FuncRa(int, int, int, int);
 
 // rat
 
 void InitRats();
-void SetRatVel(short nSprite);
-int BuildRat(short nSprite, int x, int y, int z, short nSector, int nAngle);
-int FindFood(short nSprite);
-void FuncRat(int a, int b, int nRun);
+void BuildRat(DExhumedActor* nSprite, int x, int y, int z, sectortype* pSector, int nAngle);
+void FuncRat(int a, int, int b, int nRun);
 
 // rex
 
-void InitRexs();
-int BuildRex(short nSprite, int x, int y, int z, short nSector, short nAngle, int nChannel);
-void FuncRex(int, int, int);
+void BuildRex(DExhumedActor* nSprite, int x, int y, int z, sectortype* pSector, int nAngle, int nChannel);
+void FuncRex(int, int, int, int);
 
 // roach
 
-void InitRoachs();
-int BuildRoach(int nType, int nSprite, int x, int y, int z, short nSector, int angle);
-void FuncRoach(int a, int nDamage, int nRun);
+void BuildRoach(int nType, DExhumedActor* nSprite, int x, int y, int z, sectortype* pSector, int angle);
+void FuncRoach(int a, int, int nDamage, int nRun);
 
 // runlist
 
@@ -375,75 +350,363 @@ enum
 
 struct RunStruct
 {
-    union
-    {
-        int nMoves;
-        struct
-        {
-#if B_BIG_ENDIAN == 1
-            short nRef;
-            short nVal;
-#else
-            short nVal;
-            short nRef;
-#endif
-        };
-    };
-
-    short next;
-    short prev;
+    int nAIType;                // todo later: replace this with an AI pointer
+    int nObjIndex;              // If object is a non-actor / not refactored yet.
+    TObjPtr<DExhumedActor*> pObjActor;   // If object is an actor
+    int next;
+    int prev;
 };
 
 struct RunChannel
 {
-    short a;
-    short b;
-    short c;
-    short d;
+    int16_t a;
+    int16_t b;
+    int16_t c;
+    int16_t d;
 };
 
-typedef void(*AiFunc)(int, int, int nRun);
+
+struct RunListEvent
+{
+    int nMessage;
+    int nParam;                 // mostly the player, sometimes the channel list
+    int nObjIndex;
+    DExhumedActor* pObjActor;
+    tspritetype* pTSprite;      // for the draw event
+    DExhumedActor* pOtherActor;      // for the damage event, radialSpr for radial damage - owner will not be passed as it can be retrieved from this.
+    int nDamage, nRun;
+
+    int nRadialDamage;          // Radial damage needs a bit more info.
+    int nDamageRadius;
+    DExhumedActor* pRadialActor;
+
+    bool isRadialEvent() const { return nMessage == 1; }
+};
+
+struct ExhumedAI
+{
+    //virtual ~ExhumedAI() = default;
+    virtual void ProcessChannel(RunListEvent* ev) {}
+    virtual void Tick(RunListEvent* ev) {}
+    virtual void Process(RunListEvent* ev) {}
+    virtual void Use(RunListEvent* ev) {}
+    virtual void TouchFloor(RunListEvent* ev) {}
+    virtual void LeaveSector(RunListEvent* ev) {}
+    virtual void EnterSector(RunListEvent* ev) {}
+    virtual void Damage(RunListEvent* ev) {}
+    virtual void Draw(RunListEvent* ev) {}
+    virtual void RadialDamage(RunListEvent* ev) {}
+};
+
+struct AIAnim : public ExhumedAI
+{
+    void Tick(RunListEvent* ev) override;
+    void Draw(RunListEvent* ev) override;
+};
+
+struct AIAnubis : public ExhumedAI
+{
+    void Tick(RunListEvent* ev) override;
+    void Draw(RunListEvent* ev) override;
+    void RadialDamage(RunListEvent* ev) override;
+    void Damage(RunListEvent* ev) override;
+};
+
+struct AIBubble : ExhumedAI
+{
+    void Tick(RunListEvent* ev) override;
+    void Draw(RunListEvent* ev) override;
+};
+
+class AIBullet : public ExhumedAI
+{
+    void Tick(RunListEvent* ev) override;
+    void Draw(RunListEvent* ev) override;
+};
+
+struct AIFish : public ExhumedAI
+{
+    void Tick(RunListEvent* ev) override;
+    void Damage(RunListEvent* ev) override;
+    void Draw(RunListEvent* ev) override;
+    void RadialDamage(RunListEvent* ev) override;
+};
+
+class AIFishLimb : public ExhumedAI
+{
+    void Tick(RunListEvent* ev) override;
+    void Draw(RunListEvent* ev) override;
+};
+
+struct AIGrenade : public ExhumedAI
+{
+    void Tick(RunListEvent* ev) override;
+    void Draw(RunListEvent* ev) override;
+    void RadialDamage(RunListEvent* ev) override;
+};
+
+struct AILavaDude : public ExhumedAI
+{
+    void Tick(RunListEvent* ev) override;
+    void Damage(RunListEvent* ev) override;
+    void Draw(RunListEvent* ev) override;
+};
+
+struct AILavaDudeLimb : public ExhumedAI
+{
+    void Tick(RunListEvent* ev) override;
+    void Draw(RunListEvent* ev) override;
+};
+
+struct AILion : public ExhumedAI
+{
+    void Tick(RunListEvent* ev) override;
+    void Damage(RunListEvent* ev) override;
+    void Draw(RunListEvent* ev) override;
+    void RadialDamage(RunListEvent* ev) override;
+};
+
+struct AICreatureChunk : public ExhumedAI
+{
+    virtual void Tick(RunListEvent* ev) override;
+};
+
+struct AIMummy : public ExhumedAI
+{
+    void Tick(RunListEvent* ev) override;
+    void Damage(RunListEvent* ev) override;
+    void Draw(RunListEvent* ev) override;
+    void RadialDamage(RunListEvent* ev) override;
+};
+
+struct AIElev : public ExhumedAI
+{
+    void ProcessChannel(RunListEvent* ev) override;
+    void Tick(RunListEvent* ev) override;
+};
+
+struct AIWallFace : public ExhumedAI
+{
+    void ProcessChannel(RunListEvent* ev) override;
+};
+
+struct AISlide : public ExhumedAI
+{
+    void ProcessChannel(RunListEvent* ev) override;
+    void Tick(RunListEvent* ev) override;
+};
+
+struct AITrap : public ExhumedAI
+{
+    void ProcessChannel(RunListEvent* ev) override;
+    void Tick(RunListEvent* ev) override;
+};
+
+struct AISpark : public ExhumedAI
+{
+    void Tick(RunListEvent* ev) override;
+};
+
+struct AIEnergyBlock : public ExhumedAI
+{
+    virtual void Damage(RunListEvent* ev) override;
+    virtual void RadialDamage(RunListEvent* ev) override;
+};
+
+struct AIObject : public ExhumedAI
+{
+    void Tick(RunListEvent* ev) override;
+    void Damage(RunListEvent* ev) override;
+    void Draw(RunListEvent* ev) override;
+    void RadialDamage(RunListEvent* ev) override;
+};
+
+struct AIPlayer : public ExhumedAI
+{
+    void Tick(RunListEvent* ev) override;
+    void Damage(RunListEvent* ev) override;
+    void Draw(RunListEvent* ev) override;
+    void RadialDamage(RunListEvent* ev) override;
+};
+
+struct AIQueenEgg : public ExhumedAI
+{
+    void Tick(RunListEvent* ev) override;
+    void Damage(RunListEvent* ev) override;
+    void Draw(RunListEvent* ev) override;
+    void RadialDamage(RunListEvent* ev) override;
+};
+
+struct AIQueenHead : public ExhumedAI
+{
+    void Tick(RunListEvent* ev) override;
+    void Damage(RunListEvent* ev) override;
+    void Draw(RunListEvent* ev) override;
+    void RadialDamage(RunListEvent* ev) override;
+};
+
+struct AIQueen : public ExhumedAI
+{
+    void Tick(RunListEvent* ev) override;
+    void Damage(RunListEvent* ev) override;
+    void Draw(RunListEvent* ev) override;
+    void RadialDamage(RunListEvent* ev) override;
+};
+
+struct AIRa : public ExhumedAI
+{
+    void Tick(RunListEvent* ev) override;
+    void Draw(RunListEvent* ev) override;
+};
+
+struct AIRat : public ExhumedAI
+{
+    void Tick(RunListEvent* ev) override;
+    void Damage(RunListEvent* ev) override;
+    void Draw(RunListEvent* ev) override;
+    void RadialDamage(RunListEvent* ev) override;
+};
+
+struct AIRex : public ExhumedAI
+{
+    void Tick(RunListEvent* ev) override;
+    void Damage(RunListEvent* ev) override;
+    void Draw(RunListEvent* ev) override;
+    void RadialDamage(RunListEvent* ev) override;
+};
+
+struct AIRoach : public ExhumedAI
+{
+    void Tick(RunListEvent* ev) override;
+    void Damage(RunListEvent* ev) override;
+    void Draw(RunListEvent* ev) override;
+    void RadialDamage(RunListEvent* ev) override;
+};
+
+struct AIScorp : public ExhumedAI
+{
+    void Effect(RunListEvent* ev, DExhumedActor* nTarget, int mode);
+    void Tick(RunListEvent* ev) override;
+    void Damage(RunListEvent* ev) override;
+    void Draw(RunListEvent* ev) override;
+    void RadialDamage(RunListEvent* ev) override;
+};
+
+struct AISet : public ExhumedAI
+{
+    void Tick(RunListEvent* ev) override;
+    void Damage(RunListEvent* ev) override;
+    void Draw(RunListEvent* ev) override;
+    void RadialDamage(RunListEvent* ev) override;
+};
+
+struct AISoul : public ExhumedAI
+{
+    void Tick(RunListEvent* ev) override;
+};
+
+struct AISnake : public ExhumedAI
+{
+    void Tick(RunListEvent* ev) override;
+    void Draw(RunListEvent* ev) override;
+};
+
+struct AISpider : public ExhumedAI
+{
+    void Tick(RunListEvent* ev) override;
+    void Damage(RunListEvent* ev) override;
+    void Draw(RunListEvent* ev) override;
+    void RadialDamage(RunListEvent* ev) override;
+};
+
+struct AIWasp : public ExhumedAI
+{
+    void Tick(RunListEvent* ev) override;
+    void Damage(RunListEvent* ev) override;
+    void Draw(RunListEvent* ev) override;
+    void RadialDamage(RunListEvent* ev) override;
+};
+
+struct AISWReady : public ExhumedAI
+{
+    void Process(RunListEvent* ev) override;
+};
+
+struct AISWPause : public ExhumedAI
+{
+    void ProcessChannel(RunListEvent* ev) override;
+    void Tick(RunListEvent* ev) override;
+    void Process(RunListEvent* ev) override;
+};
+
+struct AISWStepOn : public ExhumedAI
+{
+    void ProcessChannel(RunListEvent* ev) override;
+    void TouchFloor(RunListEvent* ev) override;
+};
+
+struct AISWNotOnPause : public ExhumedAI
+{
+    void ProcessChannel(RunListEvent* ev) override;
+    void Tick(RunListEvent* ev) override;
+    void Process(RunListEvent* ev) override;
+    void TouchFloor(RunListEvent* ev) override;
+};
+
+struct AISWPressSector : public ExhumedAI
+{
+    void ProcessChannel(RunListEvent* ev) override;
+    void Use(RunListEvent* ev) override;
+};
+
+struct AISWPressWall : public ExhumedAI
+{
+    void Process(RunListEvent* ev) override;
+    void Use(RunListEvent* ev) override;
+};
+
+
+typedef void(*AiFunc)(int, int, int, int nRun);
 
 extern FreeListArray<RunStruct, kMaxRuns> RunData;
+
 extern RunChannel sRunChannels[kMaxChannels];
-extern short NewRun;
-extern int nRadialOwner;
-extern short nRadialSpr;
+extern int NewRun;
 
 void runlist_InitRun();
 
 int runlist_GrabRun();
 int runlist_FreeRun(int nRun);
-int runlist_AddRunRec(int a, int b);
+int runlist_AddRunRec(int index, int object, int aitype);
+int runlist_AddRunRec(int index, DExhumedActor* object, int aitype);
+int runlist_AddRunRec(int index, RunStruct* other);
 int runlist_HeadRun();
 void runlist_InitChan();
-void runlist_ChangeChannel(int eax, short dx);
-void runlist_ReadyChannel(short eax);
-void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag);
+void runlist_ChangeChannel(int eax, int dx);
+void runlist_ReadyChannel(int eax);
+void runlist_ProcessSectorTag(sectortype* pSector, int nLotag, int nHitag);
 int runlist_AllocChannel(int a);
 void runlist_DoSubRunRec(int RunPtr);
 void runlist_SubRunRec(int RunPtr);
-void runlist_ProcessWallTag(int nWall, short nLotag, short nHitag);
-int runlist_CheckRadialDamage(short nSprite);
-void runlist_RadialDamageEnemy(short nSprite, short nDamage, short nRadius);
-void runlist_DamageEnemy(int nSprite, int nSprite2, short nDamage);
-void runlist_SignalRun(int NxtPtr, int edx);
+void runlist_ProcessWallTag(walltype* pWall, int nLotag, int nHitag);
+int runlist_CheckRadialDamage(DExhumedActor* actor);
+void runlist_RadialDamageEnemy(DExhumedActor* pActor, int nDamage, int nRadius);
+void runlist_DamageEnemy(DExhumedActor* nSprite, DExhumedActor* nSprite2, int nDamage);
+void runlist_SignalRun(int NxtPtr, int edx, void(ExhumedAI::* func)(RunListEvent*), RunListEvent* ev = nullptr);
 
 void runlist_CleanRunRecs();
 void runlist_ExecObjects();
 
 // scorp
 
-void InitScorp();
-int BuildScorp(short nSprite, int x, int y, int z, short nSector, short nAngle, int nChannel);
-void FuncScorp(int, int, int);
+void BuildScorp(DExhumedActor* nSprite, int x, int y, int z, sectortype* pSector, int nAngle, int nChannel);
+void FuncScorp(int, int, int, int);
 
 // set
 
-void InitSets();
-int BuildSet(short nSprite, int x, int y, int z, short nSector, short nAngle, int nChannel);
-void FuncSoul(int, int, int);
-void FuncSet(int, int, int);
+void BuildSet(DExhumedActor* nSprite, int x, int y, int z, sectortype* pSector, int nAngle, int nChannel);
+void FuncSoul(int, int, int, int);
+void FuncSet(int, int, int, int);
 
 // snake
 
@@ -452,15 +715,15 @@ enum { kSnakeSprites = 8 }; // or rename to kSnakeParts?
 // 32bytes
 struct Snake
 {
-    short nEnemy;	 // nRun
-    short nSprites[kSnakeSprites];
+    TObjPtr<DExhumedActor*> pEnemy;	 // nRun
+    TObjPtr<DExhumedActor*> pSprites[kSnakeSprites];
 
-    short sC;
-    short nRun;
+	int16_t nCountdown;
+    int16_t nRun;
 
-    char c[8];
-    short sE;
-    short nSnakePlayer;
+    uint8_t c[8];
+    int16_t nAngle;
+    int16_t nSnakePlayer;
 };
 
 enum { kMaxSnakes = 50 };
@@ -468,44 +731,40 @@ enum { kMaxSnakes = 50 };
 extern FreeListArray<Snake, kMaxSnakes> SnakeList;
 
 void InitSnakes();
-short GrabSnake();
-int BuildSnake(short nPlayer, short zVal);
-void FuncSnake(int, int, int);
+int GrabSnake();
+void BuildSnake(int nPlayer, int zVal);
+void FuncSnake(int, int, int, int);
 
 // spider
 
-void InitSpider();
-int BuildSpider(int nSprite, int x, int y, int z, short nSector, int nAngle);
-void FuncSpider(int a, int b, int nRun);
+DExhumedActor* BuildSpider(DExhumedActor* nSprite, int x, int y, int z, sectortype* pSector, int nAngle);
+void FuncSpider(int a, int, int b, int nRun);
 
 // switch
 
 void InitLink();
 void InitSwitch();
 
-void FuncSwReady(int, int, int);
-void FuncSwPause(int, int, int);
-void FuncSwStepOn(int, int, int);
-void FuncSwNotOnPause(int, int, int);
-void FuncSwPressSector(int, int, int);
-void FuncSwPressWall(int, int, int);
+void FuncSwReady(int, int, int, int);
+void FuncSwPause(int, int, int, int);
+void FuncSwStepOn(int, int, int, int);
+void FuncSwNotOnPause(int, int, int, int);
+void FuncSwPressSector(int, int, int, int);
+void FuncSwPressWall(int, int, int, int);
 
-int BuildSwPause(int nChannel, int nLink, int ebx);
-int BuildSwNotOnPause(int nChannel, int nLink, int nSector, int ecx);
+std::pair<int, int> BuildSwPause(int nChannel, int nLink, int ebx);
+std::pair<int, int> BuildSwNotOnPause(int nChannel, int nLink, sectortype* pSector, int ecx);
 int BuildLink(int nCount, ...);
-int BuildSwPressSector(int nChannel, int nLink, int nSector, int ecx);
-int BuildSwStepOn(int nChannel, int nLink, int nSector);
-int BuildSwReady(int nChannel, short nLink);
+std::pair<int, int> BuildSwPressSector(int nChannel, int nLink, sectortype* pSector, int ecx);
+std::pair<int, int> BuildSwStepOn(int nChannel, int nLink, sectortype* pSector);
+std::pair<int, int> BuildSwReady(int nChannel, int nLink);
 
-int BuildSwPressWall(short nChannel, short nLink, short nWall);
+std::pair<int, int> BuildSwPressWall(int nChannel, int nLink, walltype* pWall);
 
 // wasp
 
-int WaspCount();
-
-void InitWasps();
-int BuildWasp(short nSprite, int x, int y, int z, short nSector, short nAngle);
-void FuncWasp(int eax, int edx, int nRun);
+DExhumedActor* BuildWasp(DExhumedActor* nSprite, int x, int y, int z, sectortype* pSector, int nAngle, bool bEggWasp);
+void FuncWasp(int eax, int, int edx, int nRun);
 
 
 

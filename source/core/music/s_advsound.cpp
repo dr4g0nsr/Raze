@@ -35,7 +35,7 @@
 
 // HEADER FILES ------------------------------------------------------------
 
-#include "templates.h"
+
 #include "c_dispatch.h"
 #include "filesystem.h"
 #include "v_text.h"
@@ -52,13 +52,11 @@ enum SICommands
 	SI_MusicVolume,
 	SI_MidiDevice,
 	SI_MusicAlias,
-	SI_LevelMusic,
 };
 
 
 // This specifies whether Timidity or Windows playback is preferred for a certain song (only useful for Windows.)
 extern MusicAliasMap MusicAliases;
-extern MusicAliasMap LevelMusicAliases;
 extern MidiDeviceMap MidiDevices;
 extern MusicVolumeMap MusicVolumes;
 
@@ -80,7 +78,6 @@ static const char *SICommandStrings[] =
 	"$musicvolume",
 	"$mididevice",
 	"$musicalias",
-	"$levelmusic",
 	NULL
 };
 
@@ -140,19 +137,19 @@ static void S_AddSNDINFO (int lump)
 				sc.MustGetString();
 				FName musname (sc.String);
 				sc.MustGetFloat();
-				MusicVolumes[musname] = sc.Float;
+				MusicVolumes[musname] = (float)sc.Float;
 				}
 				break;
 
 			case SI_MusicAlias: {
 				sc.MustGetString();
-				int lump = fileSystem.FindFile(sc.String);
-				if (lump < 0)
-					lump = fileSystem.FindFile(FStringf("music/%s", sc.String));
-				if (lump >= 0)
+				int mlump = fileSystem.FindFile(sc.String);
+				if (mlump < 0)
+					mlump = fileSystem.FindFile(FStringf("music/%s", sc.String));
+				if (mlump >= 0)
 				{
 					// do not set the alias if a later WAD defines its own music of this name
-					int file = fileSystem.GetFileContainer(lump);
+					int file = fileSystem.GetFileContainer(mlump);
 					int sndifile = fileSystem.GetFileContainer(sc.LumpNum);
 					if (file > sndifile)
 					{
@@ -172,25 +169,11 @@ static void S_AddSNDINFO (int lump)
 				}
 				break;
 
-			case SI_LevelMusic: {
-				sc.MustGetString();
-				FName alias = sc.String;
-				sc.MustGetString();
-				FName mapped = sc.String;
-
-				// only set the alias if the lump it maps to exists.
-				if (mapped == NAME_None || fileSystem.FindFile(sc.String) >= 0)
-				{
-					LevelMusicAliases[alias] = mapped;
-				}
-				}
-				break;
-
 			case SI_MidiDevice: {
 				sc.MustGetString();
 				FName nm = sc.String;
 				FScanner::SavedPos save = sc.SavePos();
-				
+
 				sc.SetCMode(true);
 				sc.MustGetString();
 				MidiDeviceSetting devset;

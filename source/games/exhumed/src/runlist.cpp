@@ -32,30 +32,41 @@ enum
 };
 
 
-short nRadialSpr = -1;
-short nStackCount = 0;
-short word_966BE = 0;
-short ChannelList = -1;
-short ChannelLast = -1;
+DExhumedActor* pRadialActor;
+int nStackCount = 0;
+int word_966BE = 0;
+int ChannelList = -1;
+int ChannelLast = -1;
 
-int nRadialOwner;
 int nDamageRadius;
 int nRadialDamage;
-short RunChain;
-short NewRun;
+int RunChain;
+int NewRun;
 
 int sRunStack[kMaxRunStack];
 RunChannel sRunChannels[kMaxChannels];
 FreeListArray<RunStruct, kMaxRuns> RunData;
 
 
+size_t MarkRunlist()
+{
+    for (unsigned i = 0; i < kMaxRuns; i++) // only way to catch everything. :(
+    {
+        GC::Mark(RunData[i].pObjActor);
+    }
+    return kMaxRuns;
+}
+
+
 FSerializer& Serialize(FSerializer& arc, const char* keyname, RunStruct& w, RunStruct* def)
 {
     if (arc.BeginObject(keyname))
     {
-        arc("moves", w.nMoves)
-            ("_4", w.next)
-            ("_6", w.prev)
+        arc("ref", w.nAIType)
+            ("val", w.nObjIndex)
+            ("actor", w.pObjActor)
+            ("next", w.next)
+            ("prev", w.prev)
             .EndObject();
     }
     return arc;
@@ -66,12 +77,10 @@ void SerializeRunList(FSerializer& arc)
     if (arc.BeginObject("runlist"))
     {
         arc("data", RunData)
-            ("radialspr", nRadialSpr)
             ("stackcount", nStackCount)
             ("w966be", word_966BE)
             ("list", ChannelList)
             ("last", ChannelLast)
-            ("radialowner", nRadialOwner)
             ("damageradius", nDamageRadius)
             ("radialdamage", nRadialDamage)
             ("runchain", RunChain)
@@ -82,46 +91,88 @@ void SerializeRunList(FSerializer& arc)
     }
 }
 
-AiFunc aiFunctions[kFuncMax] = {
-    FuncElev,
-    FuncSwReady,
-    FuncSwPause,
-    FuncSwStepOn,
-    FuncSwNotOnPause,
-    FuncSwPressSector,
-    FuncSwPressWall,
-    FuncWallFace,
-    FuncSlide,
-    FuncAnubis,
-    FuncPlayer,
-    FuncBullet,
-    FuncSpider,
-    FuncCreatureChunk,
-    FuncMummy,
-    FuncGrenade,
-    FuncAnim,
-    FuncSnake,
-    FuncFish,
-    FuncLion,
-    FuncBubble,
-    FuncLava,
-    FuncLavaLimb,
-    FuncObject,
-    FuncRex,
-    FuncSet,
-    FuncQueen,
-    FuncQueenHead,
-    FuncRoach,
-    FuncQueenEgg,
-    FuncWasp,
-    FuncTrap,
-    FuncFishLimb,
-    FuncRa,
-    FuncScorp,
-    FuncSoul,
-    FuncRat,
-    FuncEnergyBlock,
-    FuncSpark,
+AIElev aiElev;
+AISWReady aiSwReady;
+AISWPause aiSwPause;
+AISWStepOn aiSwStepOn;
+AISWNotOnPause aiSwNotOnPause;
+AISWPressSector aiSwPressSector;
+AISWPressWall aiSwPressWall;
+AIWallFace aiWallFace;
+AISlide aiSlide;
+AIAnubis aiAnubis;
+AIPlayer aiPlayer;
+AIBullet aiBullet;
+AISpider aiSpider;
+AICreatureChunk aiCreatureChunk;
+AIMummy aiMummy;
+AIGrenade aiGrenade;
+AIAnim aiAnim;
+AISnake aiSnake;
+AIFish aiFish;
+AILion aiLion;
+AIBubble aiBubble;
+AILavaDude aiLava;
+AILavaDudeLimb aiLavaLimb;
+AIObject aiObject;
+AIRex aiRex;
+AISet aiSet;
+AIQueen aiQueen;
+AIQueenHead aiQueenHead;
+AIRoach aiRoach;
+AIQueenEgg aiQueenEgg;
+AIWasp aiWasp;
+AITrap aiTrap;
+AIFishLimb aiFishLimb;
+AIRa aiRa;
+AIScorp aiScorp;
+AISoul aiSoul;
+AIRat aiRat;
+AIEnergyBlock aiEnergyBlock;
+AISpark aiSpark;
+
+
+ExhumedAI* ais[kFuncMax] =
+{
+    &aiElev,
+    &aiSwReady,
+    &aiSwPause,
+    &aiSwStepOn,
+    &aiSwNotOnPause,
+    &aiSwPressSector,
+    &aiSwPressWall,
+    &aiWallFace,
+    &aiSlide,
+    &aiAnubis,
+    &aiPlayer,
+    &aiBullet,
+    &aiSpider,
+    &aiCreatureChunk,
+    &aiMummy,
+    &aiGrenade,
+    &aiAnim,
+    &aiSnake,
+    &aiFish,
+    &aiLion,
+    &aiBubble,
+    &aiLava,
+    &aiLavaLimb,
+    &aiObject,
+    &aiRex,
+    &aiSet,
+    &aiQueen,
+    &aiQueenHead,
+    &aiRoach,
+    &aiQueenEgg,
+    &aiWasp,
+    &aiTrap,
+    &aiFishLimb,
+    &aiRa,
+    &aiScorp,
+    &aiSoul,
+    &aiRat,
+    &aiEnergyBlock,
+    &aiSpark,
 };
 
 
@@ -135,7 +186,9 @@ int runlist_FreeRun(int nRun)
     assert(nRun >= 0 && nRun < kMaxRuns);
 
     RunData[nRun].prev = -1;
-    RunData[nRun].nMoves = -1;
+    RunData[nRun].nAIType = -1;
+    RunData[nRun].nObjIndex = -1;
+    RunData[nRun].pObjActor = nullptr;
     RunData[nRun].next = RunData[nRun].prev;
     RunData.Release(nRun);
     return 1;
@@ -160,7 +213,9 @@ void runlist_InitRun()
 
     for (i = 0; i < kMaxRuns; i++)
     {
-        RunData[i].nMoves = -1;
+        RunData[i].nAIType = -1;
+        RunData[i].pObjActor = nullptr;
+        RunData[i].nObjIndex = -1;
         RunData[i].prev = -1;
         RunData[i].next = -1;
     }
@@ -173,7 +228,7 @@ void runlist_InitRun()
         PlayerList[i].nRun = -1;
     }
 
-    nRadialSpr = -1;
+    pRadialActor = nullptr;
 }
 
 void runlist_UnlinkRun(int nRun)
@@ -213,15 +268,42 @@ void runlist_InsertRun(int RunLst, int RunNum)
     RunData[RunLst].next = RunNum;
 }
 
-int runlist_AddRunRec(int a, int b)
+int runlist_AddRunRec(int nIndex, int nObject, int nAIType)
 {
     int nRun = runlist_GrabRun();
 
-    RunData[nRun].nMoves = b; // TODO - split this into the two shorts?
+    RunData[nRun].nAIType = nAIType;
+    RunData[nRun].nObjIndex = nObject;
+    RunData[nRun].pObjActor = nullptr;
 
-    runlist_InsertRun(a, nRun);
+    runlist_InsertRun(nIndex, nRun);
     return nRun;
 }
+
+int runlist_AddRunRec(int nIndex, DExhumedActor* pObject, int nAIType)
+{
+    int nRun = runlist_GrabRun();
+
+    RunData[nRun].nAIType = nAIType;
+    RunData[nRun].nObjIndex = -1;
+    RunData[nRun].pObjActor = pObject;
+
+    runlist_InsertRun(nIndex, nRun);
+    return nRun;
+}
+
+int runlist_AddRunRec(int nIndex, RunStruct* other)
+{
+    int nRun = runlist_GrabRun();
+
+    RunData[nRun].nAIType = other->nAIType;
+    RunData[nRun].nObjIndex = other->nObjIndex;
+    RunData[nRun].pObjActor = other->pObjActor;
+
+    runlist_InsertRun(nIndex, nRun);
+    return nRun;
+}
+
 
 void runlist_DoSubRunRec(int RunPtr)
 {
@@ -246,7 +328,7 @@ void runlist_CleanRunRecs()
         int runPtr = nextPtr;
         assert(runPtr < kMaxRuns);
 
-        int val = RunData[runPtr].nRef; // >> 16;
+        int val = RunData[runPtr].nAIType; // >> 16;
         nextPtr = RunData[runPtr].next;
 
         if (val < 0) {
@@ -259,32 +341,35 @@ void runlist_SubRunRec(int RunPtr)
 {
     if (!(RunPtr >= 0 && RunPtr < kMaxRuns)) return;
 
-    RunData[RunPtr].nMoves = -totalmoves;
+    RunData[RunPtr].nAIType = -totalmoves;
 }
 
-void runlist_SendMessageToRunRec(int nRun, int nMessage, int nDamage)
+void runlist_SendMessage(int nRun, int nObject, void(ExhumedAI::* func)(RunListEvent*), RunListEvent* ev)
 {
-    int nFunc = RunData[nRun].nRef;// >> 16;
+    int nFunc = RunData[nRun].nAIType >> 16;
 
-    if (nFunc < 0) {
+    if (nFunc < 0 || nFunc >= (int)countof(ais)) {
         return;
     }
 
-    assert(nFunc >= 0 && nFunc <= kFuncMax);
-
-    if (nFunc > kFuncMax) {
-        return;
+    RunListEvent defev;
+    if (!ev)
+    {
+        defev = {};
+        ev = &defev;
     }
+    ev->nObjIndex = RunData[nRun].nObjIndex;
+    ev->pObjActor = RunData[nRun].pObjActor;
+    ev->nParam = nObject;
+    ev->nRun = nRun;
 
-    assert(nFunc < kFuncMax); // REMOVE
 
-    // do function pointer call here.
-    aiFunctions[nFunc](nMessage, nDamage, nRun);
+    (ais[nFunc]->*func)(ev);
 }
 
 void runlist_ExplodeSignalRun()
 {
-    short nextPtr = RunChain;
+    int nextPtr = RunChain;
 
     if (nextPtr >= 0)
     {
@@ -298,12 +383,16 @@ void runlist_ExplodeSignalRun()
         int runPtr = nextPtr;
         assert(runPtr < kMaxRuns);
 
-        int val = RunData[runPtr].nMoves;
         nextPtr = RunData[runPtr].next;
 
-        if (val >= 0)
+        if (RunData[runPtr].nObjIndex >= 0 || RunData[runPtr].pObjActor)
         {
-            runlist_SendMessageToRunRec(runPtr, 0xA0000, 0);
+            RunListEvent ev{};
+            ev.nMessage = 1;
+            ev.nRadialDamage = nRadialDamage;
+            ev.nDamageRadius = nDamageRadius;
+            ev.pRadialActor = pRadialActor;
+            runlist_SendMessage(runPtr, 0, &ExhumedAI::RadialDamage, &ev);
         }
     }
 }
@@ -328,7 +417,7 @@ int runlist_PopMoveRun()
     return sRunStack[nStackCount];
 }
 
-void runlist_SignalRun(int NxtPtr, int edx)
+void runlist_SignalRun(int NxtPtr, int edx, void(ExhumedAI::* func)(RunListEvent*), RunListEvent* ev)
 {
     if (NxtPtr == RunChain && word_966BE != 0) {
         runlist_PushMoveRun(edx);
@@ -352,11 +441,10 @@ void runlist_SignalRun(int NxtPtr, int edx)
             if (RunPtr >= 0)
             {
                 assert(RunPtr < kMaxRuns);
-                int val = RunData[RunPtr].nMoves;
                 NxtPtr = RunData[RunPtr].next;
 
-                if (val >= 0) {
-                    runlist_SendMessageToRunRec(RunPtr, edx, 0);
+                if (RunData[RunPtr].nObjIndex >= 0 || RunData[RunPtr].pObjActor) {
+                    runlist_SendMessage(RunPtr, edx, func, ev);
                 }
             }
         }
@@ -385,11 +473,11 @@ void runlist_InitChan()
     }
 }
 
-void runlist_ChangeChannel(int eax, short nVal)
+void runlist_ChangeChannel(int eax, int nVal)
 {
     if (sRunChannels[eax].b < 0)
     {
-        short nChannel = ChannelList;
+        int nChannel = ChannelList;
         ChannelList = eax;
         sRunChannels[eax].b = nChannel;
     }
@@ -398,11 +486,11 @@ void runlist_ChangeChannel(int eax, short nVal)
     sRunChannels[eax].d |= 2;
 }
 
-void runlist_ReadyChannel(short eax)
+void runlist_ReadyChannel(int eax)
 {
     if (sRunChannels[eax].b < 0)
     {
-        short nChannel = ChannelList;
+        int nChannel = ChannelList;
         ChannelList = eax;
         sRunChannels[eax].b = nChannel;
     }
@@ -412,12 +500,11 @@ void runlist_ReadyChannel(short eax)
 
 void runlist_ProcessChannels()
 {
-#if 1
-    short v0;
-    short v1;
+    int v0;
+    int v1;
     int v5;
-    short b;
-    short d;
+    int b;
+    int d;
 
     do
     {
@@ -432,13 +519,13 @@ void runlist_ProcessChannels()
             if (d & 2)
             {
                 sRunChannels[ChannelList].d = d ^ 2;
-                runlist_SignalRun(sRunChannels[ChannelList].a, ChannelList | 0x10000);
+                runlist_SignalRun(sRunChannels[ChannelList].a, ChannelList, &ExhumedAI::ProcessChannel);
             }
 
             if (d & 1)
             {
                 sRunChannels[ChannelList].d ^= 1;
-                runlist_SignalRun(sRunChannels[ChannelList].a, 0x30000);
+                runlist_SignalRun(sRunChannels[ChannelList].a, 0, &ExhumedAI::Process);
             }
 
             if (sRunChannels[ChannelList].d)
@@ -464,66 +551,9 @@ void runlist_ProcessChannels()
         ChannelList = v1;
     } while (v1 != -1);
 
-#else
-    int edi = -1;
-    int esi = edi;
-
-    while (1)
-    {
-        short nChannel = ChannelList;
-        if (nChannel < 0)
-        {
-            ChannelList = esi;
-            if (esi != -1)
-            {
-                edi = -1;
-                esi = edi;
-                continue;
-            }
-            else {
-                return;
-            }
-        }
-
-        short b = sRunChannels[nChannel].b;
-        short d = sRunChannels[nChannel].d;
-
-        if (d & 2)
-        {
-            sRunChannels[nChannel].d = d ^ 2;
-            runlist_SignalRun(sRunChannels[nChannel].a, ChannelList | 0x10000);
-        }
-
-        if (d & 1)
-        {
-            sRunChannels[nChannel].d = d ^ 1;
-            runlist_SignalRun(sRunChannels[nChannel].a, 0x30000);
-        }
-
-        if (sRunChannels[nChannel].d == 0)
-        {
-            sRunChannels[ChannelList].b = -1;
-        }
-        else
-        {
-            if (esi == -1)
-            {
-                esi = ChannelList;
-                edi = esi;
-            }
-            else
-            {
-                sRunChannels[edi].b = ChannelList;
-                edi = ChannelList;
-            }
-        }
-
-        ChannelList = b;
-    }
-#endif
 }
 
-int runlist_FindChannel(short ax)
+int runlist_FindChannel(int ax)
 {
     for (int i = 0; i < kMaxChannels; i++)
     {
@@ -555,10 +585,10 @@ int runlist_AllocChannel(int a)
 void runlist_ExecObjects()
 {
     runlist_ProcessChannels();
-    runlist_SignalRun(RunChain, 0x20000);
+    runlist_SignalRun(RunChain, 0, &ExhumedAI::Tick);
 }
 
-void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
+void runlist_ProcessSectorTag(sectortype* pSector, int nLotag, int nHitag)
 {
     int zListA[8];
     int zListB[8];
@@ -585,39 +615,39 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
                 This function searches z-coordinates of neighboring sectors to find the
                 closest (next) ceiling starting at the given z-coordinate (thez).
             */
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].ceilingz, -1, -1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->ceilingz, -1, -1);
 
-            int nElev = BuildElevC(0, nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, sector[nextSector].ceilingz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevC(0, nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, pSector->floorz, nextSectorP->ceilingz);
 
-            int nSwPress = BuildSwPressSector(nChannel, BuildLink(1, 1), nSector, keyMask);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwPress);
+            auto nSwPress = BuildSwPressSector(nChannel, BuildLink(1, 1), pSector, keyMask);
 
-            int nSwPause = BuildSwPause(nChannel, BuildLink(2, -1, 0), 60);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nSwPress.first, nSwPress.second);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwPause);
+            auto nSwPause = BuildSwPause(nChannel, BuildLink(2, -1, 0), 60);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a, nSwPause.first, nSwPause.second);
             return;
         }
 
         case 2: // Floor Doom door
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, 1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->floorz, 1, 1);
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].ceilingz, sector[nextSector].floorz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, pSector->ceilingz, nextSectorP->floorz);
 
-            int nSwPress = BuildSwPressSector(nChannel, BuildLink(1, 1), nSector, keyMask);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwPress);
+            auto nSwPress = BuildSwPressSector(nChannel, BuildLink(1, 1), pSector, keyMask);
 
-            int nSwPause = BuildSwPause(nChannel, BuildLink(2, -1, 0), 60);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nSwPress.first, nSwPress.second);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwPause);
+            auto nSwPause = BuildSwPause(nChannel, BuildLink(2, -1, 0), 60);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a, nSwPause.first, nSwPause.second);
             return;
         }
 
@@ -653,93 +683,98 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
 
         case 5: // Permanent floor raise
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz + 1, -1, -1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->floorz + 1, -1, -1);
+			if (nextSectorP == nullptr) break;
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, sector[nextSector].ceilingz);
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, pSector->floorz, nextSectorP->ceilingz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
             return;
         }
 
         case 6: // Touchplate floor lower, single
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, -1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->floorz, 1, -1);
+			if (nextSectorP == nullptr) break;
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), 400, 400, 2, sector[nextSector].floorz, sector[nSector].floorz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), 400, 400, 2, nextSectorP->floorz, pSector->floorz);
 
-            int nSwitch = BuildSwStepOn(nChannel, BuildLink(2, 1, 1), nSector);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            auto nSwitch = BuildSwStepOn(nChannel, BuildLink(2, 1, 1), pSector);
 
-            sector[nSector].floorz = sector[nextSector].floorz;
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
+
+            pSector->setfloorz(nextSectorP->floorz);
             return;
         }
 
         case 7: // Touchplate floor lower, multiple
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, 1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->floorz, 1, 1);
+			if (nextSectorP == nullptr) break;
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, sector[nextSector].floorz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, pSector->floorz, nextSectorP->floorz);
 
-            int nSwitch = BuildSwStepOn(nChannel, BuildLink(1, 1), nSector);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            auto nSwitch = BuildSwStepOn(nChannel, BuildLink(1, 1), pSector);
 
-            int nSwitch2 = BuildSwNotOnPause(nChannel, BuildLink(2, -1, 0), nSector, 8);
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch2);
+            auto nSwitch2 = BuildSwNotOnPause(nChannel, BuildLink(2, -1, 0), pSector, 8);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch2.first, nSwitch2.second);
             return;
         }
 
         case 8: // Permanent floor lower
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, 1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->floorz, 1, 1);
+			if (nextSectorP == nullptr) break;
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, sector[nextSector].floorz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, pSector->floorz, nextSectorP->floorz);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
             return;
         }
 
         case 9: // Switch activated lift down
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, 1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->floorz, 1, 1);
+			if (nextSectorP == nullptr) break;
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, sector[nextSector].floorz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, pSector->floorz, nextSectorP->floorz);
 
-            int nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), 150);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            auto nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), 150);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
             return;
         }
 
         case 10: // Touchplate Floor Raise
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, -1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->floorz, 1, -1);
+			if (nextSectorP == nullptr) break;
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, sector[nextSector].floorz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, pSector->floorz, nextSectorP->floorz);
 
-            int nSwitch = BuildSwStepOn(nChannel, BuildLink(1, 1), nSector);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            auto nSwitch = BuildSwStepOn(nChannel, BuildLink(1, 1), pSector);
 
-            int nSwitch2 = BuildSwNotOnPause(nChannel, BuildLink(2, -1, 0), nSector, 8);
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch2);
+            auto nSwitch2 = BuildSwNotOnPause(nChannel, BuildLink(2, -1, 0), pSector, 8);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch2.first, nSwitch2.second);
             return;
         }
 
@@ -754,14 +789,14 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
             */
             int zVal = 0;
 
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, -1);
-            if (nextSector >= 0) {
-                zVal = sector[nextSector].floorz;
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->floorz, 1, -1);
+            if (nextSectorP != nullptr) {
+                zVal = nextSectorP->floorz;
             }
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, zVal);
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, pSector->floorz, zVal);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
             return;
         }
 
@@ -774,18 +809,18 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
             */
             int zVal = 0;
 
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, -1);
-            if (nextSector >= 0) {
-                zVal = sector[nextSector].floorz;
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->floorz, 1, -1);
+            if (nextSectorP != nullptr) {
+                zVal = nextSectorP->floorz;
             }
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, zVal);
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, pSector->floorz, zVal);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            int nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), 150);
+            auto nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), 150);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
             return;
         }
 
@@ -798,85 +833,86 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
             */
             int zVal = 0;
 
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, 1);
-            if (nextSector >= 0) {
-                zVal = sector[nextSector].floorz;
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->floorz, 1, 1);
+            if (nextSectorP != nullptr) {
+                zVal = nextSectorP->floorz;
             }
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, zVal);
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, pSector->floorz, zVal);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            int nSwitch = BuildSwReady(nChannel, BuildLink(2, 1, 0));
+            auto nSwitch = BuildSwReady(nChannel, BuildLink(2, 1, 0));
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
             return;
         }
 
         case 15: // Sector raise/lower
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, -1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->floorz, 1, -1);
+			if (nextSectorP == nullptr) break;
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, sector[nextSector].floorz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, pSector->floorz, nextSectorP->floorz);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
             return;
         }
 
         case 16: // Stuttering noise (floor makes noise)
         {
-            int nElev = BuildElevC(0, nChannel, nSector, FindWallSprites(nSector), 200, nSpeed * 100, 2, sector[nSector].ceilingz, sector[nSector].floorz - 8);
+            int nElev = BuildElevC(0, nChannel, pSector, FindWallSprites(pSector), 200, nSpeed * 100, 2, pSector->ceilingz, pSector->floorz - 8);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            int nSwitch = BuildSwStepOn(nChannel, BuildLink(1, 1), nSector);
+            auto nSwitch = BuildSwStepOn(nChannel, BuildLink(1, 1), pSector);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
 
-            int nSwitch2 = BuildSwReady(nChannel, BuildLink(2, -1, 0));
+            auto nSwitch2 = BuildSwReady(nChannel, BuildLink(2, -1, 0));
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch2);
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch2.first, nSwitch2.second);
             return;
         }
 
         case 17: // Reserved?
         {
-            int nElev = BuildElevC(0, nChannel, nSector, FindWallSprites(nSector), 200, nSpeed * 100, 2, sector[nSector].ceilingz, sector[nSector].floorz - 8);
+            int nElev = BuildElevC(0, nChannel, pSector, FindWallSprites(pSector), 200, nSpeed * 100, 2, pSector->ceilingz, pSector->floorz - 8);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            int nSwitch = BuildSwReady(nChannel, BuildLink(2, -1, 0));
+            auto nSwitch = BuildSwReady(nChannel, BuildLink(2, -1, 0));
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
             return;
         }
 
         case 18: // Raises floor AND lowers ceiling
         {
-            int ebx = ((sector[nSector].floorz - sector[nSector].ceilingz) / 2) + sector[nSector].ceilingz;
+            int ebx = ((pSector->floorz - pSector->ceilingz) / 2) + pSector->ceilingz;
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), 200, nSpeed * 100, 2, sector[nSector].floorz, ebx);
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), 200, nSpeed * 100, 2, pSector->floorz, ebx);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            int ebx2 = (((sector[nSector].floorz - sector[nSector].ceilingz) / 2) + sector[nSector].ceilingz) - 8;
+            int ebx2 = (((pSector->floorz - pSector->ceilingz) / 2) + pSector->ceilingz) - 8;
 
-            int nElev2 = BuildElevC(0, nChannel, nSector, FindWallSprites(nSector), 200, nSpeed * 100, 2, sector[nSector].ceilingz, ebx2);
+            int nElev2 = BuildElevC(0, nChannel, pSector, FindWallSprites(pSector), 200, nSpeed * 100, 2, pSector->ceilingz, ebx2);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev2);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev2, 0);
 
-            int nSwitch = BuildSwStepOn(nChannel, BuildLink(1, 1), nSector);
+            auto nSwitch = BuildSwStepOn(nChannel, BuildLink(1, 1), pSector);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
             return;
         }
 
         case 21: // Touchplate
         {
-            int nSwitch = BuildSwStepOn(nChannel, BuildLink(2, 1, 1), nSector);
+            auto nSwitch = BuildSwStepOn(nChannel, BuildLink(2, 1, 1), pSector);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
             return;
         }
 
@@ -889,141 +925,150 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
             */
             int zVal = 0;
 
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, 1);
-            if (nextSector >= 0) {
-                zVal = sector[nextSector].floorz;
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->floorz, 1, 1);
+            if (nextSectorP) {
+                zVal = nextSectorP->floorz;
             }
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), 32767, 200, 2, sector[nSector].floorz, zVal);
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), 32767, 200, 2, pSector->floorz, zVal);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            int nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), nSpeed * 60);
+            auto nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), nSpeed * 60);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
             return;
         }
 
         case 24: // Ceiling door, channel trigger only
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].ceilingz, -1, -1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->ceilingz, -1, -1);
+			if (nextSectorP == nullptr) break;
 
-            int nElev = BuildElevC(0, nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, sector[nextSector].ceilingz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevC(0, nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, pSector->floorz, nextSectorP->ceilingz);
 
-            int nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), 60);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            auto nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), 60);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
             return;
         }
 
         case 25:
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, 1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->floorz, 1, 1);
+			if (nextSectorP == nullptr) break;
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, sector[nextSector].floorz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, pSector->floorz, nextSectorP->floorz);
 
-            int nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), 300);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            auto nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), 300);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
             return;
         }
 
         case 26:
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, 1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->floorz, 1, 1);
+			if (nextSectorP == nullptr) break;
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, sector[nextSector].floorz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, pSector->floorz, nextSectorP->floorz);
 
-            int nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), 450);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            auto nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), 450);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
             return;
         }
 
         case 27:
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, 1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->floorz, 1, 1);
+			if (nextSectorP == nullptr) break;
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, sector[nextSector].floorz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, pSector->floorz, nextSectorP->floorz);
 
-            int nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), 600);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            auto nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), 600);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
             return;
         }
 
         case 28:
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, 1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->floorz, 1, 1);
+			if (nextSectorP == nullptr) break;
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, sector[nextSector].floorz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, pSector->floorz, nextSectorP->floorz);
 
-            int nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), 900);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            auto nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), 900);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
             return;
         }
 
         case 31: // Touchplate
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, 1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->floorz, 1, 1);
+			if (nextSectorP == nullptr) break;
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), 0x7FFF, 0x7FFF, 2, sector[nSector].floorz, sector[nextSector].floorz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), 0x7FFF, 0x7FFF, 2, pSector->floorz, nextSectorP->floorz);
 
-            int nSwitch = BuildSwStepOn(nChannel, BuildLink(1, 1), nSector);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            auto nSwitch = BuildSwStepOn(nChannel, BuildLink(1, 1), pSector);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
             return;
         }
 
         case 32:
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, 1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->floorz, 1, 1);
+			if (nextSectorP == nullptr) break;
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), 0x7FFF, 0x7FFF, 2, sector[nSector].floorz, sector[nextSector].floorz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), 0x7FFF, 0x7FFF, 2, pSector->floorz, nextSectorP->floorz);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
             return;
         }
 
         case 33: // Ceiling Crusher
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].ceilingz, -1, -1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->ceilingz, -1, -1);
+			if (nextSectorP == nullptr) break;
 
-            int nElev = BuildElevC(20, nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nextSector].ceilingz, sector[nSector].floorz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevC(20, nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, nextSectorP->ceilingz, pSector->floorz);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
             return;
         }
 
         case 34: // Triggerable Ceiling Crusher(Inactive)
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].ceilingz, -1, -1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->ceilingz, -1, -1);
+			if (nextSectorP == nullptr) break;
 
-            int nElev = BuildElevC(28, nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nextSector].ceilingz, sector[nSector].floorz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevC(28, nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, nextSectorP->ceilingz, pSector->floorz);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
             return;
         }
 
@@ -1032,10 +1077,10 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
         {
             nEnergyTowers++;
 
-            int nEnergyBlock = BuildEnergyBlock(nSector);
+            auto nEnergyBlock = BuildEnergyBlock(pSector);
 
             if (nLotag == 36) {
-                nFinaleSpr = nEnergyBlock;
+                pFinaleSpr = nEnergyBlock;
             }
 
             return;
@@ -1043,67 +1088,69 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
 
         case 37:
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, 1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->floorz, 1, 1);
+			if (nextSectorP == nullptr) break;
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, sector[nextSector].floorz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, pSector->floorz, nextSectorP->floorz);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
             return;
         }
 
         case 39: // Touchplate
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, 1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->floorz, 1, 1);
+			if (nextSectorP == nullptr) break;
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), 0x7FFF, 0x7FFF, 2, sector[nSector].floorz, sector[nextSector].floorz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), 0x7FFF, 0x7FFF, 2, pSector->floorz, nextSectorP->floorz);
 
-            int nSwitch = BuildSwStepOn(nChannel, BuildLink(1, 1), nSector);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            auto nSwitch = BuildSwStepOn(nChannel, BuildLink(1, 1), pSector);
 
-            int nSwitch2 = BuildSwNotOnPause(nChannel, BuildLink(2, -1, 0), nSector, 8);
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch2);
+            auto nSwitch2 = BuildSwNotOnPause(nChannel, BuildLink(2, -1, 0), pSector, 8);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch2.first, nSwitch2.second);
             return;
         }
 
         case 40: // Moving sector(follows waypoints)
         {
-            AddMovingSector(nSector, nLotag, nHitag % 1000, 2);
+            AddMovingSector(pSector, nLotag, nHitag % 1000, 2);
             return;
         }
 
         case 41: // Moving sector(follows waypoints)
         {
-            AddMovingSector(nSector, nLotag, nHitag % 1000, 18);
+            AddMovingSector(pSector, nLotag, nHitag % 1000, 18);
             return;
         }
 
         case 42: // Moving sector(follows waypoints)
         {
-            AddMovingSector(nSector, nLotag, nHitag % 1000, 58);
+            AddMovingSector(pSector, nLotag, nHitag % 1000, 58);
             return;
         }
 
         case 43: // Moving sector(follows waypoints)
         {
-            AddMovingSector(nSector, nLotag, nHitag % 1000, 122);
+            AddMovingSector(pSector, nLotag, nHitag % 1000, 122);
             return;
         }
 
         case 44: // Moving sector(follows waypoints)
         {
-            AddMovingSector(nSector, nLotag, nHitag % 1000, 90);
+            AddMovingSector(pSector, nLotag, nHitag % 1000, 90);
             return;
         }
 
         case 45: // Pushbox sector
         {
-            CreatePushBlock(nSector);
+            CreatePushBlock(pSector);
             return;
         }
 
@@ -1116,163 +1163,169 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
             */
             int zVal = 0;
 
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].ceilingz, -1, 1);
-            if (nextSector >= 0) {
-                zVal = sector[nextSector].ceilingz;
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->ceilingz, -1, 1);
+            if (nextSectorP != nullptr) {
+                zVal = nextSectorP->ceilingz;
             }
 
-            int nElev = BuildElevC(0, nChannel, nSector, FindWallSprites(nSector), 200, nSpeed * 100, 2, sector[nSector].ceilingz, zVal);
+            int nElev = BuildElevC(0, nChannel, pSector, FindWallSprites(pSector), 200, nSpeed * 100, 2, pSector->ceilingz, zVal);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
             return;
         }
 
         case 49:
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].ceilingz, -1, -1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->ceilingz, -1, -1);
+			if (nextSectorP == nullptr) break;
 
-            int nElev = BuildElevC(0, nChannel, nSector, FindWallSprites(nSector), 200, nSpeed * 100, 2, sector[nSector].ceilingz, sector[nextSector].ceilingz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevC(0, nChannel, pSector, FindWallSprites(pSector), 200, nSpeed * 100, 2, pSector->ceilingz, nextSectorP->ceilingz);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
             return;
         }
 
         case 50: // Floor lower / raise
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].ceilingz, 1, 1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->ceilingz, 1, 1);
+			if (nextSectorP == nullptr) break;
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), 0x7FFF, 200, 2, sector[nextSector].floorz, sector[nSector].floorz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), 0x7FFF, 200, 2, nextSectorP->floorz, pSector->floorz);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
             return;
         }
 
         case 51:
         {
-            int edx = ((sector[nSector].floorz - sector[nSector].ceilingz) / 2) + sector[nSector].ceilingz;
+            int edx = ((pSector->floorz - pSector->ceilingz) / 2) + pSector->ceilingz;
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), 200, nSpeed * 100, 2, sector[nSector].floorz, edx);
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), 200, nSpeed * 100, 2, pSector->floorz, edx);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            int eax = (((sector[nSector].floorz - sector[nSector].ceilingz) / 2) + sector[nSector].ceilingz) - 8;
+            int eax = (((pSector->floorz - pSector->ceilingz) / 2) + pSector->ceilingz) - 8;
 
-            nElev = BuildElevC(0, nChannel, nSector, FindWallSprites(nSector), 200, nSpeed * 100, 2, sector[nSector].ceilingz, eax);
+            nElev = BuildElevC(0, nChannel, pSector, FindWallSprites(pSector), 200, nSpeed * 100, 2, pSector->ceilingz, eax);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            int nSwitch = BuildSwReady(nChannel, BuildLink(2, 1, 0));
+            auto nSwitch = BuildSwReady(nChannel, BuildLink(2, 1, 0));
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
             return;
         }
 
         case 52:
         {
-            int eax = ((sector[nSector].floorz - sector[nSector].ceilingz) / 2) + sector[nSector].ceilingz;
+            int eax = ((pSector->floorz - pSector->ceilingz) / 2) + pSector->ceilingz;
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, eax, sector[nSector].floorz);
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, eax, pSector->floorz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            eax = ((sector[nSector].floorz - sector[nSector].ceilingz) / 2) + sector[nSector].ceilingz;
+            eax = ((pSector->floorz - pSector->ceilingz) / 2) + pSector->ceilingz;
 
-            nElev = BuildElevC(0, nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, eax, sector[nSector].ceilingz);
+            nElev = BuildElevC(0, nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, eax, pSector->ceilingz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            int nSwitch = BuildSwPressSector(nChannel, BuildLink(1, 1), nSector, keyMask);
+            auto nSwitch = BuildSwPressSector(nChannel, BuildLink(1, 1), pSector, keyMask);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
 
             nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), 60);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
             return;
         }
 
         case 53:
         {
-            int eax = ((sector[nSector].floorz - sector[nSector].ceilingz) / 2) + sector[nSector].ceilingz;
+            int eax = ((pSector->floorz - pSector->ceilingz) / 2) + pSector->ceilingz;
 
-            int nElev = BuildElevC(0, nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, eax, sector[nSector].floorz);
+            int nElev = BuildElevC(0, nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, eax, pSector->floorz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            eax = ((sector[nSector].floorz - sector[nSector].ceilingz) / 2) + sector[nSector].ceilingz;
+            eax = ((pSector->floorz - pSector->ceilingz) / 2) + pSector->ceilingz;
 
-            nElev = BuildElevC(0, nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, eax, sector[nSector].ceilingz);
+            nElev = BuildElevC(0, nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, eax, pSector->ceilingz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            int nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), 150);
+            auto nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), 150);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
             return;
         }
 
         case 54:
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].ceilingz, -1, -1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->ceilingz, -1, -1);
+			if (nextSectorP == nullptr) break;
 
-            int nElev = BuildElevC(0, nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, sector[nextSector].ceilingz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevC(0, nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, pSector->floorz, nextSectorP->ceilingz);
 
-            int nSwitch = BuildSwPressSector(nChannel, BuildLink(1, 1), nSector, keyMask);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            auto nSwitch = BuildSwPressSector(nChannel, BuildLink(1, 1), pSector, keyMask);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
             return;
         }
 
         case 55:
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].ceilingz, -1, -1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->ceilingz, -1, -1);
+			if (nextSectorP == nullptr) break;
 
-            int nElev = BuildElevC(0, nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, sector[nextSector].ceilingz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevC(0, nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, pSector->floorz, nextSectorP->ceilingz);
 
-            int nSwitch = BuildSwPressSector(nChannel, BuildLink(1, 1), nSector, keyMask);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            auto nSwitch = BuildSwPressSector(nChannel, BuildLink(1, 1), pSector, keyMask);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
             return;
         }
 
         case 56:
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].ceilingz, -1, -1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->ceilingz, -1, -1);
+			if (nextSectorP == nullptr) break;
 
-            int nElev = BuildElevC(0, nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, sector[nextSector].ceilingz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevC(0, nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, pSector->floorz, nextSectorP->ceilingz);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
             return;
         }
 
         case 57:
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, 1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->floorz, 1, 1);
+			if (nextSectorP == nullptr) break;
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].ceilingz, sector[nextSector].floorz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, pSector->ceilingz, nextSectorP->floorz);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
             return;
         }
 
         case 58:
         {
-            int nSwitch = BuildSwPressSector(nChannel, BuildLink(1, 1), nSector, keyMask);
+            auto nSwitch = BuildSwPressSector(nChannel, BuildLink(1, 1), pSector, keyMask);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
 
             // Fall through to case 62
-            fallthrough__;
+            [[fallthrough]];
         }
         case 63: // Ceiling door, kill trigger (Enemy death triggers door)
         {
@@ -1280,138 +1333,142 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
                 nEnergyChan = nChannel;
             }
 
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].ceilingz, -1, -1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->ceilingz, -1, -1);
 
-            int nElev = BuildElevC(0, nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, sector[nextSector].ceilingz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevC(0, nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, pSector->floorz, nextSectorP->ceilingz);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
             return;
         }
 
         case 59:
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, 1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->floorz, 1, 1);
+			if (nextSectorP == nullptr) break;
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, sector[nextSector].floorz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, pSector->floorz, nextSectorP->floorz);
 
-            int nSwitch = BuildSwStepOn(nChannel, BuildLink(1, 1), nSector);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            auto nSwitch = BuildSwStepOn(nChannel, BuildLink(1, 1), pSector);
 
-            int nSwitch2 = BuildSwNotOnPause(nChannel, BuildLink(1, 1), nSector, 60);
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch2);
+            auto nSwitch2 = BuildSwNotOnPause(nChannel, BuildLink(1, 1), pSector, 60);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch2.first, nSwitch2.second);
             return;
         }
 
         case 61:
         {
-            zListB[0] = sector[nSector].floorz;
+            zListB[0] = pSector->floorz;
             int var_1C = 1;
 
             while (1)
             {
-                short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, -1);
-                if (nextSector < 0 || var_1C >= 8) {
+                auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->floorz, 1, -1);
+                if (nextSectorP == nullptr || var_1C >= 8) {
                     break;
                 }
 
-                zListB[var_1C] = sector[nextSector].floorz;
+                zListB[var_1C] = nextSectorP->floorz;
 
                 var_1C++;
             }
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, var_1C,
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, var_1C,
                 zListB[0], zListB[1], zListB[2], zListB[3], zListB[4], zListB[5], zListB[6], zListB[7]);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
             return;
         }
 
         case 62:
         {
-            zListA[0] = sector[nSector].floorz;
+            zListA[0] = pSector->floorz;
             int var_20 = 1;
 
             while (1)
             {
-                short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, 1);
-                if (nextSector < 0 || var_20 >= 8) {
+                auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->floorz, 1, 1);
+                if (nextSectorP == nullptr || var_20 >= 8) {
                     break;
                 }
 
-                zListA[var_20] = sector[nextSector].floorz;
+                zListA[var_20] = nextSectorP->floorz;
 
                 var_20++;
             }
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, var_20,
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, var_20,
                 zListA[0], zListA[1], zListA[2], zListA[3], zListA[4], zListA[5], zListA[6], zListA[7]);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
             return;
         }
 
         case 64:
         {
-            int nSwitch = BuildSwStepOn(nChannel, BuildLink(2, 0, 0), nSector);
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            auto nSwitch = BuildSwStepOn(nChannel, BuildLink(2, 0, 0), pSector);
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
             return;
         }
 
         case 68:
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, 1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->floorz, 1, 1);
+			if (nextSectorP == nullptr) break;
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, sector[nextSector].floorz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevF(nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, pSector->floorz, nextSectorP->floorz);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
             return;
         }
 
         case 70:
         case 71:
         {
-            short nextSector = nextsectorneighborz(nSector, sector[nSector].ceilingz, -1, -1);
-            assert(nextSector > -1);
+            auto nextSectorP = safenextsectorneighborzptr(pSector, pSector->ceilingz, -1, -1);
+			if (nextSectorP == nullptr) break;
 
-            int nElev = BuildElevC(0, nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, (int)sector[nSector].floorz, (int)sector[nextSector].ceilingz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            int nElev = BuildElevC(0, nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, (int)pSector->floorz, (int)nextSectorP->ceilingz);
 
-            int nSwitch = BuildSwPressSector(nChannel, BuildLink(1, 1), nSector, keyMask);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            auto nSwitch = BuildSwPressSector(nChannel, BuildLink(1, 1), pSector, keyMask);
 
-            int nSwitch2 = BuildSwPause(nChannel, BuildLink(2, -1, 0), 60);
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch2);
+            auto nSwitch2 = BuildSwPause(nChannel, BuildLink(2, -1, 0), 60);
+
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch2.first, nSwitch2.second);
             return;
         }
 
         case 75:
         {
-            int nElev = BuildElevC(0, nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, (int)sector[nSector].ceilingz, (int)sector[nSector].floorz);
+            int nElev = BuildElevC(0, nChannel, pSector, FindWallSprites(pSector), nSpeed * 100, nSpeed * 100, 2, (int)pSector->ceilingz, (int)pSector->floorz);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nElev);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nElev, 0);
             return;
         }
 
         case 80:
         {
-            SectFlag[nSector] |= 0x8000;
+            pSector->Flag |= 0x8000;
             return;
         }
     }
 }
 
-void runlist_ProcessWallTag(int nWall, short nLotag, short nHitag)
+void runlist_ProcessWallTag(walltype* pWall, int nLotag, int nHitag)
 {
+	auto& wal = *pWall;
     int nChannel = runlist_AllocChannel(nHitag % 1000);
     assert(nChannel >= 0 && nChannel < kMaxChannels);
 
@@ -1431,54 +1488,54 @@ void runlist_ProcessWallTag(int nWall, short nLotag, short nHitag)
 
         case 1:
         {
-            int nWallFace = BuildWallFace(nChannel, nWall, 2, wall[nWall].picnum, wall[nWall].picnum + 1);
-            runlist_AddRunRec(sRunChannels[nChannel].a, nWallFace);
+            int nWallFace = BuildWallFace(nChannel, pWall, 2, pWall->picnum, pWall->picnum + 1);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nWallFace,  0x70000);
 
-            int nSwitch = BuildSwPressWall(nChannel, BuildLink(2, nEffectTag, 0), nWall);
+            auto nSwitch = BuildSwPressWall(nChannel, BuildLink(2, nEffectTag, 0), pWall);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
             return;
         }
 
         case 6:
         {
-            int nSwitch = BuildSwPressWall(nChannel, BuildLink(2, 1, 0), nWall);
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            auto nSwitch = BuildSwPressWall(nChannel, BuildLink(2, 1, 0), pWall);
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
             return;
         }
 
         case 7: // Regular switch
         {
-            int nWallFace = BuildWallFace(nChannel, nWall, 2, wall[nWall].picnum, wall[nWall].picnum + 1);
-            runlist_AddRunRec(sRunChannels[nChannel].a, nWallFace);
+            int nWallFace = BuildWallFace(nChannel, pWall, 2, pWall->picnum, pWall->picnum + 1);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nWallFace,  0x70000);
 
-            int nSwitch = BuildSwPressWall(nChannel, BuildLink(1, 1), nWall);
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            auto nSwitch = BuildSwPressWall(nChannel, BuildLink(1, 1), pWall);
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
             return;
         }
 
         case 8: // Reverse switch
         {
-            int nWallFace = BuildWallFace(nChannel, nWall, 2, wall[nWall].picnum, wall[nWall].picnum + 1);
-            runlist_AddRunRec(sRunChannels[nChannel].a, nWallFace);
+            int nWallFace = BuildWallFace(nChannel, pWall, 2, pWall->picnum, pWall->picnum + 1);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nWallFace,  0x70000);
 
-            int nSwitch = BuildSwPressWall(nChannel, BuildLink(2, -1, 0), nWall);
+            auto nSwitch = BuildSwPressWall(nChannel, BuildLink(2, -1, 0), pWall);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
             return;
         }
 
         case 9: // Invisible switch
         {
-            int nSwitch = BuildSwPressWall(nChannel, BuildLink(2, 1, 1), nWall);
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            auto nSwitch = BuildSwPressWall(nChannel, BuildLink(2, 1, 1), pWall);
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
             return;
         }
 
         case 10:
         {
-            int nSwitch = BuildSwPressWall(nChannel, BuildLink(2, -1, 0), nWall);
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch);
+            auto nSwitch = BuildSwPressWall(nChannel, BuildLink(2, -1, 0), pWall);
+            runlist_AddRunRec(sRunChannels[nChannel].a,nSwitch.first, nSwitch.second);
             return;
         }
 
@@ -1488,68 +1545,68 @@ void runlist_ProcessWallTag(int nWall, short nLotag, short nHitag)
         case 19:
         case 20:
         {
-            int nLastWall = 0;
-            int n2ndLastWall = 0;
+            walltype* pLastWall = nullptr;
+            walltype* p2ndLastWall = nullptr;
 
-            short nStart = nWall;
+            auto pStart = pWall;
 
             while (1)
             {
-                nWall = wall[nWall].point2; // get the next (right side) wall point
+                pWall = pWall->point2Wall(); // get the next (right side) wall point
 
-                if (nStart == nWall) { // we've looped back around
+                if (pStart == pWall) { // we've looped back around
                     break;
                 }
 
-                n2ndLastWall = nLastWall;
-                nLastWall = nWall;
+                p2ndLastWall = pLastWall;
+                pLastWall = pWall;
             }
 
-            short nWall2 = wall[nStart].point2;
-            short nWall3 = wall[nWall2].point2;
-            short nWall4 = wall[nWall3].point2;
+            auto pWall2 = pStart->point2Wall();
+            auto pWall3 = pWall2->point2Wall();
+            auto pWall4 = pWall3->point2Wall();
 
-            int nSlide = BuildSlide(nChannel, nStart, nLastWall, n2ndLastWall, nWall2, nWall3, nWall4);
+            int nSlide = BuildSlide(nChannel, pStart, pLastWall, p2ndLastWall, pWall2, pWall3, pWall4);
 
-            runlist_AddRunRec(sRunChannels[nChannel].a, nSlide);
+            runlist_AddRunRec(sRunChannels[nChannel].a, nSlide, 0x80000);
             return;
         }
 
         case 24: // Waterfall
         {
-            AddFlow(nWall, nPanSpeed, 3);
+            AddFlow(pWall, nPanSpeed, 3);
             return;
         }
 
         case 25: // Inverse waterfall
         {
-            AddFlow(nWall, nPanSpeed, 2);
+            AddFlow(pWall, nPanSpeed, 2);
             return;
         }
     }
 }
 
-int runlist_CheckRadialDamage(short nSprite)
+int runlist_CheckRadialDamage(DExhumedActor* pActor)
 {
-    if (nSprite == nRadialSpr) {
+    if (pActor == pRadialActor) {
         return 0;
     }
 
-    if (!(sprite[nSprite].cstat & 0x101)) {
+    if (!(pActor->spr.cstat & CSTAT_SPRITE_BLOCK_ALL)) {
         return 0;
     }
 
-    if (sprite[nSprite].statnum >= kMaxStatus || sprite[nRadialSpr].statnum >= kMaxStatus) {
+    if (pActor->spr.statnum >= kMaxStatus || pRadialActor->spr.statnum >= kMaxStatus) {
         return 0;
     }
 
-    if (sprite[nSprite].statnum != 100 && nSprite == nRadialOwner) {
+    if (pActor->spr.statnum != 100 && pActor == pRadialActor->pTarget) {
         return 0;
     }
 
-    int x = (sprite[nSprite].x - sprite[nRadialSpr].x) >> 8;
-    int y = (sprite[nSprite].y - sprite[nRadialSpr].y) >> 8;
-    int z = (sprite[nSprite].z - sprite[nRadialSpr].z) >> 12;
+    int x = (pActor->spr.pos.X - pRadialActor->spr.pos.X) >> 8;
+    int y = (pActor->spr.pos.Y - pRadialActor->spr.pos.Y) >> 8;
+    int z = (pActor->spr.pos.Z - pRadialActor->spr.pos.Z) >> 12;
 
     if (abs(x) > nDamageRadius) {
         return 0;
@@ -1580,18 +1637,18 @@ int runlist_CheckRadialDamage(short nSprite)
 
     if (nDist < nDamageRadius)
     {
-        uint16_t nCStat = sprite[nSprite].cstat;
-        sprite[nSprite].cstat = 0x101;
+        auto nCStat = pActor->spr.cstat;
+        pActor->spr.cstat = CSTAT_SPRITE_BLOCK_ALL;
 
-        if (((kStatExplodeTarget - sprite[nSprite].statnum) <= 1) ||
-            cansee(sprite[nRadialSpr].x,
-                sprite[nRadialSpr].y,
-                sprite[nRadialSpr].z - 512,
-                sprite[nRadialSpr].sectnum,
-                sprite[nSprite].x,
-                sprite[nSprite].y,
-                sprite[nSprite].z - 8192,
-                sprite[nSprite].sectnum))
+        if (((kStatExplodeTarget - pActor->spr.statnum) <= 1) ||
+            cansee(pRadialActor->spr.pos.X,
+                pRadialActor->spr.pos.Y,
+                pRadialActor->spr.pos.Z - 512,
+                pRadialActor->sector(),
+                pActor->spr.pos.X,
+                pActor->spr.pos.Y,
+                pActor->spr.pos.Z - 8192,
+                pActor->sector()))
         {
             edi = (nRadialDamage * (nDamageRadius - nDist)) / nDamageRadius;
 
@@ -1602,17 +1659,17 @@ int runlist_CheckRadialDamage(short nSprite)
             {
                 int nAngle = GetMyAngle(x, y);
 
-                sprite[nSprite].xvel += (edi * bcos(nAngle)) >> 3;
-                sprite[nSprite].yvel += (edi * bsin(nAngle)) >> 3;
-                sprite[nSprite].zvel -= edi * 24;
+                pActor->spr.xvel += (edi * bcos(nAngle)) >> 3;
+                pActor->spr.yvel += (edi * bsin(nAngle)) >> 3;
+                pActor->spr.zvel -= edi * 24;
 
-                if (sprite[nSprite].zvel < -3584) {
-                    sprite[nSprite].zvel = -3584;
+                if (pActor->spr.zvel < -3584) {
+                    pActor->spr.zvel = -3584;
                 }
             }
         }
 
-        sprite[nSprite].cstat = nCStat;
+        pActor->spr.cstat = nCStat;
     }
 
     if (edi > 0x7FFF) {
@@ -1622,57 +1679,59 @@ int runlist_CheckRadialDamage(short nSprite)
     return edi;
 }
 
-void runlist_RadialDamageEnemy(short nSprite, short nDamage, short nRadius)
+void runlist_RadialDamageEnemy(DExhumedActor* pActor, int nDamage, int nRadius)
 {
     if (!nRadius) {
         return;
     }
 
-    if (nRadialSpr == -1)
+    if (pRadialActor == nullptr)
     {
         nRadialDamage = nDamage * 4;
         nDamageRadius = nRadius;
-        nRadialSpr = nSprite;
-        nRadialOwner = sprite[nSprite].owner;
+        pRadialActor = pActor;
 
         runlist_ExplodeSignalRun();
 
-        nRadialSpr = -1;
+        pRadialActor = nullptr;
     }
 }
 
-void runlist_DamageEnemy(int nSprite, int nSprite2, short nDamage)
+void runlist_DamageEnemy(DExhumedActor* pActor, DExhumedActor* pActor2, int nDamage)
 {
-    if (sprite[nSprite].statnum >= kMaxStatus) {
+	if (pActor->spr.statnum >= kMaxStatus) {
         return;
     }
 
-    short nRun = sprite[nSprite].owner;
+    int nRun = pActor->spr.owner;
     if (nRun <= -1) {
         return;
     }
 
-    short nPreCreaturesKilled = nCreaturesKilled;
+    int nPreCreaturesKilled = nCreaturesKilled;
 
-    runlist_SendMessageToRunRec(nRun, (nSprite2 & 0xFFFF) | 0x80000, nDamage * 4);
+    RunListEvent ev{};
+    ev.pOtherActor = pActor2;
+    ev.nDamage = nDamage * 4;
+    runlist_SendMessage(nRun, -1, &ExhumedAI::Damage, &ev);
 
     // is there now one less creature? (has one died)
-    if (nPreCreaturesKilled < nCreaturesKilled && nSprite2 > -1)
+    if (nPreCreaturesKilled < nCreaturesKilled && pActor2 != nullptr)
     {
-        if (sprite[nSprite2].statnum != 100) {
+        if (pActor2->spr.statnum != 100) {
             return;
         }
 
-        short nPlayer = GetPlayerFromSprite(nSprite2);
-        nTauntTimer[nPlayer]--;
+        int nPlayer = GetPlayerFromActor(pActor2);
+        PlayerList[nPlayer].nTauntTimer--;
 
-        if (nTauntTimer[nPlayer] <= 0)
+        if (PlayerList[nPlayer].nTauntTimer <= 0)
         {
             // Do a taunt
-            int nPlayerSprite = PlayerList[nPlayer].nSprite;
-            int nSector = sprite[nPlayerSprite].sectnum;
+            auto pPlayerActor = PlayerList[nPlayer].pActor;
+            auto pSector = pPlayerActor->sector();
 
-            if (!(SectFlag[nSector] & kSectUnderwater))
+            if (!(pSector->Flag & kSectUnderwater))
             {
                 int ebx = 0x4000;
 
@@ -1680,14 +1739,12 @@ void runlist_DamageEnemy(int nSprite, int nSprite2, short nDamage)
                     ebx = 0x6000;
                 }
 
-                int nDopSprite = nDoppleSprite[nPlayer];
-                D3PlayFX(StaticSound[kSoundTauntStart + (RandomSize(3) % 5)], nDopSprite | ebx);
+                D3PlayFX(StaticSound[kSoundTauntStart + (RandomSize(3) % 5)], PlayerList[nPlayer].pDoppleSprite, ebx);
             }
 
-            nTauntTimer[nPlayer] = RandomSize(3) + 3;
+            PlayerList[nPlayer].nTauntTimer = RandomSize(3) + 3;
         }
     }
 }
-
 
 END_PS_NS

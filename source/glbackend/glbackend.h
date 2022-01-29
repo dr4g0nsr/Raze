@@ -1,4 +1,5 @@
 #pragma once
+#include <limits.h>
 #include <stdlib.h>
 #include <algorithm>
 #include <vector>
@@ -12,7 +13,7 @@
 #include "hw_material.h"
 #include "hw_renderstate.h"
 #include "pm_renderstate.h"
-#include "templates.h"
+
 
 class FShader;
 class FGameTexture;
@@ -61,14 +62,14 @@ public:
 	int MatrixChange = 0;
 
 	PolymostRenderState renderState;
-	
-	
+
+
 public:
 	float mProjectionM5 = 1.0f; // needed by ssao
 	glinfo_t glinfo;
-	
+
 	void Init(int y);
-	
+
 	static int GetTexDimension(int value)
 	{
 		//if (value > gl.max_texturesize) return gl.max_texturesize;
@@ -113,11 +114,7 @@ public:
 	void SetPalswap(int index);
 	void SetFade(int palette);
 
-	void SetShade(int32_t shade, int numshades)
-	{
-		renderState.drawblack = shade > numshades;
-		renderState.Shade = std::min(shade, numshades-1);
-	}
+	void SetShade(int32_t shade, int numshades);
 
 	void SetVisibility(float visibility)
 	{

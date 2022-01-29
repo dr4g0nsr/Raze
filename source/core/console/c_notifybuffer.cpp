@@ -65,7 +65,7 @@ CVAR(Bool, con_centernotify, false, CVAR_ARCHIVE)
 CVAR(Bool, con_pulsetext, false, CVAR_ARCHIVE)
 CVAR(Bool, con_notify_advanced, false, CVAR_ARCHIVE)
 
-enum { NOTIFYFADETIME = 6 };
+const int NOTIFYFADETIME = 6;
 
 CUSTOM_CVAR(Int, con_notifylines, 4, CVAR_GLOBALCONFIG | CVAR_ARCHIVE)
 {
@@ -78,6 +78,11 @@ CUSTOM_CVAR(Float, con_notifyscale, 1, CVAR_ARCHIVE)
 	if (self > 1) self = 1;
 }
 
+
+static FFont* GetNotifyFont()
+{
+	return generic_ui ? NewSmallFont : isWW2GI()? ConFont : SmallFont ? SmallFont : AlternativeSmallFont;
+}
 
 void FNotifyBuffer::AddString(int printlevel, FString source)
 {
@@ -93,7 +98,7 @@ void FNotifyBuffer::AddString(int printlevel, FString source)
 
 	auto screenratio = ActiveRatio(screen->GetWidth(), screen->GetHeight());
 
-	FFont* font = generic_ui ? NewSmallFont : SmallFont ? SmallFont : AlternativeSmallFont;
+	FFont* font = GetNotifyFont();
 	if (font == nullptr) return;	// Without an initialized font we cannot handle the message (this is for those which come here before the font system is ready.)
 	double fontscale = (generic_ui? 0.7 : NotifyFontScale) * con_notifyscale;
 
@@ -116,10 +121,10 @@ void FNotifyBuffer::DrawNative()
 
 	FFont* font = isBlood() ? SmallFont2 : SmallFont;
 
-	int line = isBlood() ? Top : (g_gameType & GAMEFLAG_SW) ? 40 : font->GetDisplacement();
+	double line = isBlood() ? Top : isSWALL() ? 40 : font->GetDisplacement();
 	bool canskip = isBlood();
 	double scale = 1 / (NotifyFontScale * con_notifyscale);
-	int lineadv = font->GetHeight() / NotifyFontScale;
+	double lineadv = font->GetHeight() / NotifyFontScale;
 
 	for (unsigned i = topline; i < Text.Size(); ++i)
 	{
@@ -188,12 +193,12 @@ void FNotifyBuffer::Draw()
 	bool canskip = true;
 
 
-	FFont* font = generic_ui ? NewSmallFont : SmallFont? SmallFont : AlternativeSmallFont;
+	FFont* font = GetNotifyFont();
 	double nfscale = (generic_ui? 0.7 : NotifyFontScale);
-	double scale = 1 / ( * con_notifyscale);
+	double scale = 1 / (nfscale * con_notifyscale);
 
-	int line = Top + font->GetDisplacement() / nfscale;
-	int lineadv = font->GetHeight () / nfscale;
+	double line = Top + font->GetDisplacement() / nfscale;
+	double lineadv = font->GetHeight () / nfscale;
 
 	for (unsigned i = 0; i < Text.Size(); ++ i)
 	{

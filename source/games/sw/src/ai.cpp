@@ -40,24 +40,15 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 
 BEGIN_SW_NS
 
-bool PlayerTakeDamage(PLAYERp, short);
 ANIMATOR InitActorRunToward;
-bool FAF_Sector(short);
-bool DropAhead(short SpriteNum, short min_height);
+bool DropAhead(DSWActor* actor, int  min_height);
 
-short FindTrackToPlayer(USERp u);
-ANIMATORp ChooseAction(DECISION decision[]);
+ANIMATOR* ChooseAction(DECISION decision[]);
 
-
-//static short ZigZagDeltaAng[] = {-200, 200};
-
-// Choose between two things
-short AttackOrRun = 200;
 
 #define CHOOSE2(value) (RANDOM_P2(1024) < (value))
 
-int
-Distance(int x1, int y1, int x2, int y2)
+int Distance(int x1, int y1, int x2, int y2)
 {
     int min;
 
@@ -72,134 +63,65 @@ Distance(int x1, int y1, int x2, int y2)
     else
         min = x2;
 
-    return x2 + y2 - DIV2(min);
+    return x2 + y2 - (min >> 1);
 }
 
 
-void DebugMoveHit(short SpriteNum)
+
+bool ActorMoveHitReact(DSWActor* actor)
 {
-    SPRITEp sp;
-    USERp u = User[SpriteNum].Data();
-
-    return;
-
-    //if (u->ret == -1)
-    //    printf("Hit a ledge\n");
-    //else
-    /*
-    switch (TEST(u->ret, HIT_MASK))
-        {
-        case HIT_SPRITE:
-            sp = &sprite[NORM_SPRITE(u->ret)];
-            //DSPRINTF(ds, "Hit a Sprite %d, stat %d ", sp-sprite, (short)sp->statnum);
-            if (sp->statnum == STAT_MISSILE)
-                {
-                //DSPRINTF(ds, "Monster hit bullet %d, stat %d ", sp-sprite, (short)sp->statnum);
-                }
-            else
-                {
-                //DSPRINTF(ds, "Hit a Sprite %d, stat %d ", sp-sprite, (short)sp->statnum);
-                }
-            break;
-        case HIT_WALL:
-            //DSPRINTF(ds, "Hit a Wall %d    ", NORM_WALL(u->ret));
-            break;
-        case HIT_SECTOR:
-            //DSPRINTF(ds, "Hit a Sector %d  ", NORM_SECTOR(u->ret));
-            break;
-        }
-
-    MONO_PRINT(ds);
-    */
-}
-
-
-bool ActorMoveHitReact(short SpriteNum)
-{
-    USERp u = User[SpriteNum].Data();
-
     // Should only return true if there is a reaction to what was hit that
     // would cause the calling function to abort
 
-    switch (TEST(u->ret, HIT_MASK))
+    auto coll = actor->user.coll;
+    if (coll.type == kHitSprite)
     {
-    case HIT_SPRITE:
-    {
-        short HitSprite = NORM_SPRITE(u->ret);
-        USERp hu;
-        ANIMATORp action;
-
-        hu = User[HitSprite].Data();
-
-
-        // if you ran into a player - call close range functions
-        if (hu && hu->PlayerP)
+        auto hitActor = coll.actor();
+        if (hitActor->hasU() && hitActor->user.PlayerP)
         {
-            DoActorPickClosePlayer(SpriteNum);
-            action = ChooseAction(u->Personality->TouchTarget);
+            // if you ran into a player - call close range functions
+            DoActorPickClosePlayer(actor);
+            auto action = ChooseAction(actor->user.Personality->TouchTarget);
             if (action)
             {
-                (*action)(SpriteNum);
+                (*action)(actor);
                 return true;
             }
         }
-        break;
     }
-
-    case HIT_WALL:
-    {
-        break;
-    }
-
-    case HIT_SECTOR:
-    {
-        break;
-    }
-    }
-
     return false;
 }
 
 
-bool ActorFlaming(short SpriteNum)
+bool ActorFlaming(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
-
-    if (u->flame >= 0)
+    auto flame = actor->user.flameActor;
+    if (flame != nullptr)
     {
         int size;
-        SPRITEp fp = &sprite[u->flame];
 
-        size = SPRITEp_SIZE_Z(sp) - DIV4(SPRITEp_SIZE_Z(sp));
+        size = ActorSizeZ(actor) - (ActorSizeZ(actor) >> 2);
 
-        //DSPRINTF(ds,"enemy size %d, flame size %d",size>>8,SPRITEp_SIZE_Z(fp)>>8);
-        MONO_PRINT(ds);
-
-        if (SPRITEp_SIZE_Z(fp) > size)
+        if (ActorSizeZ(flame) > size)
             return true;
     }
 
     return false;
 }
 
-void
-DoActorSetSpeed(short SpriteNum, uint8_t speed)
+void DoActorSetSpeed(DSWActor* actor, uint8_t speed)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
-
-    if (TEST(sp->cstat, CSTAT_SPRITE_RESTORE))
+    if (actor->spr.cstat & (CSTAT_SPRITE_RESTORE))
         return;
 
-    ASSERT(u->Attrib);
+    ASSERT(actor->user.Attrib);
 
-    u->speed = speed;
+    actor->user.speed = speed;
 
-    if (ActorFlaming(SpriteNum))
-        sp->xvel = u->Attrib->Speed[speed] + DIV2(u->Attrib->Speed[speed]);
+    if (ActorFlaming(actor))
+        actor->spr.xvel = actor->user.Attrib->Speed[speed] + (actor->user.Attrib->Speed[speed] >> 1);
     else
-        sp->xvel = u->Attrib->Speed[speed];
+        actor->spr.xvel = actor->user.Attrib->Speed[speed];
 }
 
 /*
@@ -208,16 +130,12 @@ DoActorSetSpeed(short SpriteNum, uint8_t speed)
   goro.c etc.
 */
 
-ANIMATORp
-ChooseAction(DECISION decision[])
+ANIMATOR* ChooseAction(DECISION decision[])
 {
-    short random_value;
-    short i;
-
     // !JIM! Here is an opportunity for some AI, instead of randomness!
-    random_value = RANDOM_P2(1024<<5)>>5;
+    int random_value = RANDOM_P2(1024<<5)>>5;
 
-    for (i = 0; true; i++)
+    for (int i = 0; true; i++)
     {
         ASSERT(i < 10);
 
@@ -232,15 +150,11 @@ ChooseAction(DECISION decision[])
   !AIC - Sometimes just want the offset of the action
 */
 
-short
-ChooseActionNumber(short decision[])
+int ChooseActionNumber(int16_t decision[])
 {
-    short random_value;
-    short i;
+    int random_value = RANDOM_P2(1024<<5)>>5;
 
-    random_value = RANDOM_P2(1024<<5)>>5;
-
-    for (i = 0; true; i++)
+    for (int i = 0; true; i++)
     {
         if (random_value <= decision[i])
         {
@@ -249,136 +163,108 @@ ChooseActionNumber(short decision[])
     }
 }
 
-int
-DoActorNoise(ANIMATORp Action, short SpriteNum)
+int DoActorNoise(ANIMATOR* Action, DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-
     if (Action == InitActorAmbientNoise)
     {
-        PlaySpriteSound(SpriteNum, attr_ambient, v3df_follow);
-//      MONO_PRINT("Ambient Sound");
+        PlaySpriteSound(actor, attr_ambient, v3df_follow);
     }
     else if (Action == InitActorAlertNoise)
     {
-        if (u && !u->DidAlert) // This only allowed once
-            PlaySpriteSound(SpriteNum, attr_alert, v3df_follow);
-//      MONO_PRINT("Alert Sound");
+        if (actor->hasU() && !actor->user.DidAlert) // This only allowed once
+            PlaySpriteSound(actor, attr_alert, v3df_follow);
     }
     else if (Action == InitActorAttackNoise)
     {
-        PlaySpriteSound(SpriteNum, attr_attack, v3df_follow);
-//      MONO_PRINT("Attack Sound");
+        PlaySpriteSound(actor, attr_attack, v3df_follow);
     }
     else if (Action == InitActorPainNoise)
     {
-        PlaySpriteSound(SpriteNum, attr_pain, v3df_follow);
-//      MONO_PRINT("Pain Sound");
+        PlaySpriteSound(actor, attr_pain, v3df_follow);
     }
     else if (Action == InitActorDieNoise)
     {
-        PlaySpriteSound(SpriteNum, attr_die, v3df_none);
-//      MONO_PRINT("Die Sound");
+        PlaySpriteSound(actor, attr_die, v3df_none);
     }
     else if (Action == InitActorExtra1Noise)
     {
-        PlaySpriteSound(SpriteNum, attr_extra1, v3df_follow);
+        PlaySpriteSound(actor, attr_extra1, v3df_follow);
     }
     else if (Action == InitActorExtra2Noise)
     {
-        PlaySpriteSound(SpriteNum, attr_extra2, v3df_follow);
+        PlaySpriteSound(actor, attr_extra2, v3df_follow);
     }
     else if (Action == InitActorExtra3Noise)
     {
-        PlaySpriteSound(SpriteNum, attr_extra3, v3df_follow);
+        PlaySpriteSound(actor, attr_extra3, v3df_follow);
     }
     else if (Action == InitActorExtra4Noise)
     {
-        PlaySpriteSound(SpriteNum, attr_extra4, v3df_follow);
+        PlaySpriteSound(actor, attr_extra4, v3df_follow);
     }
     else if (Action == InitActorExtra5Noise)
     {
-        PlaySpriteSound(SpriteNum, attr_extra5, v3df_follow);
+        PlaySpriteSound(actor, attr_extra5, v3df_follow);
     }
     else if (Action == InitActorExtra6Noise)
     {
-        PlaySpriteSound(SpriteNum, attr_extra6, v3df_follow);
+        PlaySpriteSound(actor, attr_extra6, v3df_follow);
     }
 
     return 0;
 }
 
-bool CanSeePlayer(short SpriteNum)
+bool CanSeePlayer(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
-
     // if actor can still see the player
-    int look_height = SPRITEp_TOS(sp);
+    int look_height = ActorZOfTop(actor);
 
-    //if (FAF_Sector(sp->sectnum))
-    //    return(true);
-
-    if (u->tgt_sp && FAFcansee(sp->x, sp->y, look_height, sp->sectnum, u->tgt_sp->x, u->tgt_sp->y, SPRITEp_UPPER(u->tgt_sp), u->tgt_sp->sectnum))
+    if (actor->user.targetActor && FAFcansee(actor->spr.pos.X, actor->spr.pos.Y, look_height, actor->sector(), actor->user.targetActor->spr.pos.X, actor->user.targetActor->spr.pos.Y, ActorUpperZ(actor->user.targetActor), actor->user.targetActor->sector()))
         return true;
     else
         return false;
 }
 
-int
-CanHitPlayer(short SpriteNum)
+int CanHitPlayer(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP, hp;
-    hitdata_t hitinfo;
+    HitInfo hit{};
     int xvect,yvect,zvect;
-    short ang,ret=false;
+    int ang;
     // if actor can still see the player
     int zhs, zhh;
 
-    //if (FAF_Sector(sp->sectnum))
-    //    return(true);
+    zhs = actor->spr.pos.Z - (ActorSizeZ(actor) >> 1);
 
-    zhs = sp->z - DIV2(SPRITEp_SIZE_Z(sp));
 
-    hp = u->tgt_sp;
+    auto targ = actor->user.targetActor;
 
     // get angle to target
-    ang = getangle(hp->x - sp->x, hp->y - sp->y);
+    ang = getangle(targ->spr.pos.X - actor->spr.pos.X, targ->spr.pos.Y - actor->spr.pos.Y);
 
     // get x,yvect
     xvect = bcos(ang);
     yvect = bsin(ang);
 
     // get zvect
-    zhh = hp->z - DIV2(SPRITEp_SIZE_Z(hp));
-    if (hp->x - sp->x != 0)
-        zvect = xvect * ((zhh - zhs)/(hp->x - sp->x));
-    else if (hp->y - sp->y != 0)
-        zvect = yvect * ((zhh - zhs)/(hp->y - sp->y));
+    zhh = targ->spr.pos.Z - (ActorSizeZ(targ) >> 1);
+    if (targ->spr.pos.X - actor->spr.pos.X != 0)
+        zvect = xvect * ((zhh - zhs) / (targ->spr.pos.X - actor->spr.pos.X));
+    else if (targ->spr.pos.Y - actor->spr.pos.Y != 0)
+        zvect = yvect * ((zhh - zhs) / (targ->spr.pos.Y - actor->spr.pos.Y));
     else
         return false;
 
-    // so actors won't shoot straight up at you
-    // need to be a bit of a distance away
-    // before they have a valid shot
-//    if (labs(zvect / FindDistance2D(hp->x - sp->x, hp->y - sp->y)) > 200)
-//       return(false);
-
-    FAFhitscan(sp->x, sp->y, zhs, sp->sectnum,
+    FAFhitscan(actor->spr.pos.X, actor->spr.pos.Y, zhs, actor->sector(),
                xvect,
                yvect,
                zvect,
-               &hitinfo, CLIPMASK_MISSILE);
+               hit, CLIPMASK_MISSILE);
 
-    if (hitinfo.sect < 0)
+    if (hit.hitSector == nullptr)
         return false;
 
-    if (hitinfo.sprite == u->tgt_sp - sprite)
+    if (hit.actor() == actor->user.targetActor)
         return true;
-
-    ////DSPRINTF(ds,"CanHit %s",ret ? "true" : "false");
-    //MONO_PRINT(ds);
 
     return false;
 }
@@ -387,36 +273,32 @@ CanHitPlayer(short SpriteNum)
   !AIC - Pick a nearby player to be the actors target
 */
 
-int
-DoActorPickClosePlayer(short SpriteNum)
+int DoActorPickClosePlayer(DSWActor* actor)
 {
-    //extern short Zombies;
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
     int dist, near_dist = MAX_ACTIVE_RANGE, a,b,c;
-    short pnum;
-    PLAYERp pp;
+    int pnum;
+    PLAYER* pp;
     // if actor can still see the player
-    int look_height = SPRITEp_TOS(sp);
+    int look_height = ActorZOfTop(actor);
     bool found = false;
     int i;
 
-    if (u->ID == ZOMBIE_RUN_R0 && gNet.MultiGameType == MULTI_GAME_COOPERATIVE)
+    if (actor->user.ID == ZOMBIE_RUN_R0 && gNet.MultiGameType == MULTI_GAME_COOPERATIVE)
         goto TARGETACTOR;
 
     // Set initial target to Player 0
-    u->tgt_sp = Player->SpriteP;
+    actor->user.targetActor = Player->actor;
 
-    if (TEST(u->Flags2, SPR2_DONT_TARGET_OWNER))
+    if (actor->user.Flags2 & (SPR2_DONT_TARGET_OWNER))
     {
         TRAVERSE_CONNECT(pnum)
         {
             pp = &Player[pnum];
 
-            if (sp->owner == pp->PlayerSprite)
+            if (GetOwner(actor) == pp->actor)
                 continue;
 
-            u->tgt_sp = pp->SpriteP;
+            actor->user.targetActor = pp->actor;
             break;
         }
     }
@@ -429,25 +311,25 @@ DoActorPickClosePlayer(short SpriteNum)
         pp = &Player[pnum];
 
         // Zombies don't target their masters!
-        if (TEST(u->Flags2, SPR2_DONT_TARGET_OWNER))
+        if (actor->user.Flags2 & (SPR2_DONT_TARGET_OWNER))
         {
-            if (sp->owner == pp->PlayerSprite)
+            if (GetOwner(actor) == pp->actor)
                 continue;
 
-            if (!PlayerTakeDamage(pp, SpriteNum))
+            if (!PlayerTakeDamage(pp, actor))
                 continue;
 
             // if co-op don't hurt teammate
-            // if (gNet.MultiGameType == MULTI_GAME_COOPERATIVE && !gNet.HurtTeammate && u->spal == User[pp->PlayerSprite]->spal)
+            // if (gNet.MultiGameType == MULTI_GAME_COOPERATIVE && !gNet.HurtTeammate && actor->user.spal == pp->actor->spr.spal)
             //    continue;
         }
 
-        DISTANCE(sp->x, sp->y, pp->posx, pp->posy, dist, a, b, c);
+        DISTANCE(actor->spr.pos.X, actor->spr.pos.Y, pp->pos.X, pp->pos.Y, dist, a, b, c);
 
         if (dist < near_dist)
         {
             near_dist = dist;
-            u->tgt_sp = pp->SpriteP;
+            actor->user.targetActor = pp->actor;
         }
     }
 
@@ -459,26 +341,22 @@ DoActorPickClosePlayer(short SpriteNum)
         pp = &Player[pnum];
 
         // Zombies don't target their masters!
-        if (TEST(u->Flags2, SPR2_DONT_TARGET_OWNER))
+        if (actor->user.Flags2 & (SPR2_DONT_TARGET_OWNER))
         {
-            if (sp->owner == pp->PlayerSprite)
+            if (GetOwner(actor) == pp->actor)
                 continue;
 
-            if (!PlayerTakeDamage(pp, SpriteNum))
+            if (!PlayerTakeDamage(pp, actor))
                 continue;
-
-            // if co-op don't hurt teammate
-            //if (gNet.MultiGameType == MULTI_GAME_COOPERATIVE && !gNet.HurtTeammate && u->spal == User[pp->PlayerSprite]->spal)
-            //    continue;
         }
 
-        DISTANCE(sp->x, sp->y, pp->posx, pp->posy, dist, a, b, c);
+        DISTANCE(actor->spr.pos.X, actor->spr.pos.Y, pp->pos.X, pp->pos.Y, dist, a, b, c);
 
-        //bool ICanSee = FAFcansee(sp->x, sp->y, look_height, sp->sectnum, pp->SpriteP->x, pp->SpriteP->y, SPRITEp_UPPER(pp->SpriteP), pp->SpriteP->sectnum);
-        if (dist < near_dist && FAFcansee(sp->x, sp->y, look_height, sp->sectnum, pp->SpriteP->x, pp->SpriteP->y, SPRITEp_UPPER(pp->SpriteP), pp->SpriteP->sectnum))
+        DSWActor* plActor = pp->actor;
+        if (dist < near_dist && FAFcansee(actor->spr.pos.X, actor->spr.pos.Y, look_height, actor->sector(), plActor->spr.pos.X, plActor->spr.pos.Y, ActorUpperZ(plActor), plActor->sector()))
         {
             near_dist = dist;
-            u->tgt_sp = pp->SpriteP;
+            actor->user.targetActor = pp->actor;
             found = true;
         }
     }
@@ -487,24 +365,24 @@ DoActorPickClosePlayer(short SpriteNum)
 TARGETACTOR:
     // this is only for Zombies right now
     // zombie target other actors
-    if (!found && TEST(u->Flags2, SPR2_DONT_TARGET_OWNER))
+    if (!found && (actor->user.Flags2 & SPR2_DONT_TARGET_OWNER))
     {
         near_dist = MAX_ACTIVE_RANGE;
-        StatIterator it(STAT_ENEMY);
-        while ((i = it.NextIndex()) >= 0)
+        SWStatIterator it(STAT_ENEMY);
+        while (auto itActor = it.Next())
         {
-            if (i == SpriteNum)
+            if (itActor == actor || !itActor->hasU())
                 continue;
 
-            if (TEST(User[i]->Flags, SPR_SUICIDE|SPR_DEAD))
+            if ((itActor->user.Flags & (SPR_SUICIDE | SPR_DEAD)))
                 continue;
 
-            DISTANCE(sp->x, sp->y, sprite[i].x, sprite[i].y, dist, a, b, c);
+            DISTANCE(actor->spr.pos.X, actor->spr.pos.Y, itActor->spr.pos.X, itActor->spr.pos.Y, dist, a, b, c);
 
-            if (dist < near_dist && FAFcansee(sp->x, sp->y, look_height, sp->sectnum, sprite[i].x, sprite[i].y, SPRITEp_UPPER(&sprite[i]), sprite[i].sectnum))
+            if (dist < near_dist && FAFcansee(actor->spr.pos.X, actor->spr.pos.Y, look_height, actor->sector(), itActor->spr.pos.X, itActor->spr.pos.Y, ActorUpperZ(itActor), itActor->sector()))
             {
                 near_dist = dist;
-                u->tgt_sp = &sprite[i];
+                actor->user.targetActor = itActor;
             }
         }
     }
@@ -512,103 +390,67 @@ TARGETACTOR:
     return 0;
 }
 
-int
-GetPlayerSpriteNum(short SpriteNum)
+DSWActor* GetPlayerSpriteNum(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    short pnum;
-    PLAYERp pp;
+    int pnum;
+    PLAYER* pp;
 
     TRAVERSE_CONNECT(pnum)
     {
         pp = &Player[pnum];
 
-        if (pp->SpriteP == u->tgt_sp)
+        if (pp->actor == actor->user.targetActor)
         {
-            return pp->PlayerSprite;
+            return pp->actor;
         }
     }
-    return 0;
+    return nullptr;
 }
 
-int
-CloseRangeDist(SPRITEp sp1, SPRITEp sp2)
+int CloseRangeDist(DSWActor* actor1, DSWActor* actor2)
 {
-    int clip1 = sp1->clipdist;
-    int clip2 = sp2->clipdist;
+    int clip1 = actor1->spr.clipdist;
+    int clip2 = actor2->spr.clipdist;
 
     // add clip boxes and a fudge factor
-#define DIST_CLOSE_RANGE 400
+    const int DIST_CLOSE_RANGE = 400;
 
-    return (clip1<<2) + (clip2<<2) + DIST_CLOSE_RANGE;
+    return (clip1 << 2) + (clip2 << 2) + DIST_CLOSE_RANGE;
 }
 
-int DoActorOperate(short SpriteNum)
+int DoActorOperate(DSWActor* actor)
 {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u = User[SpriteNum].Data();
-    short nearsector, nearwall, nearsprite;
-    int nearhitdist;
+    HitInfo near{};
     int z[2];
     unsigned int i;
 
-    if (u->ID == HORNET_RUN_R0 || u->ID == EEL_RUN_R0 || u->ID == BUNNY_RUN_R0)
+    if (actor->user.ID == HORNET_RUN_R0 || actor->user.ID == EEL_RUN_R0 || actor->user.ID == BUNNY_RUN_R0)
         return false;
 
-    if (u->Rot == u->ActorActionSet->Sit || u->Rot == u->ActorActionSet->Stand)
+    if (actor->user.Rot == actor->user.ActorActionSet->Sit || actor->user.Rot == actor->user.ActorActionSet->Stand)
         return false;
 
-    if ((u->WaitTics -= ACTORMOVETICS) > 0)
+    if ((actor->user.WaitTics -= ACTORMOVETICS) > 0)
         return false;
 
-    //DSPRINTF(ds,"sp->x = %ld, sp->y = %ld, sp->sector = %d, tp->x = %ld, tp->y = %ld, tp->ang = %d\n",sp->x,sp->y,sp->sectnum,tpoint->x,tpoint->y,tpoint->ang);
-    //MONO_PRINT(ds);
-
-    z[0] = sp->z - SPRITEp_SIZE_Z(sp) + Z(5);
-    z[1] = sp->z - DIV2(SPRITEp_SIZE_Z(sp));
+    z[0] = actor->spr.pos.Z - ActorSizeZ(actor) + Z(5);
+    z[1] = actor->spr.pos.Z - (ActorSizeZ(actor) >> 1);
 
     for (i = 0; i < SIZ(z); i++)
     {
-        neartag(sp->x, sp->y, z[i], sp->sectnum, sp->ang,
-                &nearsector, &nearwall, &nearsprite,
-                &nearhitdist, 1024L, NTAG_SEARCH_LO_HI, NULL);
-
-        //DSPRINTF(ds,"nearsector = %d, nearwall = %d, nearsprite = %d hitdist == %ld\n",nearsector,nearwall,nearsprite,nearhitdist);
-        //MONO_PRINT(ds);
-
-#if 0  // Actors don't hit switches on a whim
-        if (nearsprite >= 0 && nearhitdist < 1024)
-        {
-            if (OperateSprite(nearsprite, false))
-            {
-                u->WaitTics = 2 * 120;
-
-                NewStateGroup(SpriteNum, u->ActorActionSet->Stand);
-            }
-        }
-#endif
-
+        neartag({ actor->spr.pos.X, actor->spr.pos.Y, z[i] }, actor->sector(), actor->spr.ang, near, 1024, NTAG_SEARCH_LO_HI);
     }
 
-    if (nearsector >= 0 && nearhitdist < 1024)
+    if (near.hitSector != nullptr && near.hitpos.X < 1024)
     {
-        if (OperateSector(nearsector, false))
+        if (OperateSector(near.hitSector, false))
         {
-            u->WaitTics = 2 * 120;
+            actor->user.WaitTics = 2 * 120;
 
-            NewStateGroup(SpriteNum, u->ActorActionSet->Sit);
+            NewStateGroup(actor, actor->user.ActorActionSet->Sit);
         }
     }
 
-    if (nearwall >= 0 && nearhitdist < 1024)
-    {
-        if (OperateWall(nearwall, false))
-        {
-            u->WaitTics = 2 * 120;
-
-            NewStateGroup(SpriteNum, u->ActorActionSet->Stand);
-        }
-    }
     return true;
 
 }
@@ -625,118 +467,104 @@ DECISION GenericFlaming[] =
  every time through the loop.  This would be too slow.  It is only called when
  the actor needs to know what to do next such as running into something or being
  targeted.  It makes decisions based on the distance and viewablity of its target
- (u->tgt_sp).  When it figures out the situatation with its target it calls
+ (actor->user.targetActor).  When it figures out the situatation with its target it calls
  ChooseAction which does a random table lookup to decide what action to initialize.
  Once this action is initialized it will be called until it can't figure out what to
  do anymore and then this routine is called again.
 */
 
-ANIMATORp
-DoActorActionDecide(short SpriteNum)
+ANIMATOR* DoActorActionDecide(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
     int dist;
-    ANIMATORp action;
-    USERp pu=NULL;
+    ANIMATOR* action;
     bool ICanSee=false;
 
     // REMINDER: This function is not even called if SpriteControl doesn't let
     // it get called
 
-    ASSERT(u->Personality);
+    ASSERT(actor->user.Personality);
 
-    u->Dist = 0;
+    actor->user.Dist = 0;
     action = InitActorDecide;
 
     // target is gone.
-    if (u->tgt_sp == nullptr)
+    if (actor->user.targetActor == nullptr)
     {
         return action;
     }
 
-    if (TEST(u->Flags, SPR_JUMPING | SPR_FALLING))
+    if (actor->user.Flags & (SPR_JUMPING | SPR_FALLING))
     {
         //CON_Message("Jumping or falling");
         return action;
     }
 
     // everybody on fire acts like this
-    if (ActorFlaming(SpriteNum))
+    if (ActorFlaming(actor))
     {
         action = ChooseAction(&GenericFlaming[0]);
         //CON_Message("On Fire");
         return action;
     }
 
-    ICanSee = CanSeePlayer(SpriteNum);  // Only need to call once
+    ICanSee = CanSeePlayer(actor);  // Only need to call once
     // But need the result multiple times
 
     // !AIC KEY - If aware of player - var is changed in SpriteControl
-    if (TEST(u->Flags, SPR_ACTIVE))
+    if (actor->user.Flags & (SPR_ACTIVE))
     {
-        // CODE BELOW = CRAP, DON'T USE IT OR IT MAKES ACTORS NOT ANIMATE SOMETIMES!!!!!
-        // If target was actor, retarget to player it actor died
-        // or just randomly give the target actor a break
-        //if ((User[u->tgt_sp-sprite] &&
-        //    User[u->tgt_sp-sprite]->Health <= 0) || RANDOM_RANGE(1000) > 950)
-        //    {
-        //    DoActorPickClosePlayer(SpriteNum);
-        //    InitActorReposition(SpriteNum);
-        //    return(action);
-        //    }
 
         // Try to operate stuff
-        DoActorOperate(SpriteNum);
+        DoActorOperate(actor);
 
         // if far enough away and cannot see the player
-        dist = Distance(sp->x, sp->y, u->tgt_sp->x, u->tgt_sp->y);
+        dist = Distance(actor->spr.pos.X, actor->spr.pos.Y, actor->user.targetActor->spr.pos.X, actor->user.targetActor->spr.pos.Y);
 
         if (dist > 30000 && !ICanSee)
         {
             // Enemy goes inactive - he is still allowed to roam about for about
             // 5 seconds trying to find another player before his active_range is
             // bumped down
-            SetEnemyInactive(SpriteNum);
+            actor->user.Flags &= ~(SPR_ACTIVE);
 
             // You've lost the player - now decide what to do
-            action = ChooseAction(u->Personality->LostTarget);
+            action = ChooseAction(actor->user.Personality->LostTarget);
             //CON_Message("LostTarget");
             return action;
         }
 
 
-        pu = User[GetPlayerSpriteNum(SpriteNum)].Data();
+        auto pActor = GetPlayerSpriteNum(actor);
         // check for short range attack possibility
-        if ((dist < CloseRangeDist(sp, u->tgt_sp) && ICanSee) ||
-            (pu && pu->WeaponNum == WPN_FIST && u->ID != RIPPER2_RUN_R0 && u->ID != RIPPER_RUN_R0))
+        if ((dist < CloseRangeDist(actor, actor->user.targetActor) && ICanSee) ||
+            (pActor && pActor->hasU() && pActor->user.WeaponNum == WPN_FIST && actor->user.ID != RIPPER2_RUN_R0 && actor->user.ID != RIPPER_RUN_R0))
         {
-            if ((u->ID == COOLG_RUN_R0 && TEST(sp->cstat, CSTAT_SPRITE_TRANSLUCENT)) || TEST(sp->cstat, CSTAT_SPRITE_INVISIBLE))
-                action = ChooseAction(u->Personality->Evasive);
+            if ((actor->user.ID == COOLG_RUN_R0 && (actor->spr.cstat & CSTAT_SPRITE_TRANSLUCENT)) || (actor->spr.cstat & CSTAT_SPRITE_INVISIBLE))
+                action = ChooseAction(actor->user.Personality->Evasive);
             else
-                action = ChooseAction(u->Personality->CloseRange);
+                action = ChooseAction(actor->user.Personality->CloseRange);
             //CON_Message("CloseRange");
             return action;
         }
 
         // if player is facing me and I'm being attacked
-        if (FACING(sp, u->tgt_sp) && TEST(u->Flags, SPR_ATTACKED) && ICanSee)
+        if (Facing(actor, actor->user.targetActor) && (actor->user.Flags & SPR_ATTACKED) && ICanSee)
         {
             // if I'm a target - at least one missile comming at me
-            if (TEST(u->Flags, SPR_TARGETED))
+            if (actor->user.Flags & (SPR_TARGETED))
             {
                 // not going to evade, reset the target bit
-                RESET(u->Flags, SPR_TARGETED);        // as far as actor
+                actor->user.Flags &= ~(SPR_TARGETED);        // as far as actor
                 // knows, its not a
                 // target any more
-                if (u->ActorActionSet->Duck && RANDOM_P2(1024<<8)>>8 < 100)
+                if (actor->user.ActorActionSet->Duck && RANDOM_P2(1024<<8)>>8 < 100)
                     action = InitActorDuck;
                 else
                 {
-                    if ((u->ID == COOLG_RUN_R0 && TEST(sp->cstat, CSTAT_SPRITE_TRANSLUCENT)) || TEST(sp->cstat, CSTAT_SPRITE_INVISIBLE))
-                        action = ChooseAction(u->Personality->Evasive);
+                    if ((actor->user.ID == COOLG_RUN_R0 && (actor->spr.cstat & CSTAT_SPRITE_TRANSLUCENT)) || (actor->spr.cstat & CSTAT_SPRITE_INVISIBLE))
+                        action = ChooseAction(actor->user.Personality->Evasive);
                     else
-                        action = ChooseAction(u->Personality->Battle);
+                        action = ChooseAction(actor->user.Personality->Battle);
                 }
                 //CON_Message("Battle 1");
                 return action;
@@ -745,10 +573,10 @@ DoActorActionDecide(short SpriteNum)
             // fighting
             else
             {
-                if ((u->ID == COOLG_RUN_R0 && TEST(sp->cstat, CSTAT_SPRITE_TRANSLUCENT)) || TEST(sp->cstat, CSTAT_SPRITE_INVISIBLE))
-                    action = ChooseAction(u->Personality->Evasive);
+                if ((actor->user.ID == COOLG_RUN_R0 && (actor->spr.cstat & CSTAT_SPRITE_TRANSLUCENT)) || (actor->spr.cstat & CSTAT_SPRITE_INVISIBLE))
+                    action = ChooseAction(actor->user.Personality->Evasive);
                 else
-                    action = ChooseAction(u->Personality->Battle);
+                    action = ChooseAction(actor->user.Personality->Battle);
                 //CON_Message("Battle 2");
                 return action;
             }
@@ -757,17 +585,17 @@ DoActorActionDecide(short SpriteNum)
         // if player is NOT facing me he is running or unaware of actor
         else if (ICanSee)
         {
-            if ((u->ID == COOLG_RUN_R0 && TEST(sp->cstat, CSTAT_SPRITE_TRANSLUCENT)) || TEST(sp->cstat, CSTAT_SPRITE_INVISIBLE))
-                action = ChooseAction(u->Personality->Evasive);
+            if ((actor->user.ID == COOLG_RUN_R0 && (actor->spr.cstat & CSTAT_SPRITE_TRANSLUCENT)) || (actor->spr.cstat & CSTAT_SPRITE_INVISIBLE))
+                action = ChooseAction(actor->user.Personality->Evasive);
             else
-                action = ChooseAction(u->Personality->Offense);
+                action = ChooseAction(actor->user.Personality->Offense);
             //CON_Message("Offense");
             return action;
         }
         else
         {
             // You've lost the player - now decide what to do
-            action = ChooseAction(u->Personality->LostTarget);
+            action = ChooseAction(actor->user.Personality->LostTarget);
             //CON_Message("Close but cant see, LostTarget");
             return action;
         }
@@ -777,24 +605,24 @@ DoActorActionDecide(short SpriteNum)
     {
         // try and find another player
         // pick a closeby player as the (new) target
-        if (sp->hitag != TAG_SWARMSPOT)
-            DoActorPickClosePlayer(SpriteNum);
+        if (actor->spr.hitag != TAG_SWARMSPOT)
+            DoActorPickClosePlayer(actor);
 
         // if close by
-        dist = Distance(sp->x, sp->y, u->tgt_sp->x, u->tgt_sp->y);
+        dist = Distance(actor->spr.pos.X, actor->spr.pos.Y, actor->user.targetActor->spr.pos.X, actor->user.targetActor->spr.pos.Y);
         if (dist < 15000 || ICanSee)
         {
-            if ((FACING(sp, u->tgt_sp) && dist < 10000) || ICanSee)
+            if ((Facing(actor, actor->user.targetActor) && dist < 10000) || ICanSee)
             {
-                DoActorOperate(SpriteNum);
+                DoActorOperate(actor);
 
                 // Don't let player completely sneek up behind you
-                action = ChooseAction(u->Personality->Surprised);
+                action = ChooseAction(actor->user.Personality->Surprised);
                 //CON_Message("Surprised");
-                if (!u->DidAlert && ICanSee)
+                if (!actor->user.DidAlert && ICanSee)
                 {
-                    DoActorNoise(InitActorAlertNoise, SpriteNum);
-                    u->DidAlert = true;
+                    DoActorNoise(InitActorAlertNoise, actor);
+                    actor->user.DidAlert = true;
                 }
                 return action;
 
@@ -803,7 +631,7 @@ DoActorActionDecide(short SpriteNum)
             {
                 // Player has not seen actor, to be fair let him know actor
                 // are there
-                DoActorNoise(ChooseAction(u->Personality->Broadcast),SpriteNum);
+                DoActorNoise(ChooseAction(actor->user.Personality->Broadcast),actor);
                 //CON_Message("Actor Noise");
                 return action;
             }
@@ -819,70 +647,51 @@ DoActorActionDecide(short SpriteNum)
 */
 
 
-int
-InitActorDecide(short SpriteNum)
+int InitActorDecide(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-
-    // NOTE: It is possible to overflow the stack with too many calls to this
-    // routine
-    // Should use:
-    // u->ActorActionFunc = DoActorDecide;
-    // Instead of calling this function direcly
-
-    // MONO_PRINT(strcpy(ds,"Init Actor Stay Put"));
-
-    u->ActorActionFunc = DoActorDecide;
-
-    DoActorDecide(SpriteNum);
-
-    return 0;
+    actor->user.ActorActionFunc = DoActorDecide;
+    return DoActorDecide(actor);
 }
 
-int
-DoActorDecide(short SpriteNum)
+int DoActorDecide(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
-    ANIMATORp actor_action;
-
-    // DoActorTest(SpriteNum);
+    ANIMATOR* actor_action;
 
     // See what to do next
-    actor_action = DoActorActionDecide(SpriteNum);
+    actor_action = DoActorActionDecide(actor);
 
     // Fix for the GenericFlaming bug for actors that don't have attack states
-    if (actor_action == InitActorAttack && u->WeaponNum == 0)
+    if (actor_action == InitActorAttack && actor->user.WeaponNum == 0)
         return 0;   // Just let the actor do as it was doing before in this case
 
     // Target is gone.
-    if (u->tgt_sp == nullptr)
+    if (actor->user.targetActor == nullptr)
         return 0;
 
     // zombie is attacking a player
-    if (actor_action == InitActorAttack && u->ID == ZOMBIE_RUN_R0 && User[u->tgt_sp-sprite]->PlayerP)
+    if (actor_action == InitActorAttack && actor->user.ID == ZOMBIE_RUN_R0 && actor->user.targetActor->user.PlayerP)
     {
         // Don't let zombies shoot at master
-        if (sp->owner == (u->tgt_sp - sprite))
+        if (GetOwner(actor) == actor->user.targetActor)
             return 0;
 
         // if this player cannot take damage from this zombie(weapon) return out
-        if (!PlayerTakeDamage(User[u->tgt_sp-sprite]->PlayerP, SpriteNum))
+        if (!PlayerTakeDamage(actor->user.targetActor->user.PlayerP, actor))
             return 0;
     }
 
-    ASSERT(actor_action != NULL);
+    ASSERT(actor_action != nullptr);
 
     if (actor_action != InitActorDecide)
     {
         // NOT staying put
-        (*actor_action)(SpriteNum);
+        (*actor_action)(actor);
         //CON_Message("DoActorDecide: NOT Staying put");
     }
     else
     {
         // Actually staying put
-        NewStateGroup(SpriteNum, u->ActorActionSet->Stand);
+        NewStateGroup(actor, actor->user.ActorActionSet->Stand);
         //CON_Message("DoActorDecide: Staying put");
     }
 
@@ -895,172 +704,91 @@ DoActorDecide(short SpriteNum)
 int sw_snd_scratch = 0;
 
 
-int
-InitActorAlertNoise(short SpriteNum)
+int InitActorAlertNoise(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
     sw_snd_scratch = 1;
-    // MONO_PRINT(strcpy(ds,"Init Actor Threat Noise"));
-
-    // make some sort of noise here
-
-    // InitActorDecide(SpriteNum);
-    u->ActorActionFunc = DoActorDecide;
+    actor->user.ActorActionFunc = DoActorDecide;
 
     return 0;
 }
 
 
-int
-InitActorAmbientNoise(short SpriteNum)
+int InitActorAmbientNoise(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
     sw_snd_scratch = 2;
-
-    // MONO_PRINT(strcpy(ds,"Init Actor Move Noise"));
-
-    // make some sort of noise here
-
-    // InitActorDecide(SpriteNum);
-    u->ActorActionFunc = DoActorDecide;
+    actor->user.ActorActionFunc = DoActorDecide;
 
     return 0;
 }
 
-int
-InitActorAttackNoise(short SpriteNum)
+int InitActorAttackNoise(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
     sw_snd_scratch = 3;
-
-    // MONO_PRINT(strcpy(ds,"Init Actor Move Noise"));
-
-    // make some sort of noise here
-
-    // InitActorDecide(SpriteNum);
-    u->ActorActionFunc = DoActorDecide;
+    actor->user.ActorActionFunc = DoActorDecide;
 
     return 0;
 }
 
-int
-InitActorPainNoise(short SpriteNum)
+int InitActorPainNoise(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
     sw_snd_scratch = 4;
-
-    // MONO_PRINT(strcpy(ds,"Init Actor Move Noise"));
-
-    // make some sort of noise here
-
-    // InitActorDecide(SpriteNum);
-    u->ActorActionFunc = DoActorDecide;
+    actor->user.ActorActionFunc = DoActorDecide;
 
     return 0;
 }
 
-int
-InitActorDieNoise(short SpriteNum)
+int InitActorDieNoise(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
     sw_snd_scratch = 5;
-
-    // MONO_PRINT(strcpy(ds,"Init Actor Move Noise"));
-
-    // make some sort of noise here
-
-    // InitActorDecide(SpriteNum);
-    u->ActorActionFunc = DoActorDecide;
+    actor->user.ActorActionFunc = DoActorDecide;
 
     return 0;
 }
 
-int
-InitActorExtra1Noise(short SpriteNum)
+int InitActorExtra1Noise(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
     sw_snd_scratch = 6;
-    // MONO_PRINT(strcpy(ds,"Init Actor Move Noise"));
-
-    // make some sort of noise here
-
-    // InitActorDecide(SpriteNum);
-    u->ActorActionFunc = DoActorDecide;
+    actor->user.ActorActionFunc = DoActorDecide;
 
     return 0;
 }
 
-int
-InitActorExtra2Noise(short SpriteNum)
+int InitActorExtra2Noise(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
     sw_snd_scratch = 7;
-    // MONO_PRINT(strcpy(ds,"Init Actor Move Noise"));
-
-    // make some sort of noise here
-
-    // InitActorDecide(SpriteNum);
-    u->ActorActionFunc = DoActorDecide;
+    actor->user.ActorActionFunc = DoActorDecide;
 
     return 0;
 }
 
-int
-InitActorExtra3Noise(short SpriteNum)
+int InitActorExtra3Noise(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
     sw_snd_scratch = 8;
-    // MONO_PRINT(strcpy(ds,"Init Actor Move Noise"));
-
-    // make some sort of noise here
-
-    // InitActorDecide(SpriteNum);
-    u->ActorActionFunc = DoActorDecide;
+    actor->user.ActorActionFunc = DoActorDecide;
 
     return 0;
 }
 
-int
-InitActorExtra4Noise(short SpriteNum)
+int InitActorExtra4Noise(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
     sw_snd_scratch = 9;
-    // MONO_PRINT(strcpy(ds,"Init Actor Move Noise"));
-
-    // make some sort of noise here
-
-    // InitActorDecide(SpriteNum);
-    u->ActorActionFunc = DoActorDecide;
+    actor->user.ActorActionFunc = DoActorDecide;
 
     return 0;
 }
 
-int
-InitActorExtra5Noise(short SpriteNum)
+int InitActorExtra5Noise(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
     sw_snd_scratch = 10;
-    // MONO_PRINT(strcpy(ds,"Init Actor Move Noise"));
-
-    // make some sort of noise here
-
-    // InitActorDecide(SpriteNum);
-    u->ActorActionFunc = DoActorDecide;
+    actor->user.ActorActionFunc = DoActorDecide;
 
     return 0;
 }
 
-int
-InitActorExtra6Noise(short SpriteNum)
+int InitActorExtra6Noise(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
     sw_snd_scratch = 11;
-    // MONO_PRINT(strcpy(ds,"Init Actor Move Noise"));
-
-    // make some sort of noise here
-
-    // InitActorDecide(SpriteNum);
-    u->ActorActionFunc = DoActorDecide;
+    actor->user.ActorActionFunc = DoActorDecide;
 
     return 0;
 }
@@ -1070,119 +798,83 @@ InitActorExtra6Noise(short SpriteNum)
   !AIC KEY - Routines handle moving toward the player.
 */
 
-int
-InitActorMoveCloser(short SpriteNum)
+int InitActorMoveCloser(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
+    actor->user.ActorActionFunc = DoActorMoveCloser;
 
-    //MONO_PRINT("Init Actor Move Closer\n");
+    if (actor->user.Rot != actor->user.ActorActionSet->Run)
+        NewStateGroup(actor, actor->user.ActorActionSet->Run);
 
-    u->ActorActionFunc = DoActorMoveCloser;
-
-    if (u->Rot != u->ActorActionSet->Run)
-        NewStateGroup(SpriteNum, u->ActorActionSet->Run);
-
-    (*u->ActorActionFunc)(SpriteNum);
+    (*actor->user.ActorActionFunc)(actor);
 
     return 0;
 }
 
-int
-DoActorCantMoveCloser(short SpriteNum)
+int DoActorCantMoveCloser(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
+    actor->user.track = FindTrackToPlayer(actor);
 
-    //MONO_PRINT("Can't move closer\n");
-
-    u->track = FindTrackToPlayer(u);
-
-    if (u->track >= 0)
+    if (actor->user.track >= 0)
     {
-        sp->ang = getangle((Track[u->track].TrackPoint + u->point)->x - sp->x, (Track[u->track].TrackPoint + u->point)->y - sp->y);
+        actor->spr.ang = getangle((Track[actor->user.track].TrackPoint + actor->user.point)->x - actor->spr.pos.X, (Track[actor->user.track].TrackPoint + actor->user.point)->y - actor->spr.pos.Y);
 
-        DoActorSetSpeed(SpriteNum, MID_SPEED);
-        SET(u->Flags, SPR_FIND_PLAYER);
+        DoActorSetSpeed(actor, MID_SPEED);
+        actor->user.Flags |= (SPR_FIND_PLAYER);
 
-        u->ActorActionFunc = DoActorDecide;
-        NewStateGroup(SpriteNum, u->ActorActionSet->Run);
-        //MONO_PRINT("Trying to get to the track point\n");
+        actor->user.ActorActionFunc = DoActorDecide;
+        NewStateGroup(actor, actor->user.ActorActionSet->Run);
     }
     else
     {
-        int InitActorReposition(short SpriteNum);
-
         // Try to move closer
-        //MONO_PRINT("Move Closer - Trying to move around\n");
-
-        InitActorReposition(SpriteNum);
+        InitActorReposition(actor);
     }
     return 0;
 }
 
-int
-DoActorMoveCloser(short SpriteNum)
+int DoActorMoveCloser(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
     int nx, ny;
 
-    nx = MulScale(sp->xvel, bcos(sp->ang), 14);
-    ny = MulScale(sp->xvel, bsin(sp->ang), 14);
+    nx = MulScale(actor->spr.xvel, bcos(actor->spr.ang), 14);
+    ny = MulScale(actor->spr.xvel, bsin(actor->spr.ang), 14);
 
     // if cannot move the sprite
-    if (!move_actor(SpriteNum, nx, ny, 0L))
+    if (!move_actor(actor, nx, ny, 0))
     {
-        DebugMoveHit(SpriteNum);
-
-        if (ActorMoveHitReact(SpriteNum))
+        if (ActorMoveHitReact(actor))
             return 0;
 
-        DoActorCantMoveCloser(SpriteNum);
+        DoActorCantMoveCloser(actor);
         return 0;
     }
 
     // Do a noise if ok
-    DoActorNoise(ChooseAction(u->Personality->Broadcast),SpriteNum);
-
-#if 0
-    // evasion if targeted
-    if (TEST(u->Flags, SPR_TARGETED))
-    {
-        ANIMATORp action;
-
-        action = ChooseAction(u->Personality->Evasive);
-        if (action)
-        {
-            (*action)(SpriteNum);
-            return 0;
-        }
-    }
-#endif
+    DoActorNoise(ChooseAction(actor->user.Personality->Broadcast), actor);
 
     // after moving a ways check to see if player is still in sight
-    if (u->DistCheck > 550)
+    if (actor->user.DistCheck > 550)
     {
-        u->DistCheck = 0;
+        actor->user.DistCheck = 0;
 
         // If player moved out of sight
-        if (!CanSeePlayer(SpriteNum))
+        if (!CanSeePlayer(actor))
         {
             // stay put and choose another option
-            InitActorDecide(SpriteNum);
+            InitActorDecide(actor);
             return 0;
         }
         else
         {
             // turn to face player
-            sp->ang = getangle(u->tgt_sp->x - sp->x, u->tgt_sp->y - sp->y);
+            actor->spr.ang = getangle(actor->user.targetActor->spr.pos.X - actor->spr.pos.X, actor->user.targetActor->spr.pos.Y - actor->spr.pos.Y);
         }
     }
 
     // Should be a random value test
-    if (u->Dist > 512 * 3)
+    if (actor->user.Dist > 512 * 3)
     {
-        InitActorDecide(SpriteNum);
+        InitActorDecide(actor);
     }
 
     return 0;
@@ -1194,16 +886,14 @@ DoActorMoveCloser(short SpriteNum)
 */
 
 
-short
-FindTrackToPlayer(USERp u)
+int FindTrackToPlayer(DSWActor* actor)
 {
-    SPRITEp sp = u->SpriteP;
-
-    short point, track_dir, track;
-    short i, *type, size;
+    int point, track_dir, track;
+    int i, size;
+    const uint16_t* type;
     int zdiff;
 
-    static short PlayerAbove[] =
+    static const uint16_t PlayerAbove[] =
     {
         BIT(TT_LADDER),
         BIT(TT_STAIRS),
@@ -1213,7 +903,7 @@ FindTrackToPlayer(USERp u)
         BIT(TT_SCAN)
     };
 
-    static short PlayerBelow[] =
+    static const uint16_t PlayerBelow[] =
     {
         BIT(TT_JUMP_DOWN),
         BIT(TT_STAIRS),
@@ -1222,7 +912,7 @@ FindTrackToPlayer(USERp u)
         BIT(TT_SCAN)
     };
 
-    static short PlayerOnLevel[] =
+    static const uint16_t PlayerOnLevel[] =
     {
         BIT(TT_DUCK_N_SHOOT),
         BIT(TT_HIDE_N_SHOOT),
@@ -1232,11 +922,9 @@ FindTrackToPlayer(USERp u)
         BIT(TT_SCAN)
     };
 
-    //MONO_PRINT("FindTrackToPlayer\n");
+    zdiff = ActorUpperZ(actor->user.targetActor) - (actor->spr.pos.Z - ActorSizeZ(actor) + Z(8));
 
-    zdiff = SPRITEp_UPPER(u->tgt_sp) - (sp->z - SPRITEp_SIZE_Z(sp) + Z(8));
-
-    if (labs(zdiff) <= Z(20))
+    if (abs(zdiff) <= Z(20))
     {
         type = PlayerOnLevel;
         size = SIZ(PlayerOnLevel);
@@ -1258,16 +946,13 @@ FindTrackToPlayer(USERp u)
 
     for (i = 0; i < size; i++)
     {
-        track = ActorFindTrack(u->SpriteNum, 1, type[i], &point, &track_dir);
+        track = ActorFindTrack(actor, 1, type[i], &point, &track_dir);
 
         if (track >= 0)
         {
-            u->point = point;
-            u->track_dir = track_dir;
-            SET(Track[track].flags, TF_TRACK_OCCUPIED);
-
-            ////DSPRINTF(ds, "Found Track To Player\n");
-            //MONO_PRINT(ds);
+            actor->user.point = point;
+            actor->user.track_dir = track_dir;
+            Track[track].flags |= (TF_TRACK_OCCUPIED);
 
             return track;
         }
@@ -1279,13 +964,12 @@ FindTrackToPlayer(USERp u)
 
 
 
-short
-FindTrackAwayFromPlayer(USERp u)
+int FindTrackAwayFromPlayer(DSWActor* actor)
 {
-    short point, track_dir, track;
+    int point, track_dir, track;
     unsigned int i;
 
-    static short RunAwayTracks[] =
+    static const int16_t RunAwayTracks[] =
     {
         BIT(TT_EXIT),
         BIT(TT_LADDER),
@@ -1299,24 +983,18 @@ FindTrackAwayFromPlayer(USERp u)
         BIT(TT_SCAN)
     };
 
-    //MONO_PRINT("FindTrackAwayFromPlayer\n");
-
     for (i = 0; i < SIZ(RunAwayTracks); i++)
     {
-        track = ActorFindTrack(u->SpriteNum, -1, RunAwayTracks[i], &point, &track_dir);
+        track = ActorFindTrack(actor, -1, RunAwayTracks[i], &point, &track_dir);
 
         if (track >= 0)
         {
-            u->point = point;
-            u->track_dir = track_dir;
-            SET(Track[track].flags, TF_TRACK_OCCUPIED);
-
-            ////DSPRINTF(ds, "Found Run Away Track\n");
-            //MONO_PRINT(ds);
+            actor->user.point = point;
+            actor->user.track_dir = track_dir;
+            Track[track].flags |= (TF_TRACK_OCCUPIED);
 
             return track;
         }
-        //MONO_PRINT("Did not find a run away track!\n");
     }
 
     return -1;
@@ -1324,13 +1002,12 @@ FindTrackAwayFromPlayer(USERp u)
 }
 
 
-short
-FindWanderTrack(USERp u)
+int FindWanderTrack(DSWActor* actor)
 {
-    short point, track_dir, track;
+    int point, track_dir, track;
     unsigned int i;
 
-    static short WanderTracks[] =
+    static const int16_t WanderTracks[] =
     {
         BIT(TT_DUCK_N_SHOOT),
         BIT(TT_HIDE_N_SHOOT),
@@ -1344,17 +1021,15 @@ FindWanderTrack(USERp u)
         BIT(TT_OPERATE)
     };
 
-    //MONO_PRINT("FindWanderTrack\n");
-
     for (i = 0; i < SIZ(WanderTracks); i++)
     {
-        track = ActorFindTrack(u->SpriteNum, -1, WanderTracks[i], &point, &track_dir);
+        track = ActorFindTrack(actor, -1, WanderTracks[i], &point, &track_dir);
 
         if (track >= 0)
         {
-            u->point = point;
-            u->track_dir = track_dir;
-            SET(Track[track].flags, TF_TRACK_OCCUPIED);
+            actor->user.point = point;
+            actor->user.track_dir = track_dir;
+            Track[track].flags |= (TF_TRACK_OCCUPIED);
 
             return track;
         }
@@ -1364,49 +1039,35 @@ FindWanderTrack(USERp u)
 }
 
 
-int
-InitActorRunAway(short SpriteNum)
+int InitActorRunAway(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
+    actor->user.ActorActionFunc = DoActorDecide;
+    NewStateGroup(actor, actor->user.ActorActionSet->Run);
 
-    //MONO_PRINT("Init Actor RunAway\n");
+    actor->user.track = FindTrackAwayFromPlayer(actor);
 
-    u->ActorActionFunc = DoActorDecide;
-    NewStateGroup(SpriteNum, u->ActorActionSet->Run);
-
-    u->track = FindTrackAwayFromPlayer(u);
-
-    if (u->track >= 0)
+    if (actor->user.track >= 0)
     {
-        sp->ang = NORM_ANGLE(getangle((Track[u->track].TrackPoint + u->point)->x - sp->x, (Track[u->track].TrackPoint + u->point)->y - sp->y));
-        DoActorSetSpeed(SpriteNum, FAST_SPEED);
-        SET(u->Flags, SPR_RUN_AWAY);
-        //MONO_PRINT("Actor running away on track\n");
+        actor->spr.ang = NORM_ANGLE(getangle((Track[actor->user.track].TrackPoint + actor->user.point)->x - actor->spr.pos.X, (Track[actor->user.track].TrackPoint + actor->user.point)->y - actor->spr.pos.Y));
+        DoActorSetSpeed(actor, FAST_SPEED);
+        actor->user.Flags |= (SPR_RUN_AWAY);
     }
     else
     {
-        SET(u->Flags, SPR_RUN_AWAY);
-        InitActorReposition(SpriteNum);
-        ////DSPRINTF(ds, "Actor RunAway\n");
-        //MONO_PRINT(ds);
+        actor->user.Flags |= (SPR_RUN_AWAY);
+        InitActorReposition(actor);
     }
 
     return 0;
 }
 
-int
-InitActorRunToward(short SpriteNum)
+int InitActorRunToward(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
+    actor->user.ActorActionFunc = DoActorDecide;
+    NewStateGroup(actor, actor->user.ActorActionSet->Run);
 
-    //MONO_PRINT("InitActorRunToward\n");
-
-    u->ActorActionFunc = DoActorDecide;
-    NewStateGroup(SpriteNum, u->ActorActionSet->Run);
-
-    InitActorReposition(SpriteNum);
-    DoActorSetSpeed(SpriteNum, FAST_SPEED);
+    InitActorReposition(actor);
+    DoActorSetSpeed(actor, FAST_SPEED);
 
     return 0;
 }
@@ -1418,381 +1079,317 @@ InitActorRunToward(short SpriteNum)
 */
 
 
-int
-InitActorAttack(short SpriteNum)
+int InitActorAttack(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
-
     // zombie is attacking a player
-    if (u->ID == ZOMBIE_RUN_R0 && User[u->tgt_sp-sprite]->PlayerP)
+    if (actor->user.ID == ZOMBIE_RUN_R0 && actor->user.targetActor->hasU() && actor->user.targetActor->user.PlayerP)
     {
         // Don't let zombies shoot at master
-        if (sp->owner == (u->tgt_sp - sprite))
+        if (GetOwner(actor) == actor->user.targetActor)
             return 0;
 
         // if this player cannot take damage from this zombie(weapon) return out
-        if (!PlayerTakeDamage(User[u->tgt_sp-sprite]->PlayerP, SpriteNum))
+        if (!PlayerTakeDamage(actor->user.targetActor->user.PlayerP, actor))
             return 0;
     }
 
-    if (TEST(sprite[u->tgt_sp-sprite].cstat, CSTAT_SPRITE_TRANSLUCENT))
+    if ((actor->user.targetActor->spr.cstat & CSTAT_SPRITE_TRANSLUCENT))
     {
-        InitActorRunAway(SpriteNum);
+        InitActorRunAway(actor);
         return 0;
     }
 
-    if (User[u->tgt_sp-sprite].Data() &&
-        User[u->tgt_sp-sprite]->Health <= 0)
+    if (actor->user.targetActor->hasU() && actor->user.targetActor->user.Health <= 0)
     {
-        DoActorPickClosePlayer(SpriteNum);
-        InitActorReposition(SpriteNum);
+        DoActorPickClosePlayer(actor);
+        InitActorReposition(actor);
         return 0;
     }
 
-    if (!CanHitPlayer(SpriteNum))
+    if (!CanHitPlayer(actor))
     {
-        InitActorReposition(SpriteNum);
+        InitActorReposition(actor);
         return 0;
     }
 
     // if the guy you are after is dead, look for another and
     // reposition
-    if (User[u->tgt_sp-sprite].Data() &&
-        User[u->tgt_sp-sprite]->PlayerP &&
-        TEST(User[u->tgt_sp-sprite]->PlayerP->Flags, PF_DEAD))
+    if (actor->user.targetActor->hasU() && actor->user.targetActor->user.PlayerP &&
+        (actor->user.targetActor->user.PlayerP->Flags & PF_DEAD))
     {
-        DoActorPickClosePlayer(SpriteNum);
-        InitActorReposition(SpriteNum);
+        DoActorPickClosePlayer(actor);
+        InitActorReposition(actor);
         return 0;
     }
 
-    u->ActorActionFunc = DoActorAttack;
+    actor->user.ActorActionFunc = DoActorAttack;
 
     // move into standing frame
-    //NewStateGroup(SpriteNum, u->ActorActionSet->Stand);
+    //NewStateGroup(actor, actor->user.ActorActionSet->Stand);
 
     // face player when attacking
-    sp->ang = NORM_ANGLE(getangle(u->tgt_sp->x - sp->x, u->tgt_sp->y - sp->y));
+    actor->spr.ang = NORM_ANGLE(getangle(actor->user.targetActor->spr.pos.X - actor->spr.pos.X, actor->user.targetActor->spr.pos.Y - actor->spr.pos.Y));
 
     // If it's your own kind, lay off!
-    if (u->ID == User[u->tgt_sp - sprite]->ID && !User[u->tgt_sp - sprite]->PlayerP)
+    if (actor->user.ID == actor->user.targetActor->user.ID && !actor->user.targetActor->user.PlayerP)
     {
-        InitActorRunAway(SpriteNum);
+        InitActorRunAway(actor);
         return 0;
     }
 
-#if 0
-    // if low on health determine if needs to run away
-    if (u->Health < 26)
-    {
-        if (CHOOSE2(AttackOrRun))
-        {
-            InitActorRunAway(SpriteNum);
-
-            // could do a FindHealth here
-
-            return 0;
-        }
-
-    }
-#endif
-
     // Hari Kari for Ninja's
-    if (u->ActorActionSet->Death2)
+    if (actor->user.ActorActionSet->Death2)
     {
         //#define SUICIDE_HEALTH_VALUE 26
 #define SUICIDE_HEALTH_VALUE 38
         //#define SUICIDE_HEALTH_VALUE 50
 
-        if (u->Health < SUICIDE_HEALTH_VALUE)
+        if (actor->user.Health < SUICIDE_HEALTH_VALUE)
         {
             if (CHOOSE2(100))
             {
-                u->ActorActionFunc = DoActorDecide;
-                NewStateGroup(SpriteNum, u->ActorActionSet->Death2);
+                actor->user.ActorActionFunc = DoActorDecide;
+                NewStateGroup(actor, actor->user.ActorActionSet->Death2);
                 return 0;
             }
         }
     }
 
 
-    (*u->ActorActionFunc)(SpriteNum);
+    (*actor->user.ActorActionFunc)(actor);
 
     return 0;
 }
 
 
-int
-DoActorAttack(short SpriteNum)
+int DoActorAttack(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data(),pu;
-    SPRITEp sp = User[SpriteNum]->SpriteP;
-    short rand_num;
+    int rand_num;
     int dist,a,b,c;
 
-    DoActorNoise(ChooseAction(u->Personality->Broadcast),SpriteNum);
+    DoActorNoise(ChooseAction(actor->user.Personality->Broadcast),actor);
 
-    DISTANCE(sp->x, sp->y, u->tgt_sp->x, u->tgt_sp->y, dist, a, b, c);
+    DISTANCE(actor->spr.pos.X, actor->spr.pos.Y, actor->user.targetActor->spr.pos.X, actor->user.targetActor->spr.pos.Y, dist, a, b, c);
 
-    pu = User[GetPlayerSpriteNum(SpriteNum)].Data();
-    if ((u->ActorActionSet->CloseAttack[0] && dist < CloseRangeDist(sp, u->tgt_sp)) ||
-        (pu && pu->WeaponNum == WPN_FIST))      // JBF: added null check
+    auto pActor = GetPlayerSpriteNum(actor);
+    if ((actor->user.ActorActionSet->CloseAttack[0] && dist < CloseRangeDist(actor, actor->user.targetActor)) ||
+        (pActor && pActor->hasU() && pActor->user.WeaponNum == WPN_FIST))      // JBF: added null check
     {
-        rand_num = ChooseActionNumber(u->ActorActionSet->CloseAttackPercent);
+        rand_num = ChooseActionNumber(actor->user.ActorActionSet->CloseAttackPercent);
 
-        NewStateGroup(SpriteNum, u->ActorActionSet->CloseAttack[rand_num]);
+        NewStateGroup(actor, actor->user.ActorActionSet->CloseAttack[rand_num]);
     }
     else
     {
-        ASSERT(u->WeaponNum != 0);
+        ASSERT(actor->user.WeaponNum != 0);
 
-        rand_num = ChooseActionNumber(u->ActorActionSet->AttackPercent);
+        rand_num = ChooseActionNumber(actor->user.ActorActionSet->AttackPercent);
 
-        ASSERT(rand_num < u->WeaponNum);
+        ASSERT(rand_num < actor->user.WeaponNum);
 
-        NewStateGroup(SpriteNum, u->ActorActionSet->Attack[rand_num]);
-        u->ActorActionFunc = DoActorDecide;
+        NewStateGroup(actor, actor->user.ActorActionSet->Attack[rand_num]);
+        actor->user.ActorActionFunc = DoActorDecide;
     }
 
-    //u->ActorActionFunc = DoActorDecide;
+    //actor->user.ActorActionFunc = DoActorDecide;
 
     return 0;
 }
 
-int
-InitActorEvade(short SpriteNum)
+int InitActorEvade(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
-
-    //MONO_PRINT("Init Actor Evade\n");
-
-    // Evade is same thing as run away except when you get to the end of the
-    // track
+    // Evade is same thing as run away except when you get to the end of the track
     // you stop and take up the fight again.
 
-    u->ActorActionFunc = DoActorDecide;
-    NewStateGroup(SpriteNum, u->ActorActionSet->Run);
+    actor->user.ActorActionFunc = DoActorDecide;
+    NewStateGroup(actor, actor->user.ActorActionSet->Run);
 
-    u->track = FindTrackAwayFromPlayer(u);
+    actor->user.track = FindTrackAwayFromPlayer(actor);
 
-    if (u->track >= 0)
+    if (actor->user.track >= 0)
     {
-        sp->ang = NORM_ANGLE(getangle((Track[u->track].TrackPoint + u->point)->x - sp->x, (Track[u->track].TrackPoint + u->point)->y - sp->y));
-        DoActorSetSpeed(SpriteNum, FAST_SPEED);
+        actor->spr.ang = NORM_ANGLE(getangle((Track[actor->user.track].TrackPoint + actor->user.point)->x - actor->spr.pos.X, (Track[actor->user.track].TrackPoint + actor->user.point)->y - actor->spr.pos.Y));
+        DoActorSetSpeed(actor, FAST_SPEED);
         // NOT doing a RUN_AWAY
-        RESET(u->Flags, SPR_RUN_AWAY);
+        actor->user.Flags &= ~(SPR_RUN_AWAY);
     }
 
     return 0;
 }
 
-int
-InitActorWanderAround(short SpriteNum)
+int InitActorWanderAround(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
+    actor->user.ActorActionFunc = DoActorDecide;
+    NewStateGroup(actor, actor->user.ActorActionSet->Run);
 
-    //DSPRINTF(ds, "InitActorWanderAround\n");
-    //MONO_PRINT(ds);
+    DoActorPickClosePlayer(actor);
 
-    u->ActorActionFunc = DoActorDecide;
-    NewStateGroup(SpriteNum, u->ActorActionSet->Run);
+    actor->user.track = FindWanderTrack(actor);
 
-    DoActorPickClosePlayer(SpriteNum);
-
-    u->track = FindWanderTrack(u);
-
-    if (u->track >= 0)
+    if (actor->user.track >= 0)
     {
-        sp->ang = getangle((Track[u->track].TrackPoint + u->point)->x - sp->x, (Track[u->track].TrackPoint + u->point)->y - sp->y);
-        DoActorSetSpeed(SpriteNum, NORM_SPEED);
+        actor->spr.ang = getangle((Track[actor->user.track].TrackPoint + actor->user.point)->x - actor->spr.pos.X, (Track[actor->user.track].TrackPoint + actor->user.point)->y - actor->spr.pos.Y);
+        DoActorSetSpeed(actor, NORM_SPEED);
     }
 
     return 0;
 }
 
-int
-InitActorFindPlayer(short SpriteNum)
+int InitActorFindPlayer(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
-    int DoActorFindPlayer(short SpriteNum);
+    actor->user.ActorActionFunc = DoActorDecide;
+    NewStateGroup(actor, actor->user.ActorActionSet->Run);
 
-    //DSPRINTF(ds, "InitActorFindPlayer\n");
-    //MONO_PRINT(ds);
+    actor->user.track = FindTrackToPlayer(actor);
 
-    u->ActorActionFunc = DoActorDecide;
-    NewStateGroup(SpriteNum, u->ActorActionSet->Run);
-
-    u->track = FindTrackToPlayer(u);
-
-    if (u->track >= 0)
+    if (actor->user.track >= 0)
     {
-        sp->ang = getangle((Track[u->track].TrackPoint + u->point)->x - sp->x, (Track[u->track].TrackPoint + u->point)->y - sp->y);
-        DoActorSetSpeed(SpriteNum, MID_SPEED);
-        SET(u->Flags, SPR_FIND_PLAYER);
+        actor->spr.ang = getangle((Track[actor->user.track].TrackPoint + actor->user.point)->x - actor->spr.pos.X, (Track[actor->user.track].TrackPoint + actor->user.point)->y - actor->spr.pos.Y);
+        DoActorSetSpeed(actor, MID_SPEED);
+        actor->user.Flags |= (SPR_FIND_PLAYER);
 
-        u->ActorActionFunc = DoActorDecide;
-        NewStateGroup(SpriteNum, u->ActorActionSet->Run);
+        actor->user.ActorActionFunc = DoActorDecide;
+        NewStateGroup(actor, actor->user.ActorActionSet->Run);
     }
     else
     {
-        InitActorReposition(SpriteNum);
+        InitActorReposition(actor);
     }
 
 
     return 0;
 }
 
-int
-InitActorDuck(short SpriteNum)
+int InitActorDuck(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
-    short dist;
+    int dist;
 
-//    MONO_PRINT(strcpy(ds, "Init Actor Duck"));
-
-    if (!u->ActorActionSet->Duck)
+    if (!actor->user.ActorActionSet->Duck)
     {
-        u->ActorActionFunc = DoActorDecide;
+        actor->user.ActorActionFunc = DoActorDecide;
         return 0;
     }
 
-    u->ActorActionFunc = DoActorDuck;
-    NewStateGroup(SpriteNum, u->ActorActionSet->Duck);
+    actor->user.ActorActionFunc = DoActorDuck;
+    NewStateGroup(actor, actor->user.ActorActionSet->Duck);
 
-    dist = Distance(sp->x, sp->y, u->tgt_sp->x, u->tgt_sp->y);
+    dist = Distance(actor->spr.pos.X, actor->spr.pos.Y, actor->user.targetActor->spr.pos.X, actor->user.targetActor->spr.pos.Y);
 
     if (dist > 8000)
     {
-        u->WaitTics = 190;
+        actor->user.WaitTics = 190;
     }
     else
     {
-        //u->WaitTics = 120;
-        u->WaitTics = 60;
+        //actor->user.WaitTics = 120;
+        actor->user.WaitTics = 60;
     }
 
 
-    (*u->ActorActionFunc)(SpriteNum);
+    (*actor->user.ActorActionFunc)(actor);
 
     return 0;
 }
 
-int
-DoActorDuck(short SpriteNum)
+int DoActorDuck(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-
-    if ((u->WaitTics -= ACTORMOVETICS) < 0)
+    if ((actor->user.WaitTics -= ACTORMOVETICS) < 0)
     {
-        NewStateGroup(SpriteNum, u->ActorActionSet->Rise);
-        u->ActorActionFunc = DoActorDecide;
-        // InitActorDecide(SpriteNum);
-        RESET(u->Flags, SPR_TARGETED);
+        NewStateGroup(actor, actor->user.ActorActionSet->Rise);
+        actor->user.ActorActionFunc = DoActorDecide;
+        actor->user.Flags &= ~(SPR_TARGETED);
     }
 
     return 0;
 }
 
-int
-DoActorMoveJump(short SpriteNum)
+int DoActorMoveJump(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
     int nx, ny;
 
     // Move while jumping
 
-    nx = MulScale(sp->xvel, bcos(sp->ang), 14);
-    ny = MulScale(sp->xvel, bsin(sp->ang), 14);
+    nx = MulScale(actor->spr.xvel, bcos(actor->spr.ang), 14);
+    ny = MulScale(actor->spr.xvel, bsin(actor->spr.ang), 14);
 
-    move_actor(SpriteNum, nx, ny, 0L);
+    move_actor(actor, nx, ny, 0L);
 
-    if (!TEST(u->Flags, SPR_JUMPING|SPR_FALLING))
+    if (!(actor->user.Flags & (SPR_JUMPING|SPR_FALLING)))
     {
-        InitActorDecide(SpriteNum);
+        InitActorDecide(actor);
     }
 
     return 0;
 }
 
 
-int move_scan(short SpriteNum, short ang, int dist, int *stopx, int *stopy, int *stopz, short *stopsect)
+Collision move_scan(DSWActor* actor, int ang, int dist, int *stopx, int *stopy, int *stopz)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
-
     int nx,ny;
     uint32_t cliptype = CLIPMASK_ACTOR;
-    int ret;
 
-    short sang,ss;
+    int sang;
     int x, y, z, loz, hiz;
-    SPRITEp lo_sp, hi_sp;
-    SECTORp lo_sectp, hi_sectp;
+    DSWActor* highActor;
+    DSWActor* lowActor;
+    sectortype* lo_sectp,* hi_sectp, *ssp;
 
 
     // moves out a bit but keeps the sprites original postion/sector.
 
     // save off position info
-    x = sp->x;
-    y = sp->y;
-    z = sp->z;
-    sang = sp->ang;
-    loz = u->loz;
-    hiz = u->hiz;
-    lo_sp = u->lo_sp;
-    hi_sp = u->hi_sp;
-    lo_sectp = u->lo_sectp;
-    hi_sectp = u->hi_sectp;
-    ss = sp->sectnum;
+    x = actor->spr.pos.X;
+    y = actor->spr.pos.Y;
+    z = actor->spr.pos.Z;
+    sang = actor->spr.ang;
+    loz = actor->user.loz;
+    hiz = actor->user.hiz;
+    lowActor = actor->user.lowActor;
+    highActor = actor->user.highActor;
+    lo_sectp = actor->user.lo_sectp;
+    hi_sectp = actor->user.hi_sectp;
+    ssp = actor->sector();
 
     // do the move
-    sp->ang = ang;
-    nx = MulScale(dist, bcos(sp->ang), 14);
-    ny = MulScale(dist, bsin(sp->ang), 14);
+    actor->spr.ang = ang;
+    nx = MulScale(dist, bcos(actor->spr.ang), 14);
+    ny = MulScale(dist, bsin(actor->spr.ang), 14);
 
-    ret = move_sprite(SpriteNum, nx, ny, 0, u->ceiling_dist, u->floor_dist, cliptype, 1);
+    Collision ret = move_sprite(actor, nx, ny, 0, actor->user.ceiling_dist, actor->user.floor_dist, cliptype, 1);
     // move_sprite DOES do a getzrange point?
 
     // should I look down with a FAFgetzrange to see where I am?
 
     // remember where it stopped
-    *stopx = sp->x;
-    *stopy = sp->y;
-    *stopz = sp->z;
-    *stopsect = sp->sectnum;
+    *stopx = actor->spr.pos.X;
+    *stopy = actor->spr.pos.Y;
+    *stopz = actor->spr.pos.Z;
 
     // reset position information
-    sp->x = x;
-    sp->y = y;
-    sp->z = z;
-    sp->ang = sang;
-    u->loz = loz;
-    u->hiz = hiz;
-    u->lo_sp = lo_sp;
-    u->hi_sp = hi_sp;
-    u->lo_sectp = lo_sectp;
-    u->hi_sectp = hi_sectp;
-    changespritesect(SpriteNum, ss);
+    actor->spr.pos.X = x;
+    actor->spr.pos.Y = y;
+    actor->spr.pos.Z = z;
+    actor->spr.ang = sang;
+    actor->user.loz = loz;
+    actor->user.hiz = hiz;
+    actor->user.lowActor = lowActor;
+    actor->user.highActor = highActor;
+    actor->user.lo_sectp = lo_sectp;
+    actor->user.hi_sectp = hi_sectp;
+    ChangeActorSect(actor, ssp);
 
     return ret;
 }
 
-#define TOWARD 1
-#define AWAY -1
-
-int
-FindNewAngle(short SpriteNum, signed char dir, int DistToMove)
+enum
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
+    TOWARD = 1,
+    AWAY = -1
+};
 
-    static short toward_angle_delta[4][9] =
+int FindNewAngle(DSWActor* actor, int dir, int DistToMove)
+{
+    static const int16_t toward_angle_delta[4][9] =
     {
         { -160, -384, 160, 384, -256, 256, -512, 512, -99},
         { -384, -160, 384, 160, -256, 256, -512, 512, -99},
@@ -1800,7 +1397,7 @@ FindNewAngle(short SpriteNum, signed char dir, int DistToMove)
         { 384, 160, -384, -160, 256, -256, 512, -512, -99}
     };
 
-    static short away_angle_delta[4][8] =
+    static const int16_t away_angle_delta[4][8] =
     {
         { -768, 768, -640, 640, -896, 896, 1024, -99},
         { 768, -768, 640, -640, -896, 896, 1024, -99},
@@ -1809,24 +1406,22 @@ FindNewAngle(short SpriteNum, signed char dir, int DistToMove)
     };
 
 
-    int16_t* adp = NULL;
+    const int16_t* adp = nullptr;
 
-    short new_ang, oang;
-    short save_ang = -1;
-    unsigned short ret;
+    int new_ang, oang;
+    int save_ang = -1;
     int set;
 
     int dist, stopx, stopy, stopz;
-    short stopsect;
     // start out with mininum distance that will be accepted as a move
     int save_dist = 500;
 
     // if on fire, run shorter distances
-    if (ActorFlaming(SpriteNum))
-        DistToMove = DIV4(DistToMove) + DIV8(DistToMove);
+    if (ActorFlaming(actor))
+        DistToMove = (DistToMove >> 2) + (DistToMove >> 3);
 
     // Find angle to from the player
-    oang = NORM_ANGLE(getangle(u->tgt_sp->x - sp->x, u->tgt_sp->y - sp->y));
+    oang = NORM_ANGLE(getangle(actor->user.targetActor->spr.pos.X - actor->spr.pos.X, actor->user.targetActor->spr.pos.Y - actor->spr.pos.Y));
 
     // choose a random angle array
     switch (dir)
@@ -1837,7 +1432,7 @@ FindNewAngle(short SpriteNum, signed char dir, int DistToMove)
         break;
     case AWAY:
         set = RANDOM_P2(4<<8)>>8;
-        if (CanHitPlayer(SpriteNum))
+        if (CanHitPlayer(actor))
         {
             adp = &toward_angle_delta[set][0];
         }
@@ -1847,7 +1442,7 @@ FindNewAngle(short SpriteNum, signed char dir, int DistToMove)
         }
         break;
     default:
-        printf("FindNewAngle called with dir=%d!\n",dir);
+        Printf("FindNewAngle called with dir=%d!\n",dir);
         return 0;
     }
 
@@ -1857,31 +1452,31 @@ FindNewAngle(short SpriteNum, signed char dir, int DistToMove)
 
 #if 1
         // look directly ahead for a ledge
-        if (!TEST(u->Flags, SPR_NO_SCAREDZ | SPR_JUMPING | SPR_FALLING | SPR_SWIMMING | SPR_DEAD))
+        if (!(actor->user.Flags & (SPR_NO_SCAREDZ | SPR_JUMPING | SPR_FALLING | SPR_SWIMMING | SPR_DEAD)))
         {
-            sp->ang = new_ang;
-            if (DropAhead(SpriteNum, u->lo_step))
+            actor->spr.ang = new_ang;
+            if (DropAhead(actor, actor->user.lo_step))
             {
-                sp->ang = oang;
+                actor->spr.ang = oang;
                 continue;
             }
-            sp->ang = oang;
+            actor->spr.ang = oang;
         }
 #endif
 
         // check to see how far we can move
-        ret = move_scan(SpriteNum, new_ang, DistToMove, &stopx, &stopy, &stopz, &stopsect);
+        auto ret = move_scan(actor, new_ang, DistToMove, &stopx, &stopy, &stopz);
 
-        if (ret == 0)
+        if (ret.type == kHitNone)
         {
             // cleanly moved in new direction without hitting something
-            u->TargetDist = Distance(sp->x, sp->y, stopx, stopy);
+            actor->user.TargetDist = Distance(actor->spr.pos.X, actor->spr.pos.Y, stopx, stopy);
             return new_ang;
         }
         else
         {
             // hit something
-            dist = Distance(sp->x, sp->y, stopx, stopy);
+            dist = Distance(actor->spr.pos.X, actor->spr.pos.Y, stopx, stopy);
 
             if (dist > save_dist)
             {
@@ -1893,7 +1488,7 @@ FindNewAngle(short SpriteNum, signed char dir, int DistToMove)
 
     if (save_ang != -1)
     {
-        u->TargetDist = save_dist;
+        actor->user.TargetDist = save_dist;
 
         // If actor moved to the TargetDist it would look like he was running
         // into things.
@@ -1901,10 +1496,10 @@ FindNewAngle(short SpriteNum, signed char dir, int DistToMove)
         // To keep this from happening make the TargetDist is less than the
         // point you would hit something
 
-        if (u->TargetDist > 4000)
-            u->TargetDist -= 3500;
+        if (actor->user.TargetDist > 4000)
+            actor->user.TargetDist -= 3500;
 
-        sp->ang = save_ang;
+        actor->spr.ang = save_ang;
         return save_ang;
     }
 
@@ -1925,20 +1520,13 @@ FindNewAngle(short SpriteNum, signed char dir, int DistToMove)
 
 */
 
-#define REPOSITION 2
-
-#if REPOSITION == 2
-int
-InitActorReposition(short SpriteNum)
+int InitActorReposition(DSWActor* actor)
 {
-    int DoActorReposition(short SpriteNum);
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
-    short ang;
+    int ang;
     int rnum;
     int dist;
 
-    static int AwayDist[8] =
+    static const int AwayDist[8] =
     {
         17000,
         20000,
@@ -1950,7 +1538,7 @@ InitActorReposition(short SpriteNum)
         42000
     };
 
-    static int TowardDist[8] =
+    static const int TowardDist[8] =
     {
         10000,
         15000,
@@ -1962,7 +1550,7 @@ InitActorReposition(short SpriteNum)
         40000
     };
 
-    static int PlayerDist[8] =
+    static const int16_t PlayerDist[8] =
     {
         2000,
         3000,
@@ -1974,42 +1562,40 @@ InitActorReposition(short SpriteNum)
         9000
     };
 
-    //MONO_PRINT("InitActorReposition\n");
-
-    u->Dist = 0;
+    actor->user.Dist = 0;
 
     rnum = RANDOM_P2(8<<8)>>8;
-    dist = Distance(sp->x, sp->y, u->tgt_sp->x, u->tgt_sp->y);
+    dist = Distance(actor->spr.pos.X, actor->spr.pos.Y, actor->user.targetActor->spr.pos.X, actor->user.targetActor->spr.pos.Y);
 
-    if (dist < PlayerDist[rnum] || TEST(u->Flags, SPR_RUN_AWAY))
+    if (dist < PlayerDist[rnum] || (actor->user.Flags & SPR_RUN_AWAY))
     {
         rnum = RANDOM_P2(8<<8)>>8;
-        ang = FindNewAngle(SpriteNum, AWAY, AwayDist[rnum]);
+        ang = FindNewAngle(actor, AWAY, AwayDist[rnum]);
         if (ang == -1)
         {
-            u->Vis = 8;
-            InitActorPause(SpriteNum);
+            actor->user.Vis = 8;
+            InitActorPause(actor);
             return 0;
         }
 
-        sp->ang = ang;
-        DoActorSetSpeed(SpriteNum, FAST_SPEED);
-        RESET(u->Flags, SPR_RUN_AWAY);
+        actor->spr.ang = ang;
+        DoActorSetSpeed(actor, FAST_SPEED);
+        actor->user.Flags &= ~(SPR_RUN_AWAY);
     }
     else
     {
         // try to move toward player
         rnum = RANDOM_P2(8<<8)>>8;
-        ang = FindNewAngle(SpriteNum, TOWARD, TowardDist[rnum]);
+        ang = FindNewAngle(actor, TOWARD, TowardDist[rnum]);
         if (ang == -1)
         {
             // try to move away from player
             rnum = RANDOM_P2(8<<8)>>8;
-            ang = FindNewAngle(SpriteNum, AWAY, AwayDist[rnum]);
+            ang = FindNewAngle(actor, AWAY, AwayDist[rnum]);
             if (ang == -1)
             {
-                u->Vis = 8;
-                InitActorPause(SpriteNum);
+                actor->user.Vis = 8;
+                InitActorPause(actor);
                 return 0;
             }
         }
@@ -2017,186 +1603,80 @@ InitActorReposition(short SpriteNum)
         {
             // pick random speed to move toward the player
             if (RANDOM_P2(1024) < 512)
-                DoActorSetSpeed(SpriteNum, NORM_SPEED);
+                DoActorSetSpeed(actor, NORM_SPEED);
             else
-                DoActorSetSpeed(SpriteNum, MID_SPEED);
+                DoActorSetSpeed(actor, MID_SPEED);
         }
 
-        sp->ang = ang;
+        actor->spr.ang = ang;
     }
 
 
-    u->ActorActionFunc = DoActorReposition;
-    if (!TEST(u->Flags, SPR_SWIMMING))
-        NewStateGroup(SpriteNum, u->ActorActionSet->Run);
+    actor->user.ActorActionFunc = DoActorReposition;
+    if (!(actor->user.Flags & SPR_SWIMMING))
+        NewStateGroup(actor, actor->user.ActorActionSet->Run);
 
-    (*u->ActorActionFunc)(SpriteNum);
+    (*actor->user.ActorActionFunc)(actor);
 
     return 0;
 }
 
-int
-DoActorReposition(short SpriteNum)
+int DoActorReposition(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
     int nx, ny;
 
-    nx = MulScale(sp->xvel, bcos(sp->ang), 14);
-    ny = MulScale(sp->xvel, bsin(sp->ang), 14);
+    nx = MulScale(actor->spr.xvel, bcos(actor->spr.ang), 14);
+    ny = MulScale(actor->spr.xvel, bsin(actor->spr.ang), 14);
 
     // still might hit something and have to handle it.
-    if (!move_actor(SpriteNum, nx, ny, 0L))
+    if (!move_actor(actor, nx, ny, 0L))
     {
-        if (ActorMoveHitReact(SpriteNum))
+        if (ActorMoveHitReact(actor))
             return 0;
 
-        u->Vis = 6;
-        InitActorPause(SpriteNum);
+        actor->user.Vis = 6;
+        InitActorPause(actor);
         return 0;
     }
 
     // if close to target distance do a Decision again
-    if (u->TargetDist < 50)
+    if (actor->user.TargetDist < 50)
     {
-        InitActorDecide(SpriteNum);
+        InitActorDecide(actor);
     }
 
     return 0;
 }
 
 
-int
-InitActorPause(short SpriteNum)
+int InitActorPause(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
+    actor->user.ActorActionFunc = DoActorPause;
 
-    u->ActorActionFunc = DoActorPause;
-
-    // !JIM! This makes actors not animate
-    //if (!TEST(u->Flags, SPR_SWIMMING))
-    //NewStateGroup(SpriteNum, u->ActorActionSet->Stand);
-
-    (*u->ActorActionFunc)(SpriteNum);
+    (*actor->user.ActorActionFunc)(actor);
 
     return 0;
 }
 
-int
-DoActorPause(short SpriteNum)
+int DoActorPause(DSWActor* actor)
 {
-    USERp u = User[SpriteNum].Data();
-
     // Using Vis instead of WaitTics, var name sucks, but it's the same type
     // WaitTics is used by too much other actor code and causes problems here
-    if ((u->Vis -= ACTORMOVETICS) < 0)
+    if ((actor->user.Vis -= ACTORMOVETICS) < 0)
     {
-        u->ActorActionFunc = DoActorDecide;
-        RESET(u->Flags, SPR_TARGETED);
-    }
-
-    return 0;
-}
-#endif
-
-// not used - simplified version that is purely random that is easier to follow
-// just leaving it here to look at
-#if REPOSITION == 1
-int
-InitActorReposition(short SpriteNum)
-{
-    int DoActorReposition(short SpriteNum);
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
-
-    //MONO_PRINT("InitActorReposition\n");
-
-    u->WaitTics = 8;
-    sp->ang = RANDOM_P2(2048);
-
-    u->ActorActionFunc = DoActorReposition;
-    NewStateGroup(SpriteNum, u->ActorActionSet->Run);
-
-    (*u->ActorActionFunc)(SpriteNum);
-
-    return 0;
-}
-
-int
-DoActorReposition(short SpriteNum)
-{
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
-    int nx, ny;
-
-    nx = MulScale(sp->xvel, bcos(sp->ang), 14);
-    ny = MulScale(sp->xvel, bsin(sp->ang), 14);
-
-    if (!move_actor(SpriteNum, nx, ny, 0L))
-    {
-        if (ActorMoveHitReact(SpriteNum))
-            return 0;
-
-        InitActorPause(SpriteNum);
-        return 0;
+        actor->user.ActorActionFunc = DoActorDecide;
+        actor->user.Flags &= ~(SPR_TARGETED);
     }
 
     return 0;
 }
 
-
-int
-InitActorPause(short SpriteNum)
-{
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
-
-    //MONO_PRINT("InitActorPause\n");
-
-    u->ActorActionFunc = DoActorPause;
-
-    //NewStateGroup(SpriteNum, u->ActorActionSet->Stand);
-
-    (*u->ActorActionFunc)(SpriteNum);
-
-    return 0;
-}
-
-int
-DoActorPause(short SpriteNum)
-{
-    USERp u = User[SpriteNum].Data();
-    SPRITEp sp = User[SpriteNum]->SpriteP;
-
-    if ((u->WaitTics -= ACTORMOVETICS) < 0)
-    {
-        u->ActorActionFunc = DoActorDecide;
-        RESET(u->Flags, SPR_TARGETED);
-    }
-
-    return 0;
-}
-#endif
 
 
 #include "saveable.h"
 
 static saveable_code saveable_ai_code[] =
 {
-    SAVE_CODE(DebugMoveHit),
-    SAVE_CODE(ActorMoveHitReact),
-    SAVE_CODE(ActorFlaming),
-    SAVE_CODE(DoActorSetSpeed),
-    SAVE_CODE(ChooseAction),
-    SAVE_CODE(ChooseActionNumber),
-    SAVE_CODE(DoActorNoise),
-    SAVE_CODE(CanSeePlayer),
-    SAVE_CODE(CanHitPlayer),
-    SAVE_CODE(DoActorPickClosePlayer),
-    SAVE_CODE(GetPlayerSpriteNum),
-    SAVE_CODE(CloseRangeDist),
-    SAVE_CODE(DoActorOperate),
-    SAVE_CODE(DoActorActionDecide),
     SAVE_CODE(InitActorDecide),
     SAVE_CODE(DoActorDecide),
     SAVE_CODE(InitActorAlertNoise),
@@ -2211,7 +1691,6 @@ static saveable_code saveable_ai_code[] =
     SAVE_CODE(InitActorExtra5Noise),
     SAVE_CODE(InitActorExtra6Noise),
     SAVE_CODE(InitActorMoveCloser),
-    SAVE_CODE(DoActorCantMoveCloser),
     SAVE_CODE(DoActorMoveCloser),
     SAVE_CODE(FindTrackToPlayer),
     SAVE_CODE(FindTrackAwayFromPlayer),
@@ -2226,10 +1705,8 @@ static saveable_code saveable_ai_code[] =
     SAVE_CODE(InitActorDuck),
     SAVE_CODE(DoActorDuck),
     SAVE_CODE(DoActorMoveJump),
-    SAVE_CODE(FindNewAngle),
     SAVE_CODE(InitActorReposition),
     SAVE_CODE(DoActorReposition),
-    SAVE_CODE(InitActorPause),
     SAVE_CODE(DoActorPause)
 };
 

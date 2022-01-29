@@ -36,7 +36,7 @@
 #include <assert.h>
 #include "mapinfo.h"
 #include "g_mapinfo.h"
-#include "templates.h"
+
 #include "filesystem.h"
 #include "cmdlib.h"
 #include "v_video.h"
@@ -306,11 +306,11 @@ void FMapInfoParser::ParseCluster()
 
 bool FMapInfoParser::CheckLegacyMapDefinition(FString& mapname)
 {
-	if (Internal && (g_gameType & GAMEFLAG_BLOOD | GAMEFLAG_DUKECOMPAT | GAMEFLAG_SW) && sc.CheckString("{"))
+	if (Internal && (g_gameType & (GAMEFLAG_BLOOD | GAMEFLAG_DUKECOMPAT | GAMEFLAG_SW)) && sc.CheckString("{"))
 	{
 		sc.MustGetNumber();
 		int vol = sc.Number;
-		if (!(g_gameType & GAMEFLAG_SW))
+		if (!isSWALL())
 		{
 			// Blood and Duke use volume/level pairs
 			sc.MustGetStringName(",");
@@ -408,7 +408,7 @@ DEFINE_MAP_OPTION(fade, true)
 {
 	parse.ParseAssign();
 	parse.sc.MustGetString();
-	info->fadeto = V_GetColor(nullptr, parse.sc);
+	info->fadeto = V_GetColor(parse.sc);
 }
 
 DEFINE_MAP_OPTION(partime, true)
@@ -645,9 +645,11 @@ MapFlagHandlers[] =
 	{ "sw_bossmeter_sumo",				MITYPE_SETFLAGG,LEVEL_SW_BOSSMETER_SUMO, 0, GAMEFLAG_SW },
 	{ "sw_bossmeter_zilla",				MITYPE_SETFLAGG,LEVEL_SW_BOSSMETER_ZILLA, 0, GAMEFLAG_SW },
 	{ "sw_deathexit_serpent",			MITYPE_SETFLAGG,LEVEL_SW_DEATHEXIT_SERPENT, 0, GAMEFLAG_SW },
+	{ "sw_deathexit_serpent_next",		MITYPE_SETFLAGG,LEVEL_SW_DEATHEXIT_SERPENT | LEVEL_SW_DEATHEXIT_SERPENT_NEXT, 0, GAMEFLAG_SW },
 	{ "sw_deathexit_sumo",				MITYPE_SETFLAGG,LEVEL_SW_DEATHEXIT_SUMO, 0, GAMEFLAG_SW },
 	{ "sw_deathexit_zilla",				MITYPE_SETFLAGG,LEVEL_SW_DEATHEXIT_ZILLA, 0, GAMEFLAG_SW },
 	{ "sw_spawnmines",					MITYPE_SETFLAGG,LEVEL_SW_SPAWNMINES, 0, GAMEFLAG_SW },
+	{ "bossonlycutscene",				MITYPE_SETFLAGG,LEVEL_BOSSONLYCUTSCENE, 0, -1 },
 
 	{ NULL, MITYPE_IGNORE, 0, 0}
 };
@@ -695,7 +697,6 @@ CCMD(mapinfo)
 		int lump = fileSystem.FindFile(map->fileName);
 		if (lump >= 0)
 		{
-			int rfnum = fileSystem.GetFileContainer(lump);
 			Printf("map %s \"%s\"\n{\n", map->labelName.GetChars(), map->DisplayName());
 			Printf("\tlevelnum = %d\n\tCluster = %d\n", map->levelNumber, map->cluster);
 			if (map->Author.IsNotEmpty())
@@ -831,10 +832,10 @@ void FMapInfoParser::ParseMapDefinition(MapRecord &info)
 					success = true;
 					return false;  // break
 				}
-				
+
 				return true;  // continue
 			});
-			
+
 			if (!success)
 			{
 				if (!ParseCloseBrace())
@@ -1047,9 +1048,6 @@ void FMapInfoParser::ParseCutsceneInfo()
 	FString map;
 	FString pic;
 	FString name;
-	bool remove = false;
-	char key = 0;
-	int flags = 0;
 
 	ParseOpenBrace();
 
@@ -1105,9 +1103,6 @@ void FMapInfoParser::ParseGameInfo()
 	FString map;
 	FString pic;
 	FString name;
-	bool remove = false;
-	char key = 0;
-	int flags = 0;
 
 	ParseOpenBrace();
 
@@ -1128,6 +1123,14 @@ void FMapInfoParser::ParseGameInfo()
 			sc.MustGetString();
 			sc.SetCMode(false);
 			globalCutscenes.MPSummaryScreen = sc.String;
+		}
+		else if (sc.Compare("statusbarclass"))
+		{
+			ParseAssign();
+			sc.SetCMode(false);
+			sc.MustGetString();
+			sc.SetCMode(false);
+			globalCutscenes.StatusBarClass = sc.String;
 		}
 		else if (!ParseCloseBrace())
 		{
@@ -1155,7 +1158,7 @@ void SetLevelNum (MapRecord *info, int num)
 {
 	for (auto& map : mapList)
 	{
-		
+
 		if (map->levelNumber == num)
 			map->levelNumber = 0;
 	}
@@ -1291,10 +1294,6 @@ void G_ParseMapInfo ()
 {
 	int lump, lastlump = 0;
 	MapRecord gamedefaults;
-
-	// first parse the internal one which sets up the needed basics and patches the legacy definitions of each game.
-	FMapInfoParser parse;
-	MapRecord defaultinfo;
 
 	// Parse internal RMAPINFOs.
 	while ((lump = fileSystem.FindLumpFullName("engine/rmapinfo.txt", &lastlump, false)) != -1)

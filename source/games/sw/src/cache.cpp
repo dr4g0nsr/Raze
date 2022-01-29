@@ -59,11 +59,10 @@ void PreCacheRange(int start_pic, int end_pic, int pal = 0)
 
 void PreCacheOverride(void)
 {
-	int i;
-	StatIterator it(STAT_CEILING_FLOOR_PIC_OVERRIDE);
-	while ((i = it.NextIndex()) >= 0)
+	SWStatIterator it(STAT_CEILING_FLOOR_PIC_OVERRIDE);
+	while (auto actor = it.Next())
 	{
-		int j = SPRITE_TAG2(i);
+		int j = SP_TAG2(actor);
 		if(j >= 0 && j <= MAXTILES)
 			markTileForPrecache(j, 0);
 	}
@@ -73,61 +72,60 @@ void precacheMap(void)
 {
 	int i;
 	int j;
-	SECTORp sectp;
-	WALLp wp;
-	SPRITEp sp;
+	sectortype* sectp;
+	walltype* wp;
 
-	for (sectp = sector; sectp < &sector[numsectors]; sectp++)
+	for(auto& sec: sector)
 	{
-		j = sectp->ceilingpicnum;
-		markTileForPrecache(j, sectp->ceilingpal);
+		j = sec.ceilingpicnum;
+		markTileForPrecache(j, sec.ceilingpal);
 
-		if (TEST(picanm[j].sf, PICANM_ANIMTYPE_MASK) >> PICANM_ANIMTYPE_SHIFT)
+		if ((picanm[j].sf & PICANM_ANIMTYPE_MASK) >> PICANM_ANIMTYPE_SHIFT)
 		{
 			for (i = 1; i <= picanm[j].num; i++)
 			{
-				markTileForPrecache(j + i, sectp->ceilingpal);
+				markTileForPrecache(j + i, sec.ceilingpal);
 			}
 		}
 
-		j = sectp->floorpicnum;
+		j = sec.floorpicnum;
 
-		markTileForPrecache(j, sectp->floorpal);
+		markTileForPrecache(j, sec.floorpal);
 
-		if (TEST(picanm[j].sf, PICANM_ANIMTYPE_MASK) >> PICANM_ANIMTYPE_SHIFT)
+		if ((picanm[j].sf & PICANM_ANIMTYPE_MASK) >> PICANM_ANIMTYPE_SHIFT)
 		{
 			for (i = 1; i <= picanm[j].num; i++)
 			{
-				markTileForPrecache(j + i, sectp->floorpal);
+				markTileForPrecache(j + i, sec.floorpal);
 			}
 		}
 
 	}
 
-	for (wp = wall; wp < &wall[numwalls]; wp++)
+	for (auto& wal : wall)
 	{
-		j = wp->picnum;
+		j = wal.picnum;
 
-		markTileForPrecache(j, wp->pal);
+		markTileForPrecache(j, wal.pal);
 
-		if (TEST(picanm[j].sf, PICANM_ANIMTYPE_MASK) >> PICANM_ANIMTYPE_SHIFT)
+		if ((picanm[j].sf & PICANM_ANIMTYPE_MASK) >> PICANM_ANIMTYPE_SHIFT)
 		{
 			for (i = 1; i <= picanm[j].num; i++)
 			{
-				markTileForPrecache(j + i, wp->pal);
+				markTileForPrecache(j + i, wal.pal);
 			}
 		}
 
-		if (wp->overpicnum > 0 && wp->overpicnum < MAXTILES)
+		if (wal.overpicnum > 0 && wal.overpicnum < MAXTILES)
 		{
-			j = wp->overpicnum;
-			markTileForPrecache(j, wp->pal);
+			j = wal.overpicnum;
+			markTileForPrecache(j, wal.pal);
 
-			if (TEST(picanm[j].sf, PICANM_ANIMTYPE_MASK) >> PICANM_ANIMTYPE_SHIFT)
+			if ((picanm[j].sf & PICANM_ANIMTYPE_MASK) >> PICANM_ANIMTYPE_SHIFT)
 			{
 				for (i = 1; i <= picanm[j].num; i++)
 				{
-					markTileForPrecache(j + i, wp->pal);
+					markTileForPrecache(j + i, wal.pal);
 				}
 			}
 		}
@@ -138,7 +136,7 @@ void SetupPreCache(void)
 {
 	precacheMap();
 
-	   
+
 	// actors cache ranges are called from SpriteSetup
 	// only caches the actor if its on the level
 
@@ -345,119 +343,119 @@ void PreCachePachinko(int pal)
 	PreCacheRange(4840,4863, pal);
 }
 
-void
-PreCacheActor(void)
+void PreCacheActor(void)
 {
-	int i;
 	int pic;
 
-	for (i=0; i < MAXSPRITES; i++)
+	SWSpriteIterator it;
+	while (auto actor = it.Next())
 	{
-		if (sprite[i].statnum >= MAXSTATUS)
+		int pal = actor->spr.pal;
+		if (actor->spr.statnum >= MAXSTATUS)
 			continue;
 
-		if (User[i].Data())
-			pic = User[i]->ID;
+		if (actor->hasU())
+			pic = actor->user.ID;
 		else
-			pic = sprite[i].picnum;
+			pic = actor->spr.picnum;
 
 		switch (pic)
 		{
 		case COOLIE_RUN_R0:
-			PreCacheCoolie(sprite[i].pal);
+			PreCacheCoolie(pal);
 			break;
 
 		case NINJA_RUN_R0:
 		case NINJA_CRAWL_R0:
-			PreCacheNinja(sprite[i].pal);
+			PreCacheNinja(pal);
 			break;
 
 		case GORO_RUN_R0:
-			PreCacheGuardian(sprite[i].pal);
+			PreCacheGuardian(pal);
 			break;
 
 		case 1441:
 		case COOLG_RUN_R0:
-			PreCacheGhost(sprite[i].pal);
+			PreCacheGhost(pal);
 			break;
 
 		case EEL_RUN_R0:
-			PreCacheEel(sprite[i].pal);
+			PreCacheEel(pal);
 			break;
 
 		case SUMO_RUN_R0:
-			PreCacheZilla(sprite[i].pal);
+			PreCacheZilla(pal);
 			break;
 
 		case ZILLA_RUN_R0:
-			PreCacheSumo(sprite[i].pal);
+			PreCacheSumo(pal);
 			break;
 
 		case TOILETGIRL_R0:
-			PreCacheToiletGirl(sprite[i].pal);
+			PreCacheToiletGirl(pal);
 			break;
 
 		case WASHGIRL_R0:
-			PreCacheWashGirl(sprite[i].pal);
+			PreCacheWashGirl(pal);
 			break;
 
 		case CARGIRL_R0:
-			PreCacheCarGirl(sprite[i].pal);
+			PreCacheCarGirl(pal);
 			break;
 
 		case MECHANICGIRL_R0:
-			PreCacheMechanicGirl(sprite[i].pal);
+			PreCacheMechanicGirl(pal);
 			break;
 
 		case SAILORGIRL_R0:
-			PreCacheSailorGirl(sprite[i].pal);
+			PreCacheSailorGirl(pal);
 			break;
 
 		case PRUNEGIRL_R0:
-			PreCachePruneGirl(sprite[i].pal);
+			PreCachePruneGirl(pal);
 			break;
 
 		case TRASHCAN:
-			PreCacheTrash(sprite[i].pal);
+			PreCacheTrash(pal);
 			break;
 
 		case BUNNY_RUN_R0:
-			PreCacheBunny(sprite[i].pal);
+			PreCacheBunny(pal);
 			break;
 
 		case RIPPER_RUN_R0:
-			PreCacheRipper(sprite[i].pal);
+			PreCacheRipper(pal);
 			break;
 
 		case RIPPER2_RUN_R0:
-			PreCacheRipper2(sprite[i].pal);
+			PreCacheRipper2(pal);
 			break;
 
 		case SERP_RUN_R0:
-			PreCacheSerpent(sprite[i].pal);
+			PreCacheSerpent(pal);
 			break;
 
 		case LAVA_RUN_R0:
 			break;
 
 		case SKEL_RUN_R0:
-			PreCacheSkel(sprite[i].pal);
+			PreCacheSkel(pal);
 			break;
 
 		case HORNET_RUN_R0:
-			PreCacheHornet(sprite[i].pal);
+			PreCacheHornet(pal);
 			break;
 
 		case SKULL_R0:
-			PreCacheSkull(sprite[i].pal);
+			PreCacheSkull(pal);
 			break;
 
 		case BETTY_R0:
-			PreCacheBetty(sprite[i].pal);
+			PreCacheBetty(pal);
 			break;
 
 		case GIRLNINJA_RUN_R0:
-			PreCacheNinjaGirl(sprite[i].pal);
+			PreCacheNinjaGirl(pal);
 			break;
 
 		case 623:   // Pachinko win light
@@ -465,11 +463,11 @@ PreCacheActor(void)
 		case PACHINKO2:
 		case PACHINKO3:
 		case PACHINKO4:
-			PreCachePachinko(sprite[i].pal);
+			PreCachePachinko(pal);
 			break;
 
 		default:
-			markTileForPrecache(pic, sprite[i].pal);
+			markTileForPrecache(pic, pal);
 		}
 	}
 }

@@ -190,7 +190,7 @@ class Episode1End1 : SkippableScreenJob
 		Super.Init(fadein | fadeout);
 		return self;
 	}
-	
+
 
 	override void OnTick()
 	{
@@ -201,7 +201,7 @@ class Episode1End1 : SkippableScreenJob
 		static const int boss_time[] = { 0, 220, 260, 290, 320, 350, 350 };
 		static const int boss_time2[] = { 120, 260, 290, 320, 350, 380, 380 };
 		static const String boss_tile[] = { "VICTORY4", "VICTORY5", "VICTORY6", "VICTORY7", "VICTORY8", "VICTORY9", "VICTORY9" };
-		
+
 		int currentclock = ticks * 120 / GameTicRate;
 
 		bossani.SetInvalid();
@@ -319,7 +319,7 @@ class Episode3End : ImageScreen
 
 	override void OnSkip()
 	{
-		Raze.StopAllSounds();
+		System.StopAllSounds();
 	}
 
 	override void OnTick()
@@ -367,7 +367,7 @@ class Episode3End : ImageScreen
 			if (!Duke.CheckSoundPlaying(DukeSnd.ENDSEQVOL3SND9))
 			{
 				soundstate++;
-				finishtime = ticks + GameTicRate * (Raze.SoundEnabled() ? 1 : 5);	// if sound is off this wouldn't wait without a longer delay here.
+				finishtime = ticks + GameTicRate * (System.SoundEnabled() ? 1 : 5);	// if sound is off this wouldn't wait without a longer delay here.
 			}
 			break;
 
@@ -381,7 +381,7 @@ class Episode3End : ImageScreen
 		default:
 			break;
 		}
-		if (jobstate != running) Raze.StopAllSounds();
+		if (jobstate != running) System.StopAllSounds();
 	}
 
 	override void OnDestroy()
@@ -532,7 +532,7 @@ class DukeLevelSummaryScreen : SummaryScreenBase
 
 	override bool OnEvent(InputEvent ev)
 	{
-		if (ev.type == InputEvent.Type_KeyDown && !Raze.specialKeyEvent(ev))
+		if (ev.type == InputEvent.Type_KeyDown && !System.specialKeyEvent(ev))
 		{
 			if ((displaystate & printStatsAll) != printStatsAll)
 			{
@@ -761,7 +761,7 @@ class RRLevelSummaryScreen : SummaryScreenBase
 			if (cluster != null) basetex = cluster.InterBackground;
 		}
 		if (basetex.length() == 0) basetex = "BONUSPIC01";
-		
+
 		lastmapname = level.DisplayName();
 		texBg = TexMan.CheckForTexture(basetex);
 		return self;
@@ -769,7 +769,7 @@ class RRLevelSummaryScreen : SummaryScreenBase
 
 	override bool OnEvent(InputEvent ev)
 	{
-		if (ev.type == InputEvent.Type_KeyDown && !Raze.specialKeyEvent(ev))
+		if (ev.type == InputEvent.Type_KeyDown && !System.specialKeyEvent(ev))
 		{
 			if ((displaystate & printStatsAll) != printStatsAll)
 			{
@@ -960,7 +960,7 @@ class RRRAEndOfGame : SkippableScreenJob
 class DukeLoadScreen : ScreenJob
 {
 	MapRecord rec;
-	
+
 	ScreenJob Init(MapRecord maprec)
 	{
 		Super.Init(fadein);
@@ -972,11 +972,11 @@ class DukeLoadScreen : ScreenJob
 	{
 		if (fadestate == visible) jobstate = finished;
 	}
-	
+
 	override void Draw(double sr)
 	{
 		Screen.DrawTexture(TexMan.CheckForTexture("LOADSCREEN"), false, 0, 0, DTA_FullscreenEx, FSMode_ScaleToFit43, DTA_LegacyRenderStyle, STYLE_Normal);
-		
+
 		if (!Raze.IsRR())
 		{
 			Duke.BigText(160, 90, (rec.flags & MapRecord.USERMAP)? "$TXT_LOADUM" : "$TXT_LOADING", 0);

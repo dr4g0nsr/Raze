@@ -265,7 +265,7 @@ DObject::~DObject ()
 				Release();
 			}
 		}
-		
+
 		if (nullptr != type)
 		{
 			type->DestroySpecials(this);
@@ -314,7 +314,7 @@ void DObject::Release()
 //
 //==========================================================================
 
-void DObject:: Destroy ()
+void DObject::Destroy ()
 {
 	// We cannot call the VM during shutdown because all the needed data has been or is in the process of being deleted.
 	if (PClass::bVMOperational)

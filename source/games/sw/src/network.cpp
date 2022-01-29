@@ -59,20 +59,20 @@ double smoothratio;
 
 // must start out as 0
 
-void
-InitNetPlayerOptions(void)
+void InitNetPlayerOptions(void)
 {
 //    short pnum;
-    PLAYERp pp = Player + myconnectindex;
+    PLAYER* pp = Player + myconnectindex;
 
-    strncpy(pp->PlayerName, playername, 32);
+    strncpy(pp->PlayerName, playername, 31);
 
     // myconnectindex palette
     pp->TeamColor = gs.NetColor;
-    if (pp->SpriteP)
+    DSWActor* actor = pp->actor;
+    if (actor)
     {
-        pp->SpriteP->pal = PALETTE_PLAYER0 + pp->TeamColor;
-        User[pp->SpriteP - sprite]->spal = pp->SpriteP->pal;
+        actor->spr.pal = PALETTE_PLAYER0 + pp->TeamColor;
+        pp->actor->user.spal = actor->spr.pal;
     }
 }
 

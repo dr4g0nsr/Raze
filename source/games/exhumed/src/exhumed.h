@@ -18,7 +18,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #pragma once
 
-#include "compat.h"
 #include "v_text.h"
 #include "printf.h"
 #include "gamecvars.h"
@@ -32,11 +31,15 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "screenjob.h"
 #include "gamestruct.h"
 #include "names.h"
+#include "exhumedactor.h"
+#include "serialize_obj.h"
 
 BEGIN_PS_NS
 
 
 enum { kTimerTicks = 120 };
+
+const int ITEM_MAGIC = 0x4711;
 
 enum basepal_t {
     BASEPAL = 0,
@@ -55,8 +58,6 @@ void BlackOut();
 
 void DoGameOverScene(bool finallevel);
 
-int Query(short n, short l, ...);
-
 extern unsigned char curpal[];
 
 void TintPalette(int a, int b, int c);
@@ -65,8 +66,7 @@ void TintPalette(int a, int b, int c);
 
 void EraseScreen(int eax);
 
-void mychangespritesect(int nSprite, int nSector);
-void mydeletesprite(int nSprite);
+void DeleteActor(DExhumedActor* actor);
 
 void GrabPalette();
 
@@ -79,12 +79,9 @@ void StatusMessage(int messageTime, const char *fmt, ...);
 
 void DoSpiritHead();
 
-void CheckKeys2();
-void GameTicker();
 void InitLevel(MapRecord*);
 void InitNewGame();
 
-int showmap(short nLevel, short nLevelNew, short nLevelBest);
 void menu_DoPlasma();
 void DoEnergyTile();
 void InitEnergyTile();
@@ -100,54 +97,50 @@ extern int nNetPlayerCount;
 
 extern int nNetTime;
 
-extern short nTotalPlayers;
+extern int nTotalPlayers;
 
-extern short nFontFirstChar;
-extern short nBackgroundPic;
-extern short nShadowPic;
+extern int nFontFirstChar;
+extern int nBackgroundPic;
+extern int nShadowPic;
 
-extern short nCreaturesTotal, nCreaturesKilled;
+extern int nCreaturesTotal, nCreaturesKilled;
 
 extern int lLocalButtons;
 
-extern short nEnergyTowers;
+extern int nEnergyTowers;
 
-extern short nEnergyChan;
+extern int nEnergyChan;
 
-extern short nSpiritSprite;
+extern TObjPtr<DExhumedActor*> pSpiritSprite;
 
-extern short bInDemo;
+extern bool bInDemo;
 
-extern short nFreeze;
+extern int nFreeze;
 
-extern short nCurBodyNum;
-extern short nBodyTotal;
+extern int nCurBodyNum;
+extern int nBodyTotal;
 
-extern short bSnakeCam;
+extern bool bSnakeCam;
 
-extern short nButtonColor;
+extern int nButtonColor;
 
-extern short nHeadStage;
-
-extern short lastfps;
+extern int nHeadStage;
 
 extern int flash;
 
-extern short nLocalSpr;
+extern int nSnakeCam;
 
-extern short nSnakeCam;
-
-extern short bCoordinates;
+extern bool bCoordinates;
 
 extern int totalmoves;
 
 extern int lCountDown;
-extern short nAlarmTicks;
-extern short nRedTicks;
-extern short nClockVal;
+extern int nAlarmTicks;
+extern int nRedTicks;
+extern int nClockVal;
 
-extern short bSlipMode;
-extern short bDoFlashes;
+extern bool bSlipMode;
+extern bool bDoFlashes;
 
 extern int bVanilla;
 
@@ -176,8 +169,9 @@ enum {
 
 class TextOverlay
 {
+    FFont* font;
 	double nCrawlY;
-	short nLeft[50];
+	int16_t nLeft[50];
 	int nHeight;
     double lastclock;
 	TArray<FString> screentext;
@@ -213,11 +207,12 @@ const uint32_t kSpiritY = 97;
 const uint32_t WorktileSize = kSpiritX * 2 * kSpiritY * 2;
 
 
-struct GameInterface : ::GameInterface
+struct GameInterface : public ::GameInterface
 {
     const char* Name() override { return "Exhumed"; }
     void app_init() override;
     void clearlocalinputstate() override;
+    void loadPalette() override;
 	bool GenerateSavePic() override;
     void MenuOpened() override;
     void MenuSound(EMenuSounds snd) override;
@@ -230,22 +225,24 @@ struct GameInterface : ::GameInterface
     void Ticker() override;
     void DrawBackground() override;
     void Render() override;
-    void GetInput(InputPacket* packet, ControlInfo* const hidInput) override;
+    //void DrawWeapons() override;
+    void GetInput(ControlInfo* const hidInput, double const scaleAdjust, InputPacket* packet = nullptr) override;
     void Startup() override;
     const char* GenericCheat(int player, int cheat) override;
 	void NewGame(MapRecord *map, int skill, bool) override;
 	void LevelCompleted(MapRecord *map, int skill) override;
 	void NextLevel(MapRecord *map, int skill) override;
-    bool DrawAutomapPlayer(int x, int y, int z, int a, double const smoothratio) override;
+    bool DrawAutomapPlayer(int mx, int my, int x, int y, int z, int a, double const smoothratio) override;
     fixed_t playerHorizMin() override { return IntToFixed(-150); }
     fixed_t playerHorizMax() override { return IntToFixed(150); }
     int playerKeyMove() override { return 6; }
     void WarpToCoords(int x, int y, int z, int a, int h) override;
     void ToggleThirdPerson() override;
-    int chaseCamX(binangle ang) { return -ang.bcos() / 12; }
-    int chaseCamY(binangle ang) { return -ang.bsin() / 12; }
-    int chaseCamZ(fixedhoriz horiz) { return horiz.asq16() / 384; }
-    void processSprites(spritetype* tsprite, int& spritesortcnt, int viewx, int viewy, int viewz, binangle viewang, double smoothRatio) override;
+    int chaseCamX(binangle ang) { return -(ang.bcos() * 3) >> 5; }
+    int chaseCamY(binangle ang) { return -(ang.bsin() * 3) >> 5; }
+    int chaseCamZ(fixedhoriz horiz) { return (horiz.asq16() * 3) >> 10; }
+    void processSprites(tspritetype* tsprite, int& spritesortcnt, int viewx, int viewy, int viewz, binangle viewang, double smoothRatio) override;
+    int GetCurrentSkill() override;
 
 	::GameStats getStats() override;
 };

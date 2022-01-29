@@ -26,6 +26,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "gamestruct.h"
 #include "mapinfo.h"
 #include "d_net.h"
+#include "serialize_obj.h"
 
 #include "common_game.h"
 #include "fx.h"
@@ -59,19 +60,19 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 BEGIN_BLD_NS
 
 struct INIDESCRIPTION {
-    const char *pzName;
-    const char *pzFilename;
-    const char **pzArts;
-    int nArts;
+	const char* pzName;
+	const char* pzFilename;
+	const char** pzArts;
+	int nArts;
 };
 
 struct INICHAIN {
-    INICHAIN *pNext;
-    char zName[BMAX_PATH];
-    INIDESCRIPTION *pDescription;
+	INICHAIN* pNext;
+	char zName[BMAX_PATH];
+	INIDESCRIPTION* pDescription;
 };
 
-extern INICHAIN *pINIChain;
+extern INICHAIN* pINIChain;
 
 extern int gNetPlayers;
 extern int blood_globalflags;
@@ -80,7 +81,7 @@ void QuitGame(void);
 void PreloadCache(void);
 void ProcessFrame(void);
 void ScanINIFiles(void);
-void EndLevel();
+void EndLevel(bool);
 
 struct MIRROR
 {
@@ -95,19 +96,24 @@ struct MIRROR
 extern MIRROR mirror[16];
 extern int mirrorcnt, mirrorsector, mirrorwall[4];
 
+//polymost needs to do some voodoo for mirrors.
+void InitPolymostMirrorHack();
+void PolymostAllocFakeSector();
+
+
 
 inline bool DemoRecordStatus(void)
 {
-    return false;
+	return false;
 }
 
 inline bool VanillaMode()
 {
-    return false;
+	return false;
 }
 void sndPlaySpecialMusicOrNothing(int nMusic);
 
-struct GameInterface : ::GameInterface
+struct GameInterface : public ::GameInterface
 {
 	const char* Name() override { return "Blood"; }
 	void app_init() override;
@@ -124,16 +130,16 @@ struct GameInterface : ::GameInterface
 	FString GetCoordString() override;
 	ReservedSpace GetReservedScreenSpace(int viewsize) override;
 	void UpdateSounds() override;
-	void GetInput(InputPacket* packet, ControlInfo* const hidInput) override;
+	void GetInput(ControlInfo* const hidInput, double const scaleAdjust, InputPacket* packet = nullptr) override;
 	void Ticker() override;
 	void DrawBackground() override;
 	void Startup() override;
 	void Render() override;
 	const char* GenericCheat(int player, int cheat) override;
-	void NewGame(MapRecord *sng, int skill, bool) override;
+	void NewGame(MapRecord* sng, int skill, bool) override;
 	void NextLevel(MapRecord* map, int skill) override;
 	void LevelCompleted(MapRecord* map, int skill) override;
-	bool DrawAutomapPlayer(int x, int y, int z, int a, double const smoothratio) override;
+	bool DrawAutomapPlayer(int mx, int my, int x, int y, int z, int a, double const smoothratio) override;
 	void SetTileProps(int til, int surf, int vox, int shade) override;
 	fixed_t playerHorizMin() override { return IntToFixed(-180); }
 	fixed_t playerHorizMax() override { return IntToFixed(120); }
@@ -145,9 +151,14 @@ struct GameInterface : ::GameInterface
 	int chaseCamX(binangle ang) override { return MulScale(-Cos(ang.asbuild()), 1280, 30); }
 	int chaseCamY(binangle ang) override { return MulScale(-Sin(ang.asbuild()), 1280, 30); }
 	int chaseCamZ(fixedhoriz horiz) override { return FixedToInt(MulScale(horiz.asq16(), 1280, 3)) - (16 << 8); }
-	void processSprites(spritetype* tsprite, int& spritesortcnt, int viewx, int viewy, int viewz, binangle viewang, double smoothRatio) override;
-	void EnterPortal(spritetype* viewer, int type) override;
-	void LeavePortal(spritetype* viewer, int type) override;
+	void processSprites(tspritetype* tsprite, int& spritesortcnt, int viewx, int viewy, int viewz, binangle viewang, double smoothRatio) override;
+	void EnterPortal(DCoreActor* viewer, int type) override;
+	void LeavePortal(DCoreActor* viewer, int type) override;
+	void LoadGameTextures() override;
+	int GetCurrentSkill() override;
+	bool IsQAVInterpTypeValid(const FString& type) override;
+	void AddQAVInterpProps(const int res_id, const FString& interptype, const bool loopable, const TMap<int, TArray<int>>&& ignoredata) override;
+	void RemoveQAVInterpProps(const int res_id) override;
 
 	GameStats getStats() override;
 };

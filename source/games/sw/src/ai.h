@@ -30,38 +30,37 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 BEGIN_SW_NS
 
 // Call functions based on a random range value
-typedef struct
+struct DECISION
 {
-    short range;
-    ANIMATORp action;
-} DECISION, *DECISIONp;
+    int range;
+    ANIMATOR* action;
+};
 
 // Personality structure
-struct PERSONALITYstruct
+struct PERSONALITY
 {
-    DECISIONp Battle;
-    DECISIONp Offense;
-    DECISIONp Broadcast;
-    DECISIONp Surprised;
-    DECISIONp Evasive;
-    DECISIONp LostTarget;
-    DECISIONp CloseRange;
-    DECISIONp TouchTarget;
+    DECISION* Battle;
+    DECISION* Offense;
+    DECISION* Broadcast;
+    DECISION* Surprised;
+    DECISION* Evasive;
+    DECISION* LostTarget;
+    DECISION* CloseRange;
+    DECISION* TouchTarget;
 };
 
 enum ActorStates { SLOW_SPEED, NORM_SPEED, MID_SPEED, FAST_SPEED, MAX_SPEED};
 
-#define MAXATTRIBSNDS   11
-typedef enum
+enum ATTRIB_SNDS
 {
     attr_ambient, attr_alert, attr_attack, attr_pain, attr_die,
     attr_extra1, attr_extra2, attr_extra3,attr_extra4,attr_extra5,
-    attr_extra6
-} ATTRIB_SNDS;
+    attr_extra6, MAXATTRIBSNDS
+};
 
-struct ATTRIBUTEstruct
+struct ATTRIBUTE
 {
-    short Speed[MAX_SPEED];
+    int16_t Speed[MAX_SPEED];
     int8_t TicAdjust[MAX_SPEED];
     uint8_t MaxWeapons;
     /*ATTRIB_SNDS*/ int Sounds[MAXATTRIBSNDS];  // JBF: ATTRIB_SNDS? Somehow I don't think this is what was intended...
@@ -70,51 +69,42 @@ struct ATTRIBUTEstruct
 extern ATTRIBUTE DefaultAttrib;
 
 // AI.C functions
-void DebugMoveHit(short SpriteNum);
-bool ActorMoveHitReact(short SpriteNum);
-bool ActorFlaming(short SpriteNum);
-void DoActorSetSpeed(short SpriteNum,uint8_t speed);
-short ChooseActionNumber(short decision[]);
-int DoActorNoise(ANIMATORp Action,short SpriteNum);
-bool CanSeePlayer(short SpriteNum);
-int CanHitPlayer(short SpriteNum);
-int DoActorPickClosePlayer(short SpriteNum);
-int CloseRangeDist(SPRITEp sp1,SPRITEp sp2);
-int InitActorDecide(short SpriteNum);
-int DoActorDecide(short SpriteNum);
-int InitActorAlertNoise(short SpriteNum);
-int InitActorAmbientNoise(short SpriteNum);
-int InitActorAttackNoise(short SpriteNum);
-int InitActorPainNoise(short SpriteNum);
-int InitActorDieNoise(short SpriteNum);
-int InitActorExtra1Noise(short SpriteNum);
-int InitActorExtra2Noise(short SpriteNum);
-int InitActorExtra3Noise(short SpriteNum);
-int InitActorExtra4Noise(short SpriteNum);
-int InitActorExtra5Noise(short SpriteNum);
-int InitActorExtra6Noise(short SpriteNum);
-int InitActorMoveCloser(short SpriteNum);
-int DoActorCantMoveCloser(short SpriteNum);
-int DoActorMoveCloser(short SpriteNum);
-short FindTrackToPlayer(USERp u);
-short FindTrackAwayFromPlayer(USERp u);
-short FindWanderTrack(USERp u);
-int InitActorRunAway(short SpriteNum);
-int InitActorRunToward(short SpriteNum);
-int InitActorAttack(short SpriteNum);
-int DoActorAttack(short SpriteNum);
-int InitActorEvade(short SpriteNum);
-int InitActorWanderAround(short SpriteNum);
-int InitActorFindPlayer(short SpriteNum);
-int InitActorDuck(short SpriteNum);
-int DoActorDuck(short SpriteNum);
-int DoActorMoveJump(short SpriteNum);
-int move_scan(short SpriteNum,short ang,int dist,int *stopx,int *stopy,int *stopz,short *stopsect);
-int FindNewAngle(short SpriteNum,signed char dir,int DistToMove);
-int InitActorReposition(short SpriteNum);
-int DoActorReposition(short SpriteNum);
-int InitActorPause(short SpriteNum);
-int DoActorPause(short SpriteNum);
+bool ActorMoveHitReact(DSWActor* actor);
+int ChooseActionNumber(int16_t decision[]);
+bool CanSeePlayer(DSWActor* actor);
+int DoActorPickClosePlayer(DSWActor* actor);
+int InitActorDecide(DSWActor* actor);
+int DoActorDecide(DSWActor* actor);
+int InitActorAlertNoise(DSWActor* actor);
+int InitActorAmbientNoise(DSWActor* actor);
+int InitActorAttackNoise(DSWActor* actor);
+int InitActorPainNoise(DSWActor* actor);
+int InitActorDieNoise(DSWActor* actor);
+int InitActorExtra1Noise(DSWActor* actor);
+int InitActorExtra2Noise(DSWActor* actor);
+int InitActorExtra3Noise(DSWActor* actor);
+int InitActorExtra4Noise(DSWActor* actor);
+int InitActorExtra5Noise(DSWActor* actor);
+int InitActorExtra6Noise(DSWActor* actor);
+int InitActorMoveCloser(DSWActor* actor);
+int DoActorCantMoveCloser(DSWActor* actor);
+int DoActorMoveCloser(DSWActor* actor);
+int FindTrackToPlayer(DSWActor* actor);
+int FindTrackAwayFromPlayer(DSWActor* actor);
+int InitActorRunAway(DSWActor* actor);
+int InitActorRunToward(DSWActor* actor);
+int InitActorAttack(DSWActor* actor);
+int DoActorAttack(DSWActor* actor);
+int InitActorEvade(DSWActor* actor);
+int InitActorWanderAround(DSWActor* actor);
+int InitActorFindPlayer(DSWActor* actor);
+int InitActorDuck(DSWActor* actor);
+int DoActorDuck(DSWActor* actor);
+int DoActorMoveJump(DSWActor* actor);
+int InitActorReposition(DSWActor* actor);
+int DoActorReposition(DSWActor* actor);
+int InitActorPause(DSWActor* actor);
+int DoActorPause(DSWActor* actor);
 
 /*
 ANIMATOR
@@ -162,7 +152,7 @@ DoActorExtra5Noise,
 DoActorExtra6Noise;
 */
 
-void DoActorSetSpeed(short SpriteNum, uint8_t speed);
+void DoActorSetSpeed(DSWActor* actor, uint8_t speed);
 
 END_SW_NS
 

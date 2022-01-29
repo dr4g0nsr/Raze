@@ -4,12 +4,12 @@
 #include <string.h>
 #include <float.h>
 #include <math.h>
-#include <limits.h>
 #include <stdarg.h>
 #include <errno.h>
 #include <ctype.h>
 #include <stdint.h>
 #include <new>
+#include <type_traits>
 #include <algorithm>
 #include <forward_list>
 #include <sys/stat.h>
@@ -21,7 +21,6 @@
 #include <vector>
 #include <utility>
 #include <functional>
-#include <algorithm>
 
 // These two headers get included nearly everywhere so it doesn't matter if changing them forces a few more recompiles.
 // The overall savings from PCHing them are more significant.
